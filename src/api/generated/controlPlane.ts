@@ -572,6 +572,229 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/adapter/controls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read adapter activation controls */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Adapter controls */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdapterActivationControlsView"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Update adapter activation controls (flag-gated) */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AdapterActivationControlsUpdate"];
+                };
+            };
+            responses: {
+                /** @description Updated adapter controls */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdapterActivationControlsView"];
+                    };
+                };
+                /** @description Activation bypass blocked by rollout FSM */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Adapter feature gate disabled */
+                412: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/adapter/observability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read adapter observability by cohort */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Adapter observability rows */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdapterCohortObservabilityRow"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/adapter/replay-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read adapter replay log for a cohort */
+        get: {
+            parameters: {
+                query: {
+                    cohort: components["schemas"]["CohortId"];
+                    limit?: number;
+                };
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Replay log rows */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdapterReplayLogRow"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/adapter/promotion-path": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read adapter promotion path status */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Adapter promotion path status */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdapterPromotionPathView"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Attempt adapter promotion path advance */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Promotion advance decision */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AdapterPromotionPathView"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/audit/events": {
         parameters: {
             query?: never;
@@ -638,6 +861,51 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["AuditEvent"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/audit/ledger-view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read immutable rollout audit ledger view (admin only) */
+        get: {
+            parameters: {
+                query?: {
+                    actor?: string;
+                    action?: string;
+                    from?: string;
+                    to?: string;
+                    limit?: number;
+                };
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Immutable audit ledger rows */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AuditLedgerRow"][];
                     };
                 };
             };
@@ -823,6 +1091,52 @@ export interface components {
             /** @enum {string} */
             SLO_compliance: "compliant" | "breach";
         };
+        AdapterActivationControls: {
+            feature_adapter_enabled: boolean;
+            allowed_cohorts: components["schemas"]["CohortId"][];
+            rate_limit: number;
+            circuit_breaker_threshold: number;
+            schema_version: string;
+        };
+        AdapterActivationControlsUpdate: components["schemas"]["AdapterActivationControls"];
+        AdapterActivationControlsView: components["schemas"]["AdapterActivationControls"] & {
+            feature_gate_enabled: boolean;
+            rollout_state: components["schemas"]["RolloutState"];
+            /** Format: date-time */
+            updated_at_utc: string;
+        };
+        /** @enum {string} */
+        CircuitBreakerState: "CLOSED" | "OPEN" | "HALF_OPEN";
+        AdapterCohortObservabilityRow: {
+            cohort: components["schemas"]["CohortId"];
+            adapter_error_rate_pct: number;
+            adapter_latency_ms: number;
+            circuit_breaker_state: components["schemas"]["CircuitBreakerState"];
+            /** Format: date-time */
+            sampled_at_utc: string;
+        };
+        AdapterReplayLogRow: {
+            event_id: string;
+            cohort: components["schemas"]["CohortId"];
+            /** Format: date-time */
+            timestamp_utc: string;
+            action: string;
+            outcome: string;
+            correlation_id: string;
+        };
+        /** @enum {string} */
+        AdapterPromotionStage: "CANARY" | "LIMITED" | "MAJORITY" | "FULL";
+        AdapterPromotionPathView: {
+            stage: components["schemas"]["AdapterPromotionStage"];
+            next_stage: components["schemas"]["AdapterPromotionStage"] | null;
+            advanced: boolean;
+            allowed_to_advance: boolean;
+            guard_reasons: string[];
+            rollout_state: components["schemas"]["RolloutState"];
+            cooldown_active: boolean;
+            /** Format: date-time */
+            updated_at_utc: string;
+        };
         AuditEvent: {
             /** Format: uuid */
             eventId: string;
@@ -834,6 +1148,16 @@ export interface components {
             metadata?: {
                 [key: string]: string | number | boolean | null;
             };
+        };
+        AuditLedgerRow: {
+            action: string;
+            actor: string;
+            /** Format: date-time */
+            timestamp: string;
+            cohort: string;
+            previous_state: string;
+            resulting_state: string;
+            correlation_id: string;
         };
     };
     responses: never;

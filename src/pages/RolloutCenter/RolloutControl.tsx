@@ -6,6 +6,7 @@ import { formatUtc } from '../../utils/date';
 import { StatusBadge } from '../../components/StatusIndicators/StatusBadge';
 import { useRollout } from '../../hooks/useRollout';
 import { toApiError, type ApiError } from '../../api/client';
+import { useOperatorAuth } from '../../hooks/useOperatorAuth';
 
 type RolloutActionId = 'initiate-promotion' | 'pause-rollout' | 'resume-rollout' | 'force-rollback';
 
@@ -32,6 +33,8 @@ export function RolloutControl() {
     resumeRollout: runResumeRollout,
     forceRollback: runForceRollback
   } = useRollout();
+  const { operatorRole } = useOperatorAuth();
+  const canMutate = operatorRole === 'operator';
   const [selectedAction, setSelectedAction] = useState<RolloutAction | undefined>();
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<ApiError | undefined>();
@@ -100,22 +103,26 @@ export function RolloutControl() {
         <StatusBadge label={haltIndicator ? 'Active' : 'Clear'} tone={haltIndicator ? 'critical' : 'ok'} />
       </p>
       <p className="muted-line">Cooldown clearing is backend-only.</p>
-      <div className="button-row">
-        {actions.map((action) => (
-          <button
-            key={action.id}
-            type="button"
-            className={action.danger ? 'danger' : undefined}
-            onClick={() => {
-              setActionError(undefined);
-              setSelectedAction(action);
-            }}
-            disabled={!rollout || submitting}
-          >
-            {action.label}
-          </button>
-        ))}
-      </div>
+      {canMutate ? (
+        <div className="button-row">
+          {actions.map((action) => (
+            <button
+              key={action.id}
+              type="button"
+              className={action.danger ? 'danger' : undefined}
+              onClick={() => {
+                setActionError(undefined);
+                setSelectedAction(action);
+              }}
+              disabled={!rollout || submitting}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <p className="muted-line">Mutation actions hidden: operator role required.</p>
+      )}
       {selectedAction ? (
         <div className="confirm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="rollout-confirm-title">
           <div className="confirm-modal">

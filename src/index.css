@@ -171,6 +171,33 @@ a { color: inherit; text-decoration: none; }
   background: color-mix(in oklab, white 88%, var(--critical));
 }
 
+.adapter-form-grid {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.adapter-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.adapter-row input[type='number'],
+.adapter-row input[type='text'] {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #fff;
+}
+
+.adapter-cohort-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+}
+
 .button-row { display: flex; gap: 8px; margin-bottom: 8px; }
 
 .confirm-modal-backdrop {

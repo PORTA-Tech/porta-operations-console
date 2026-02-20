@@ -5,6 +5,9 @@ import { CohortOverview } from './pages/Dashboard/CohortOverview';
 import { RolloutControl } from './pages/RolloutCenter/RolloutControl';
 import { BlastRadiusPreview } from './pages/RolloutCenter/BlastRadiusPreview';
 import { DryRunSimulation } from './pages/RolloutCenter/DryRunSimulation';
+import { AdapterActivationControls } from './pages/RolloutCenter/AdapterActivationControls';
+import { AdapterObservabilityPanel } from './pages/RolloutCenter/AdapterObservabilityPanel';
+import { AdapterPromotionPathPanel } from './pages/RolloutCenter/AdapterPromotionPathPanel';
 import { NodeList } from './pages/NodeDrilldown/NodeList';
 import { NodeDetails } from './pages/NodeDrilldown/NodeDetails';
 import { ConfigAuditTable } from './pages/ConfigIntegrity/ConfigAuditTable';
@@ -28,6 +31,9 @@ function RolloutPage() {
   return (
     <div className="stack">
       <RolloutControl />
+      <AdapterActivationControls />
+      <AdapterPromotionPathPanel />
+      <AdapterObservabilityPanel />
       <BlastRadiusPreview {...dryRun} />
       <DryRunSimulation {...dryRun} />
     </div>
