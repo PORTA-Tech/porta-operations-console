@@ -1,4 +1,4 @@
-import { haltRollout, promoteRollout, rollbackRollout } from '../api/rolloutClient';
+import { haltRollout, promoteRollout, rollbackRollout } from '../api/rollout';
 
 export function useRollout(): {
   promote: () => Promise<void>;
@@ -17,3 +17,4 @@ export function useRollout(): {
     }
   };
 }
+

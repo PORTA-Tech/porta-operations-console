@@ -54,7 +54,7 @@ export default function App() {
   return (
     <AppShell>
       {loading ? <p>Connecting to control plane...</p> : null}
-      {error ? <p className="error-line">{error}</p> : null}
+      {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/rollout" element={<RolloutPage />} />
@@ -65,4 +65,5 @@ export default function App() {
     </AppShell>
   );
 }
+
 

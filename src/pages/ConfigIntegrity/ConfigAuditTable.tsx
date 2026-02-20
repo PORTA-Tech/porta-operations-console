@@ -7,7 +7,7 @@ export function ConfigAuditTable() {
   return (
     <Panel title="Config Audit Ledger">
       {loading ? <p>Loading...</p> : null}
-      {error ? <p>{error}</p> : null}
+      {error ? <p>{error.code}: {error.message}</p> : null}
       {!loading && !error ? (
         <table className="simple-table">
           <thead>
@@ -33,4 +33,5 @@ export function ConfigAuditTable() {
     </Panel>
   );
 }
+
 

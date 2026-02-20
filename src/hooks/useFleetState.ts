@@ -1,10 +1,11 @@
+import type { ApiError } from '../api/client';
 import { useEffect, useState } from 'react';
-import { fetchRolloutState } from '../api/rolloutClient';
+import { getFleetState } from '../api/fleet';
 import { useFleetSlice } from '../store/fleetSlice';
 
-export function useFleetState(): { loading: boolean; error?: string } {
+export function useFleetState(): { loading: boolean; error?: ApiError } {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | undefined>();
+  const [error, setError] = useState<ApiError | undefined>();
   const setRollout = useFleetSlice((s) => s.setRollout);
 
   useEffect(() => {
@@ -12,20 +13,22 @@ export function useFleetState(): { loading: boolean; error?: string } {
 
     const refresh = async (): Promise<void> => {
       try {
-        const state = await fetchRolloutState();
+        const state = await getFleetState();
         if (!mounted) return;
         setRollout(state);
         setError(undefined);
       } catch (err) {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(err as ApiError);
       } finally {
         if (mounted) setLoading(false);
       }
     };
 
-    refresh();
-    const timer = window.setInterval(refresh, 5000);
+    void refresh();
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 5000);
     return () => {
       mounted = false;
       window.clearInterval(timer);

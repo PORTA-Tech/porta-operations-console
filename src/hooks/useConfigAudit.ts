@@ -1,23 +1,24 @@
+import type { ApiError } from '../api/client';
 import { useEffect, useState } from 'react';
 import type { ConfigLedgerRecord } from '@porta/api-contracts';
-import { fetchConfigLedger } from '../api/configClient';
+import { getConfigLedger } from '../api/config';
 
-export function useConfigAudit(): { rows: ConfigLedgerRecord[]; loading: boolean; error?: string } {
+export function useConfigAudit(): { rows: ConfigLedgerRecord[]; loading: boolean; error?: ApiError } {
   const [rows, setRows] = useState<ConfigLedgerRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | undefined>();
+  const [error, setError] = useState<ApiError | undefined>();
 
   useEffect(() => {
     let mounted = true;
 
-    fetchConfigLedger()
+    getConfigLedger()
       .then((data) => {
         if (!mounted) return;
         setRows(data);
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err instanceof Error ? err.message : String(err));
+        setError(err as ApiError);
       })
       .finally(() => {
         if (mounted) setLoading(false);
