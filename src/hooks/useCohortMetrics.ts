@@ -1,18 +1,76 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { CohortId } from '@porta/api-contracts';
+import { getCohortSummary, type CohortSummary } from '../api/cohorts';
+import { toApiError, type ApiError } from '../api/client';
 import { useCohortSlice } from '../store/cohortSlice';
+import type { CohortWindow } from '../types/ui';
 
-export function useCohortMetrics(): { cohortId: string; errorRatePct: number; p99LatencyMs: number; driftRisk: 'low' | 'medium' | 'high' } {
-  const cohortId = useCohortSlice((s) => s.selectedCohort);
+export function useCohortMetrics(): {
+  rows: CohortSummary[];
+  loading: boolean;
+  error?: ApiError;
+  window: CohortWindow;
+  compareMode: boolean;
+  primaryCohort: CohortId;
+  secondaryCohort: CohortId;
+  primary?: CohortSummary;
+  secondary?: CohortSummary;
+  setWindow: (window: CohortWindow) => void;
+  setCompareMode: (enabled: boolean) => void;
+  setPrimaryCohort: (cohort: CohortId) => void;
+  setSecondaryCohort: (cohort: CohortId) => void;
+} {
+  const [rows, setRows] = useState<CohortSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<ApiError | undefined>();
+  const window = useCohortSlice((s) => s.window);
+  const compareMode = useCohortSlice((s) => s.compareMode);
+  const primaryCohort = useCohortSlice((s) => s.primaryCohort);
+  const secondaryCohort = useCohortSlice((s) => s.secondaryCohort);
+  const setWindow = useCohortSlice((s) => s.setWindow);
+  const setCompareMode = useCohortSlice((s) => s.setCompareMode);
+  const setPrimaryCohort = useCohortSlice((s) => s.setPrimaryCohort);
+  const setSecondaryCohort = useCohortSlice((s) => s.setSecondaryCohort);
 
-  return useMemo(() => {
-    const lookup: Record<string, { errorRatePct: number; p99LatencyMs: number; driftRisk: 'low' | 'medium' | 'high' }> = {
-      stable: { errorRatePct: 0.08, p99LatencyMs: 132, driftRisk: 'low' },
-      'canary-1': { errorRatePct: 0.18, p99LatencyMs: 176, driftRisk: 'medium' },
-      'canary-5': { errorRatePct: 0.26, p99LatencyMs: 202, driftRisk: 'medium' },
-      internal: { errorRatePct: 0.05, p99LatencyMs: 118, driftRisk: 'low' },
-      experimental: { errorRatePct: 0.49, p99LatencyMs: 238, driftRisk: 'high' }
+  useEffect(() => {
+    let mounted = true;
+    setLoading(true);
+
+    getCohortSummary(window)
+      .then((data) => {
+        if (!mounted) return;
+        setRows(data);
+        setError(undefined);
+      })
+      .catch((err) => {
+        if (!mounted) return;
+        setError(toApiError(err));
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+
+    return () => {
+      mounted = false;
     };
+  }, [window]);
 
-    return { cohortId, ...(lookup[cohortId] ?? lookup['canary-1']) };
-  }, [cohortId]);
+  const primary = useMemo(() => rows.find((row) => row.cohortId === primaryCohort), [rows, primaryCohort]);
+  const secondary = useMemo(() => rows.find((row) => row.cohortId === secondaryCohort), [rows, secondaryCohort]);
+
+  return {
+    rows,
+    loading,
+    error,
+    window,
+    compareMode,
+    primaryCohort,
+    secondaryCohort,
+    primary,
+    secondary,
+    setWindow,
+    setCompareMode,
+    setPrimaryCohort,
+    setSecondaryCohort
+  };
 }
