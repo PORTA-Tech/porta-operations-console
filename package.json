@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "render:prep-git-auth": "git config --global url.\"https://${GITHUB_TOKEN}@github.com/\".insteadOf \"ssh://git@github.com/\" && git config --global url.\"https://${GITHUB_TOKEN}@github.com/\".insteadOf \"git@github.com:\"",
+    "render:prep-git-auth": "sh -c 'test -n \"$GITHUB_TOKEN\" || (echo \"GITHUB_TOKEN is required\" && exit 1); git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"ssh://git@github.com/\"; git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"ssh://git@github.com\"; git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"git@github.com:\"; git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"https://github.com/\"'",
     "render:build": "npm run render:prep-git-auth && npm install && npm run build",
     "gen:api-types": "openapi-typescript node_modules/@porta/api-contracts/src/openapi/control-plane.yaml -o src/api/generated/controlPlane.ts",
     "check": "npm run gen:api-types && tsc -b",
@@ -15,7 +15,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@porta/api-contracts": "github:PORTA-Tech/porta-api-contracts#cbd4c7e",
+    "@porta/api-contracts": "git+https://github.com/PORTA-Tech/porta-api-contracts.git#cbd4c7e",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.13.0",
