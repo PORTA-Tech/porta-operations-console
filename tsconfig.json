@@ -1,8 +1,13 @@
 {
+  "compilerOptions": {
+    "types": [],
+    "typeRoots": ["./node_modules/@types"],
+    "skipLibCheck": true
+  },
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.node.json" }
   ],
-  "exclude": ["../porta-api/**"]
+  "exclude": ["../porta-api/**", "../porta-control-plane/**", "../porta-api-contracts/**"]
 }
