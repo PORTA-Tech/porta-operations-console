@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "render:prep-git-auth": "sh -c 'test -n \"$GITHUB_TOKEN\" || (echo \"GITHUB_TOKEN is required\" && exit 1); git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"ssh://git@github.com/\"; git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"ssh://git@github.com\"; git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"git@github.com:\"; git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"https://github.com/\"'",
-    "render:build": "npm run render:prep-git-auth && npm install && npm run build",
+    "render:build": "npm run render:prep-git-auth && npm install --package-lock=false && npm run build",
     "gen:api-types": "openapi-typescript node_modules/@porta/api-contracts/src/openapi/control-plane.yaml -o src/api/generated/controlPlane.ts",
     "check": "npm run gen:api-types && tsc -b",
     "test": "node -e \"console.log('No tests defined')\"",
