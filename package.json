@@ -4,8 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "preinstall": "node scripts/preinstall-git-auth.cjs",
     "dev": "vite",
-    "render:prep-git-auth": "sh -c 'test -n \"$GITHUB_TOKEN\" || (echo \"GITHUB_TOKEN is required\" && exit 1); git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"ssh://git@github.com/\"; git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"ssh://git@github.com\"; git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"git@github.com:\"; git config --global url.\"https://x-access-token:${GITHUB_TOKEN}@github.com/\".insteadOf \"https://github.com/\"'",
+    "render:prep-git-auth": "node scripts/preinstall-git-auth.cjs --require-token",
     "render:build": "npm run render:prep-git-auth && npm install --package-lock=false && npm run build",
     "gen:api-types": "openapi-typescript node_modules/@porta/api-contracts/src/openapi/control-plane.yaml -o src/api/generated/controlPlane.ts",
     "check": "npm run gen:api-types && tsc -b",
