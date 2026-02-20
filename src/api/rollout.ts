@@ -1,23 +1,44 @@
 import type { RolloutStatusView } from '@porta/api-contracts';
 import { apiRequest } from './client';
 
+export type RolloutMutationResult = {
+  rollout_state: RolloutStatusView['state'];
+  config_seq: RolloutStatusView['activeConfigSeq'];
+  cooldown_until_utc?: string;
+  halt_status: boolean;
+  updated_at_utc: string;
+};
+
 export async function getRolloutState(): Promise<RolloutStatusView> {
   return apiRequest({ path: '/v1/rollout/state', method: 'get' });
 }
 
-async function mutateAndRead(path: '/v1/rollout/promote' | '/v1/rollout/halt' | '/v1/rollout/rollback'): Promise<RolloutStatusView> {
-  await apiRequest({ path, method: 'post' });
-  return getRolloutState();
+function toMutationResult(state: RolloutStatusView): RolloutMutationResult {
+  return {
+    rollout_state: state.state,
+    config_seq: state.activeConfigSeq,
+    cooldown_until_utc: state.cooldownUntilUtc,
+    halt_status: state.state === 'HALTED' || state.state === 'ROLLED_BACK' || state.state === 'COOLDOWN',
+    updated_at_utc: state.updatedAtUtc
+  };
 }
 
-export async function promoteRollout(): Promise<RolloutStatusView> {
+async function mutateAndRead(
+  path: '/v1/rollout/promote' | '/v1/rollout/halt' | '/v1/rollout/rollback'
+): Promise<RolloutMutationResult> {
+  await apiRequest({ path, method: 'post' });
+  const state = await getRolloutState();
+  return toMutationResult(state);
+}
+
+export async function promoteRollout(): Promise<RolloutMutationResult> {
   return mutateAndRead('/v1/rollout/promote');
 }
 
-export async function haltRollout(): Promise<RolloutStatusView> {
+export async function haltRollout(): Promise<RolloutMutationResult> {
   return mutateAndRead('/v1/rollout/halt');
 }
 
-export async function rollbackRollout(): Promise<RolloutStatusView> {
+export async function rollbackRollout(): Promise<RolloutMutationResult> {
   return mutateAndRead('/v1/rollout/rollback');
 }

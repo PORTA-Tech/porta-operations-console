@@ -1,4 +1,4 @@
-import type { ApiError } from '../api/client';
+import { toApiError, type ApiError } from '../api/client';
 import { useEffect, useState } from 'react';
 import { getFleetState } from '../api/fleet';
 import { useFleetSlice } from '../store/fleetSlice';
@@ -19,7 +19,7 @@ export function useFleetState(): { loading: boolean; error?: ApiError } {
         setError(undefined);
       } catch (err) {
         if (!mounted) return;
-        setError(err as ApiError);
+        setError(toApiError(err));
       } finally {
         if (mounted) setLoading(false);
       }

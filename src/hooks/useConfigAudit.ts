@@ -1,4 +1,4 @@
-import type { ApiError } from '../api/client';
+import { toApiError, type ApiError } from '../api/client';
 import { useEffect, useState } from 'react';
 import type { ConfigLedgerRecord } from '@porta/api-contracts';
 import { getConfigLedger } from '../api/config';
@@ -18,7 +18,7 @@ export function useConfigAudit(): { rows: ConfigLedgerRecord[]; loading: boolean
       })
       .catch((err) => {
         if (!mounted) return;
-        setError(err as ApiError);
+        setError(toApiError(err));
       })
       .finally(() => {
         if (mounted) setLoading(false);

@@ -82,7 +82,47 @@ function normalizeApiError(status: number, payload: unknown, correlationId: stri
     code,
     message,
     status,
-    correlation_id: correlationId ?? undefined
+    correlation_id:
+      correlationId ??
+      (typeof payload === 'object' &&
+      payload !== null &&
+      'correlation_id' in payload &&
+      typeof payload.correlation_id === 'string'
+        ? payload.correlation_id
+        : undefined)
+  };
+}
+
+export function isApiError(value: unknown): value is ApiError {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'code' in value &&
+    'message' in value &&
+    'status' in value &&
+    typeof (value as Record<string, unknown>).code === 'string' &&
+    typeof (value as Record<string, unknown>).message === 'string' &&
+    typeof (value as Record<string, unknown>).status === 'number'
+  );
+}
+
+export function toApiError(value: unknown): ApiError {
+  if (isApiError(value)) {
+    return value;
+  }
+
+  if (value instanceof Error) {
+    return {
+      code: 'request_error',
+      message: value.message,
+      status: 0
+    };
+  }
+
+  return {
+    code: 'request_error',
+    message: 'Unexpected error',
+    status: 0
   };
 }
 
