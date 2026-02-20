@@ -1,4 +1,4 @@
-import type { SLOMetrics } from '../types/contracts';
+import type { SLOMetrics } from '@porta/api-contracts';
 import { apiRequest } from '../utils/apiHelpers';
 
 export interface SloGateDecision {

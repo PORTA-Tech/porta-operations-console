@@ -1,4 +1,4 @@
-import type { AuditEvent } from '../types/contracts';
+import type { AuditEvent } from '@porta/api-contracts';
 import { apiRequest } from '../utils/apiHelpers';
 
 export async function fetchRolloutAudit(limit = 200): Promise<AuditEvent[]> {

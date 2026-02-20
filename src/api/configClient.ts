@@ -1,4 +1,4 @@
-import type { ConfigLedgerRecord } from '../types/contracts';
+import type { ConfigLedgerRecord } from '@porta/api-contracts';
 import { apiRequest } from '../utils/apiHelpers';
 
 export async function fetchCurrentConfig(): Promise<{ configSeq: number; configVersion: string; appliedAtUtc?: string }> {

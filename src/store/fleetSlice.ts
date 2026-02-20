@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { RolloutStatusView } from '../types/contracts';
+import type { RolloutStatusView } from '@porta/api-contracts';
 
 interface FleetState {
   rollout?: RolloutStatusView;

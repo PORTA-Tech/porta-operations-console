@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import type { NodeDetail } from '../types/contracts';
+import type { NodeDetail } from '../types/ui';
 
 export function useNodeDrilldown(): { nodes: NodeDetail[] } {
   return useMemo(

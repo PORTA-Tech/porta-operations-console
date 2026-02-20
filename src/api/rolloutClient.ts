@@ -1,4 +1,4 @@
-import type { RolloutStatusView } from '../types/contracts';
+import type { RolloutStatusView } from '@porta/api-contracts';
 import { apiRequest } from '../utils/apiHelpers';
 
 export async function fetchRolloutState(): Promise<RolloutStatusView> {

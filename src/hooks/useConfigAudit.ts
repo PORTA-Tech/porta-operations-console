@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { ConfigLedgerRecord } from '../types/contracts';
+import type { ConfigLedgerRecord } from '@porta/api-contracts';
 import { fetchConfigLedger } from '../api/configClient';
 
 export function useConfigAudit(): { rows: ConfigLedgerRecord[]; loading: boolean; error?: string } {
