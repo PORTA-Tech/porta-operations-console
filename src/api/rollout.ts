@@ -1,5 +1,6 @@
 import type { RolloutStatusView } from '@porta/api-contracts';
 import { apiRequest } from './client';
+import type { components } from './generated/controlPlane';
 
 export type RolloutMutationResult = {
   rollout_state: RolloutStatusView['state'];
@@ -9,8 +10,14 @@ export type RolloutMutationResult = {
   updated_at_utc: string;
 };
 
+export type RolloutDryRunView = components['schemas']['RolloutDryRunView'];
+
 export async function getRolloutState(): Promise<RolloutStatusView> {
   return apiRequest({ path: '/v1/rollout/state', method: 'get' });
+}
+
+export async function getRolloutDryRun(): Promise<RolloutDryRunView> {
+  return apiRequest({ path: '/v1/rollout/dry-run', method: 'get' });
 }
 
 function toMutationResult(state: RolloutStatusView): RolloutMutationResult {
@@ -41,4 +48,20 @@ export async function haltRollout(): Promise<RolloutMutationResult> {
 
 export async function rollbackRollout(): Promise<RolloutMutationResult> {
   return mutateAndRead('/v1/rollout/rollback');
+}
+
+export async function initiatePromotion(): Promise<RolloutMutationResult> {
+  return promoteRollout();
+}
+
+export async function pauseRollout(): Promise<RolloutMutationResult> {
+  return haltRollout();
+}
+
+export async function resumeRollout(): Promise<RolloutMutationResult> {
+  return promoteRollout();
+}
+
+export async function forceRollback(): Promise<RolloutMutationResult> {
+  return rollbackRollout();
 }

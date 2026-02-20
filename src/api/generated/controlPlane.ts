@@ -184,6 +184,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/config/diff-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview diff between current and target config */
+        get: {
+            parameters: {
+                query?: {
+                    targetConfigSeq?: number;
+                };
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Config diff preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConfigDiffPreviewView"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/config/integrity-active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get active configuration integrity view */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Active config integrity */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ActiveConfigIntegrityView"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/rollout/state": {
         parameters: {
             query?: never;
@@ -371,6 +451,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/rollout/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dry-run rollout simulation preview */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Dry-run simulation output */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RolloutDryRunView"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/slo/evaluate": {
         parameters: {
             query?: never;
@@ -408,6 +527,45 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/nodes/snapshot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read node snapshot table */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Node snapshot rows */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NodeSnapshotView"][];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -552,6 +710,33 @@ export interface components {
             hash: string;
             previousHash?: string;
         };
+        ConfigDiffPreviewView: {
+            current_config_seq: number;
+            target_config_seq: number;
+            added_keys: string[];
+            modified_keys: string[];
+            removed_keys: string[];
+            hash_fingerprint: string;
+        };
+        FullConfigDiff: {
+            added_keys: string[];
+            modified_keys: string[];
+            removed_keys: string[];
+        };
+        /** @enum {string} */
+        ActiveConfigIntegrityStatus: "verified" | "expiry_approaching" | "invalid_or_expired";
+        ActiveConfigIntegrityView: {
+            config_seq: number;
+            config_version: string;
+            issuer: string;
+            signature_validity: boolean;
+            /** Format: date-time */
+            expires_at_utc: string;
+            expiry_countdown_seconds: number;
+            hash_fingerprint: string;
+            full_diff_from_previous: components["schemas"]["FullConfigDiff"];
+            integrity_status: components["schemas"]["ActiveConfigIntegrityStatus"];
+        };
         RolloutTransition: {
             changed: boolean;
             idempotent: boolean;
@@ -579,6 +764,19 @@ export interface components {
             toState: components["schemas"]["RolloutState"];
             /** Format: date-time */
             cooldownUntilUtc?: string;
+        };
+        PredictedSLOImpact: {
+            error_rate_delta_pct: number;
+            p99_latency_delta_ms: number;
+            degradation_rate_delta_pct: number;
+        };
+        RolloutDryRunView: {
+            blast_radius_node_count: number;
+            cohorts_impacted: components["schemas"]["CohortId"][];
+            predicted_slo_impact: components["schemas"]["PredictedSLOImpact"];
+            rollout_stage_progression_preview: components["schemas"]["RolloutState"][];
+            /** Format: date-time */
+            generated_at_utc: string;
         };
         SLOMetrics: {
             /** Format: date-time */
@@ -611,6 +809,19 @@ export interface components {
             aggregated: components["schemas"]["AggregatedSLO"];
             rolloutState: components["schemas"]["RolloutState"];
             autoAction?: components["schemas"]["RollbackActionResult"];
+        };
+        NodeSnapshotView: {
+            /** Format: uuid */
+            node_id: string;
+            cohort: components["schemas"]["CohortId"];
+            config_seq: number;
+            signature_valid: boolean;
+            /** Format: date-time */
+            last_heartbeat: string;
+            /** @enum {string} */
+            degradation_state: "normal" | "degraded" | "safe";
+            /** @enum {string} */
+            SLO_compliance: "compliant" | "breach";
         };
         AuditEvent: {
             /** Format: uuid */

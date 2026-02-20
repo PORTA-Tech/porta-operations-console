@@ -1,15 +1,17 @@
 import type { RolloutMutationResult } from '../api/rollout';
-import { haltRollout, promoteRollout, rollbackRollout } from '../api/rollout';
+import { forceRollback, initiatePromotion, pauseRollout, resumeRollout } from '../api/rollout';
 
 export function useRollout(): {
-  promote: () => Promise<RolloutMutationResult>;
-  halt: () => Promise<RolloutMutationResult>;
-  rollback: () => Promise<RolloutMutationResult>;
+  initiatePromotion: () => Promise<RolloutMutationResult>;
+  pauseRollout: () => Promise<RolloutMutationResult>;
+  resumeRollout: () => Promise<RolloutMutationResult>;
+  forceRollback: () => Promise<RolloutMutationResult>;
 } {
   return {
-    promote: async () => promoteRollout(),
-    halt: async () => haltRollout(),
-    rollback: async () => rollbackRollout()
+    initiatePromotion: async () => initiatePromotion(),
+    pauseRollout: async () => pauseRollout(),
+    resumeRollout: async () => resumeRollout(),
+    forceRollback: async () => forceRollback()
   };
 }
 

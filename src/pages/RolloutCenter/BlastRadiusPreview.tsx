@@ -1,14 +1,30 @@
 import { Panel } from '../../components/Layout/Panel';
+import type { ApiError } from '../../api/client';
+import type { RolloutDryRunView } from '../../api/rollout';
 
-export function BlastRadiusPreview() {
+interface BlastRadiusPreviewProps {
+  data?: RolloutDryRunView;
+  loading: boolean;
+  error?: ApiError;
+}
+
+export function BlastRadiusPreview({ data, loading, error }: BlastRadiusPreviewProps) {
   return (
     <Panel title="Blast Radius Preview">
-      <p>Projected impact is simulated from cohort weights and current node distribution.</p>
-      <ul>
-        <li>canary-1: ~1% nodes</li>
-        <li>canary-5: ~5% nodes</li>
-        <li>stable: ~94% nodes</li>
-      </ul>
+      {loading ? <p className="muted-line">Loading dry-run preview...</p> : null}
+      {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
+      {data ? (
+        <>
+          <p>Blast radius (node count): <strong>{data.blast_radius_node_count}</strong></p>
+          <p>Cohorts impacted:</p>
+          <ul>
+            {data.cohorts_impacted.map((cohort) => (
+              <li key={cohort}>{cohort}</li>
+            ))}
+          </ul>
+          <p>Generated at: <strong>{new Date(data.generated_at_utc).toLocaleString()}</strong></p>
+        </>
+      ) : null}
     </Panel>
   );
 }

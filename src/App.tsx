@@ -10,6 +10,8 @@ import { NodeDetails } from './pages/NodeDrilldown/NodeDetails';
 import { ConfigAuditTable } from './pages/ConfigIntegrity/ConfigAuditTable';
 import { ConfigDiffViewer } from './pages/ConfigIntegrity/ConfigDiffViewer';
 import { useFleetState } from './hooks/useFleetState';
+import { useNodeDrilldown } from './hooks/useNodeDrilldown';
+import { useRolloutDryRun } from './hooks/useRolloutDryRun';
 
 function DashboardPage() {
   return (
@@ -21,20 +23,24 @@ function DashboardPage() {
 }
 
 function RolloutPage() {
+  const dryRun = useRolloutDryRun();
+
   return (
     <div className="stack">
       <RolloutControl />
-      <BlastRadiusPreview />
-      <DryRunSimulation />
+      <BlastRadiusPreview {...dryRun} />
+      <DryRunSimulation {...dryRun} />
     </div>
   );
 }
 
 function NodePage() {
+  const nodeSnapshot = useNodeDrilldown();
+
   return (
     <div className="stack">
-      <NodeList />
-      <NodeDetails />
+      <NodeList {...nodeSnapshot} />
+      <NodeDetails {...nodeSnapshot} />
     </div>
   );
 }
