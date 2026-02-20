@@ -3,12 +3,12 @@ import { getAdapterControls, updateAdapterControls, type AdapterActivationContro
 import { toApiError, type ApiError } from '../api/client';
 
 export function useAdapterControls(): {
-  data?: AdapterActivationControlsView;
+  data: AdapterActivationControlsView | undefined;
   loading: boolean;
-  error?: ApiError;
+  error: ApiError | undefined;
   saving: boolean;
-  saveError?: ApiError;
-  lastMutation?: AdapterActivationControlsView;
+  saveError: ApiError | undefined;
+  lastMutation: AdapterActivationControlsView | undefined;
   refresh: () => Promise<void>;
   save: (next: AdapterActivationControlsView) => Promise<AdapterActivationControlsView | undefined>;
 } {

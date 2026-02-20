@@ -7,7 +7,7 @@ import type { NodeDetail } from '../../types/ui';
 interface NodeListProps {
   nodes: NodeDetail[];
   loading: boolean;
-  error?: ApiError;
+  error: ApiError | undefined;
 }
 
 export function NodeList({ nodes, loading, error }: NodeListProps) {

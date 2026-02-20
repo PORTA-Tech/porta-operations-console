@@ -5,7 +5,7 @@ import type { components } from './generated/controlPlane';
 export type RolloutMutationResult = {
   rollout_state: RolloutStatusView['state'];
   config_seq: RolloutStatusView['activeConfigSeq'];
-  cooldown_until_utc?: string;
+  cooldown_until_utc: string | undefined;
   halt_status: boolean;
   updated_at_utc: string;
 };

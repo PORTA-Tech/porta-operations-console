@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getRolloutDryRun, type RolloutDryRunView } from '../api/rollout';
 import { toApiError, type ApiError } from '../api/client';
 
-export function useRolloutDryRun(): { data?: RolloutDryRunView; loading: boolean; error?: ApiError } {
+export function useRolloutDryRun(): { data: RolloutDryRunView | undefined; loading: boolean; error: ApiError | undefined } {
   const [data, setData] = useState<RolloutDryRunView | undefined>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();

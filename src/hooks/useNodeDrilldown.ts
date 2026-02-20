@@ -3,7 +3,7 @@ import { getNodeSnapshot } from '../api/nodes';
 import { toApiError, type ApiError } from '../api/client';
 import type { NodeDetail } from '../types/ui';
 
-export function useNodeDrilldown(): { nodes: NodeDetail[]; loading: boolean; error?: ApiError } {
+export function useNodeDrilldown(): { nodes: NodeDetail[]; loading: boolean; error: ApiError | undefined } {
   const [nodes, setNodes] = useState<NodeDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();

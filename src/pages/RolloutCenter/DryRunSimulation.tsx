@@ -3,9 +3,9 @@ import type { ApiError } from '../../api/client';
 import type { RolloutDryRunView } from '../../api/rollout';
 
 interface DryRunSimulationProps {
-  data?: RolloutDryRunView;
+  data: RolloutDryRunView | undefined;
   loading: boolean;
-  error?: ApiError;
+  error: ApiError | undefined;
 }
 
 export function DryRunSimulation({ data, loading, error }: DryRunSimulationProps) {

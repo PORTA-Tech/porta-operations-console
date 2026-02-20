@@ -8,13 +8,13 @@ import type { CohortWindow } from '../types/ui';
 export function useCohortMetrics(): {
   rows: CohortSummary[];
   loading: boolean;
-  error?: ApiError;
+  error: ApiError | undefined;
   window: CohortWindow;
   compareMode: boolean;
   primaryCohort: CohortId;
   secondaryCohort: CohortId;
-  primary?: CohortSummary;
-  secondary?: CohortSummary;
+  primary: CohortSummary | undefined;
+  secondary: CohortSummary | undefined;
   setWindow: (window: CohortWindow) => void;
   setCompareMode: (enabled: boolean) => void;
   setPrimaryCohort: (cohort: CohortId) => void;

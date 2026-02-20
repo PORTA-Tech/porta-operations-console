@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getAuditLedgerView, type AuditLedgerRow } from '../api/audit';
 import { toApiError, type ApiError } from '../api/client';
 
-export function useAuditLedgerView(): { rows: AuditLedgerRow[]; loading: boolean; error?: ApiError } {
+export function useAuditLedgerView(): { rows: AuditLedgerRow[]; loading: boolean; error: ApiError | undefined } {
   const [rows, setRows] = useState<AuditLedgerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();

@@ -10,11 +10,11 @@ import { toApiError, type ApiError } from '../api/client';
 export function useAdapterObservability(): {
   rows: AdapterCohortObservabilityRow[];
   replayRows: AdapterReplayLogRow[];
-  selectedCohort?: string;
+  selectedCohort: string | undefined;
   loading: boolean;
   replayLoading: boolean;
-  error?: ApiError;
-  replayError?: ApiError;
+  error: ApiError | undefined;
+  replayError: ApiError | undefined;
   setSelectedCohort: (cohort: string) => void;
 } {
   const [rows, setRows] = useState<AdapterCohortObservabilityRow[]>([]);

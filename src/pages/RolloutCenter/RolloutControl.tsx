@@ -17,7 +17,7 @@ type RolloutAction = {
   execute: () => Promise<{
     rollout_state: RolloutStatusView['state'];
     config_seq: RolloutStatusView['activeConfigSeq'];
-    cooldown_until_utc?: string;
+    cooldown_until_utc: string | undefined;
     updated_at_utc: string;
   }>;
   danger?: boolean;
@@ -81,9 +81,9 @@ export function RolloutControl() {
       setRollout({
         state: result.rollout_state,
         activeConfigSeq: result.config_seq,
-        cooldownUntilUtc: result.cooldown_until_utc,
         updatedAtUtc: result.updated_at_utc,
-        targetCohort: rollout.targetCohort
+        ...(result.cooldown_until_utc !== undefined ? { cooldownUntilUtc: result.cooldown_until_utc } : {}),
+        ...(rollout.targetCohort !== undefined ? { targetCohort: rollout.targetCohort } : {})
       });
       setSelectedAction(undefined);
     } catch (error) {

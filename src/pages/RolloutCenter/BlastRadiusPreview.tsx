@@ -3,9 +3,9 @@ import type { ApiError } from '../../api/client';
 import type { RolloutDryRunView } from '../../api/rollout';
 
 interface BlastRadiusPreviewProps {
-  data?: RolloutDryRunView;
+  data: RolloutDryRunView | undefined;
   loading: boolean;
-  error?: ApiError;
+  error: ApiError | undefined;
 }
 
 export function BlastRadiusPreview({ data, loading, error }: BlastRadiusPreviewProps) {

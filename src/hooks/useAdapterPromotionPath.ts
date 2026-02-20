@@ -3,12 +3,12 @@ import { advanceAdapterPromotionPath, getAdapterPromotionPath, type AdapterPromo
 import { toApiError, type ApiError } from '../api/client';
 
 export function useAdapterPromotionPath(): {
-  data?: AdapterPromotionPathView;
+  data: AdapterPromotionPathView | undefined;
   loading: boolean;
-  error?: ApiError;
+  error: ApiError | undefined;
   advancing: boolean;
-  advanceError?: ApiError;
-  lastAdvance?: AdapterPromotionPathView;
+  advanceError: ApiError | undefined;
+  lastAdvance: AdapterPromotionPathView | undefined;
   advance: () => Promise<AdapterPromotionPathView | undefined>;
 } {
   const [data, setData] = useState<AdapterPromotionPathView | undefined>();

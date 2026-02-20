@@ -1,8 +1,8 @@
 import type { CohortSummary } from '../../api/cohorts';
 
 interface CohortTrendLinesProps {
-  primary?: CohortSummary;
-  secondary?: CohortSummary;
+  primary: CohortSummary | undefined;
+  secondary: CohortSummary | undefined;
   compareMode: boolean;
 }
 

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import type { ConfigLedgerRecord } from '@porta/api-contracts';
 import { getConfigLedger } from '../api/config';
 
-export function useConfigAudit(): { rows: ConfigLedgerRecord[]; loading: boolean; error?: ApiError } {
+export function useConfigAudit(): { rows: ConfigLedgerRecord[]; loading: boolean; error: ApiError | undefined } {
   const [rows, setRows] = useState<ConfigLedgerRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();

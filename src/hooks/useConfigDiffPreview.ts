@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { getConfigDiffPreview, type ConfigDiffPreviewView } from '../api/config';
 import { toApiError, type ApiError } from '../api/client';
 
-export function useConfigDiffPreview(): { data?: ConfigDiffPreviewView; loading: boolean; error?: ApiError } {
+export function useConfigDiffPreview(): { data: ConfigDiffPreviewView | undefined; loading: boolean; error: ApiError | undefined } {
   const [data, setData] = useState<ConfigDiffPreviewView | undefined>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();

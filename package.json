@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "gen:api-types": "openapi-typescript node_modules/@porta/api-contracts/src/openapi/control-plane.yaml -o src/api/generated/controlPlane.ts",
+    "check": "npm run gen:api-types && tsc -b",
+    "test": "node -e \"console.log('No tests defined')\"",
     "build": "npm run gen:api-types && tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"

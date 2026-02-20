@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 
 interface ConfigState {
-  activeConfigSeq?: number;
-  activeConfigVersion?: string;
+  activeConfigSeq: number | undefined;
+  activeConfigVersion: string | undefined;
   setConfig: (seq: number, version: string) => void;
 }
 

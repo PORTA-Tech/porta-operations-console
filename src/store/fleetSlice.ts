@@ -3,7 +3,7 @@ import type { RolloutStatusView } from '@porta/api-contracts';
 import type { CohortSnapshot } from '../api/cohorts';
 
 interface FleetState {
-  rollout?: RolloutStatusView;
+  rollout: RolloutStatusView | undefined;
   fleetHealth: number;
   cohortDistribution: CohortSnapshot[];
   sloCompliance: {

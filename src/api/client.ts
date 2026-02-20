@@ -5,7 +5,7 @@ export type ApiError = {
   code: string;
   message: string;
   status: number;
-  correlation_id?: string;
+  correlation_id: string | undefined;
 };
 
 type HttpMethod = 'get' | 'post' | 'put' | 'patch' | 'delete';
@@ -115,14 +115,16 @@ export function toApiError(value: unknown): ApiError {
     return {
       code: 'request_error',
       message: value.message,
-      status: 0
+      status: 0,
+      correlation_id: undefined
     };
   }
 
   return {
     code: 'request_error',
     message: 'Unexpected error',
-    status: 0
+    status: 0,
+    correlation_id: undefined
   };
 }
 
@@ -138,8 +140,8 @@ export async function apiRequest<P extends PathKey, M extends ExistingMethod<P>>
   const response = await fetch(`${resolveApiBaseUrl()}${String(input.path)}`, {
     method: input.method.toUpperCase(),
     headers,
-    body: input.body === undefined ? undefined : JSON.stringify(input.body),
-    signal: input.signal
+    ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
+    ...(input.signal === undefined ? {} : { signal: input.signal })
   });
 
   const correlationId = response.headers.get('x-correlation-id');

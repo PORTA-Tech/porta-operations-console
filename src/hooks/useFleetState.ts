@@ -4,7 +4,7 @@ import { getFleetState } from '../api/fleet';
 import { getCohortSnapshots } from '../api/cohorts';
 import { useFleetSlice } from '../store/fleetSlice';
 
-export function useFleetState(): { loading: boolean; error?: ApiError } {
+export function useFleetState(): { loading: boolean; error: ApiError | undefined } {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();
   const setRollout = useFleetSlice((s) => s.setRollout);
