@@ -1,4 +1,4 @@
-import type { ConfigLedgerRecord } from '@porta/api-contracts';
+import type { ConfigLedgerRecord } from '../types/apiContracts';
 import { apiRequest, type ApiResponse } from './client';
 import type { components } from './generated/controlPlane';
 

@@ -1,7 +1,7 @@
 import { Panel } from '../../components/Layout/Panel';
 import { useCohortMetrics } from '../../hooks/useCohortMetrics';
 import { CohortTrendLines } from '../../components/Graphs/CohortTrendLines';
-import type { CohortId } from '@porta/api-contracts';
+import type { CohortId } from '../../types/apiContracts';
 
 export function CohortOverview() {
   const {

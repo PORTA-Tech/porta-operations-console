@@ -1,4 +1,4 @@
-import type { RolloutStatusView } from '@porta/api-contracts';
+import type { RolloutStatusView } from '../types/apiContracts';
 import { apiRequest } from './client';
 import type { components } from './generated/controlPlane';
 

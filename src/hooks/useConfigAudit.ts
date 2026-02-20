@@ -1,6 +1,6 @@
 import { toApiError, type ApiError } from '../api/client';
 import { useEffect, useState } from 'react';
-import type { ConfigLedgerRecord } from '@porta/api-contracts';
+import type { ConfigLedgerRecord } from '../types/apiContracts';
 import { getConfigLedger } from '../api/config';
 
 export function useConfigAudit(): { rows: ConfigLedgerRecord[]; loading: boolean; error: ApiError | undefined } {

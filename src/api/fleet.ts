@@ -1,4 +1,4 @@
-import type { RolloutStatusView } from '@porta/api-contracts';
+import type { RolloutStatusView } from '../types/apiContracts';
 import { apiRequest } from './client';
 
 export async function getHealth(): Promise<{ ok: boolean }> {

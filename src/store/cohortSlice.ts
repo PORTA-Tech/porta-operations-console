@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { CohortId } from '@porta/api-contracts';
+import type { CohortId } from '../types/apiContracts';
 import type { CohortWindow } from '../types/ui';
 
 interface CohortState {

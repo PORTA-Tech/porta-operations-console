@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { CohortId } from '@porta/api-contracts';
+import type { CohortId } from '../types/apiContracts';
 import { getCohortSummary, type CohortSummary } from '../api/cohorts';
 import { toApiError, type ApiError } from '../api/client';
 import { useCohortSlice } from '../store/cohortSlice';

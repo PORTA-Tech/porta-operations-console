@@ -1,4 +1,4 @@
-import type { AuditEvent } from '@porta/api-contracts';
+import type { AuditEvent } from '../types/apiContracts';
 import { apiRequest } from './client';
 import type { components } from './generated/controlPlane';
 

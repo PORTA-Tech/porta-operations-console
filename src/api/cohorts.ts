@@ -1,4 +1,4 @@
-import type { CohortId, RolloutStatusView } from '@porta/api-contracts';
+import type { CohortId, RolloutStatusView } from '../types/apiContracts';
 import { getFleetState } from './fleet';
 import type { CohortTrendPoint, CohortWindow } from '../types/ui';
 

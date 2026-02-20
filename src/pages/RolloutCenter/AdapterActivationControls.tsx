@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { CohortId } from '@porta/api-contracts';
+import type { CohortId } from '../../types/apiContracts';
 import { Panel } from '../../components/Layout/Panel';
 import { useAdapterControls } from '../../hooks/useAdapterControls';
 import { useOperatorAuth } from '../../hooks/useOperatorAuth';

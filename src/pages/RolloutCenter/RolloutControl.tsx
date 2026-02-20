@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { RolloutStatusView } from '@porta/api-contracts';
+import type { RolloutStatusView } from '../../types/apiContracts';
 import { Panel } from '../../components/Layout/Panel';
 import { useFleetSlice } from '../../store/fleetSlice';
 import { formatUtc } from '../../utils/date';
