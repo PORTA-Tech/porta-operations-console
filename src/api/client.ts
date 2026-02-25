@@ -128,6 +128,38 @@ export function toApiError(value: unknown): ApiError {
   };
 }
 
+export type RawApiRequest = {
+  path: string;
+  method: HttpMethod;
+  body?: unknown;
+  signal?: AbortSignal;
+};
+
+export async function apiRequestRaw<T>(input: RawApiRequest): Promise<T> {
+  const auth = authClient.getOperatorAuth();
+  const headers = new Headers();
+  headers.set('Content-Type', 'application/json');
+  headers.set('x-operator-id', auth.operatorId);
+  headers.set('x-operator-role', auth.operatorRole);
+
+  const response = await fetch(`${resolveApiBaseUrl()}${input.path}`, {
+    method: input.method.toUpperCase(),
+    headers,
+    ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
+    ...(input.signal === undefined ? {} : { signal: input.signal })
+  });
+
+  const correlationId = response.headers.get('x-correlation-id');
+  const text = await response.text();
+  const payload: unknown = text.length > 0 ? JSON.parse(text) : undefined;
+
+  if (!response.ok) {
+    throw normalizeApiError(response.status, payload, correlationId);
+  }
+
+  return payload as T;
+}
+
 export async function apiRequest<P extends PathKey, M extends ExistingMethod<P>>(
   input: ApiRequestInput<P, M>
 ): Promise<ApiResponse<P, M>> {

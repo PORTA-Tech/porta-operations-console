@@ -21,3 +21,6 @@ Run npm install then npm run dev.
 
 ## Step 12
 - See `CONSOLE_FOUNDATIONS.md` for concrete production values and rendering rules.
+
+## Step 13
+- See `CONSOLE_OPERATIONS.md` for policy management, audit operations, and RBAC UI foundations.

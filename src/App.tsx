@@ -13,6 +13,7 @@ import { NodeDetails } from './pages/NodeDrilldown/NodeDetails';
 import { ConfigAuditTable } from './pages/ConfigIntegrity/ConfigAuditTable';
 import { ConfigDiffViewer } from './pages/ConfigIntegrity/ConfigDiffViewer';
 import { ConsoleFoundationPage } from './pages/ConsoleFoundation/ConsoleFoundationPage';
+import { ConsoleOperationsPage } from './pages/Operations/ConsoleOperationsPage';
 import { useFleetState } from './hooks/useFleetState';
 import { useNodeDrilldown } from './hooks/useNodeDrilldown';
 import { useRolloutDryRun } from './hooks/useRolloutDryRun';
@@ -71,6 +72,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/console" element={<ConsoleFoundationPage />} />
+        <Route path="/operations" element={<ConsoleOperationsPage />} />
         <Route path="/rollout" element={<RolloutPage />} />
         <Route path="/cohorts" element={<CohortOverview />} />
         <Route path="/nodes" element={<NodePage />} />

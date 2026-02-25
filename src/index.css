@@ -388,6 +388,61 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   background: #fff;
 }
 
+.ops-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(280px, 1fr);
+  gap: 12px;
+}
+
+.ops-editor {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.ops-editor h4 {
+  margin: 0 0 4px;
+}
+
+.ops-editor label {
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+.ops-editor input,
+.ops-editor select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #fff;
+}
+
+.ops-conflict-box {
+  margin-top: 8px;
+  border: 1px solid #f0c6c6;
+  border-radius: 10px;
+  padding: 8px;
+  background: #fff1f1;
+}
+
+.ops-conflict-box ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.click-row {
+  cursor: pointer;
+}
+
+.row-alert td {
+  color: #7d1818;
+}
+
 @media (max-width: 900px) {
   .shell-main { grid-template-columns: 1fr; }
   .sidebar {
@@ -399,4 +454,5 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   .grid-two { grid-template-columns: 1fr; }
   .grid-three { grid-template-columns: 1fr; }
   .console-grid-two { grid-template-columns: 1fr; }
+  .ops-grid { grid-template-columns: 1fr; }
 }
