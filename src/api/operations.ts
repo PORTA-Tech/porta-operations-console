@@ -1,5 +1,5 @@
 import { apiRequestRaw } from './client';
-import type { AuditDecisionRecord, ConsoleOpsMetrics, PolicyRecord, RbacAssignment } from '../types/consoleOperations';
+import type { AlertRecord, AuditDecisionRecord, ConsoleOpsMetrics, PolicyRecord, RbacAssignment } from '../types/consoleOperations';
 
 const fallbackPolicies: PolicyRecord[] = [
   {
@@ -76,6 +76,7 @@ export async function fetchAuditDecisions(): Promise<AuditDecisionRecord[]> {
     });
     return traces.map((trace) => ({
       trace_id: String(trace.trace_id ?? ''),
+      correlation_id: String(trace.correlation_id ?? ''),
       timestamp: String(trace.timestamp ?? ''),
       agent_id: String(trace.target_service ?? 'unknown'),
       policy_id: String(trace.policy_id ?? ''),
@@ -88,6 +89,24 @@ export async function fetchAuditDecisions(): Promise<AuditDecisionRecord[]> {
   } catch {
     return [];
   }
+}
+
+export async function fetchAlerts(includeHistory = false): Promise<AlertRecord[]> {
+  try {
+    return await apiRequestRaw<AlertRecord[]>({
+      path: `/v1/audit/alerts?limit=1000&include_history=${includeHistory ? 'true' : 'false'}`,
+      method: 'get'
+    });
+  } catch {
+    return [];
+  }
+}
+
+export async function resolveAlert(alertId: string): Promise<AlertRecord> {
+  return apiRequestRaw<AlertRecord>({
+    path: `/v1/audit/alerts/${encodeURIComponent(alertId)}/resolve`,
+    method: 'post'
+  });
 }
 
 export async function replayTrace(traceId: string): Promise<{ result: 'match' | 'mismatch'; details: string }> {
@@ -158,13 +177,19 @@ export async function assignRole(assignment: RbacAssignment): Promise<{ ok: bool
 export async function fetchConsoleOpsMetrics(): Promise<ConsoleOpsMetrics> {
   try {
     const rows = await apiRequestRaw<Array<{ metric_name: string; value: number }>>({ path: '/v1/audit/metrics', method: 'get' });
-    const map = new Map(rows.map((row) => [row.metric_name, row.value]));
+    const totals = new Map<string, number>();
+    for (const row of rows) {
+      totals.set(row.metric_name, (totals.get(row.metric_name) ?? 0) + Number(row.value ?? 0));
+    }
     return {
-      policy_changes_total: Number(map.get('policy_changes_total') ?? 0),
-      policy_deploy_failures_total: Number(map.get('policy_deploy_failures_total') ?? 0),
-      audit_queries_total: Number(map.get('audit_queries_total') ?? 0),
-      audit_signature_mismatch_total: Number(map.get('audit_signature_mismatch_total') ?? 0),
-      rbac_violations_total: Number(map.get('audit_access_denied_total') ?? 0)
+      policy_changes_total: Number(totals.get('policy_changes_total') ?? 0),
+      policy_deploy_failures_total: Number(totals.get('policy_deploy_failures_total') ?? 0),
+      audit_queries_total: Number(totals.get('audit_queries_total') ?? 0),
+      audit_signature_mismatch_total: Number(totals.get('audit_signature_mismatch_total') ?? 0),
+      rbac_violations_total: Number(totals.get('audit_access_denied_total') ?? 0),
+      correlation_trace_complete_total: Number(totals.get('correlation_trace_complete_total') ?? 0),
+      correlation_trace_incomplete_total: Number(totals.get('correlation_trace_incomplete_total') ?? 0),
+      alerts_triggered_total: Number(totals.get('alerts_triggered_total') ?? 0)
     };
   } catch {
     return {
@@ -172,8 +197,10 @@ export async function fetchConsoleOpsMetrics(): Promise<ConsoleOpsMetrics> {
       policy_deploy_failures_total: 0,
       audit_queries_total: 0,
       audit_signature_mismatch_total: 0,
-      rbac_violations_total: 0
+      rbac_violations_total: 0,
+      correlation_trace_complete_total: 0,
+      correlation_trace_incomplete_total: 0,
+      alerts_triggered_total: 0
     };
   }
 }
-

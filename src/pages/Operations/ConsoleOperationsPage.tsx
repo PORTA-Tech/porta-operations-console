@@ -18,11 +18,7 @@ function detectPolicyConflicts(policies: PolicyRecord[]): Array<{ left: string; 
       const a = policies[i];
       const b = policies[j];
       if (!a || !b || !a.active_flag || !b.active_flag) continue;
-      if (
-        a.service_scope === b.service_scope &&
-        a.environment_scope === b.environment_scope &&
-        a.trigger_metric === b.trigger_metric
-      ) {
+      if (a.service_scope === b.service_scope && a.environment_scope === b.environment_scope && a.trigger_metric === b.trigger_metric) {
         conflicts.push({
           left: a.policy_id,
           right: b.policy_id,
@@ -42,8 +38,21 @@ const rolePermissions: Record<RoleName, Array<'read' | 'write' | 'override'>> = 
 };
 
 export function ConsoleOperationsPage() {
-  const { policies, audits, assignments, metrics, loading, error, savePolicy, deployPolicyById, replay, exportRows, assign } =
-    useConsoleOperations();
+  const {
+    policies,
+    audits,
+    alerts,
+    assignments,
+    metrics,
+    loading,
+    error,
+    savePolicy,
+    deployPolicyById,
+    replay,
+    exportRows,
+    assign,
+    resolveAlertById
+  } = useConsoleOperations();
 
   const [editor, setEditor] = useState<PolicyRecord | null>(policies[0] ?? null);
   const [deployResult, setDeployResult] = useState<string>('');
@@ -68,10 +77,7 @@ export function ConsoleOperationsPage() {
     [audits, auditFilterPolicy, auditFilterDecision, auditConfidenceMin]
   );
 
-  const validationError =
-    editor && !semverPattern.test(editor.version)
-      ? 'Version must follow MAJOR.MINOR.PATCH'
-      : undefined;
+  const validationError = editor && !semverPattern.test(editor.version) ? 'Version must follow MAJOR.MINOR.PATCH' : undefined;
 
   const handleSelectPolicy = (policy: PolicyRecord) => {
     setEditor(policy);
@@ -97,7 +103,11 @@ export function ConsoleOperationsPage() {
     <div className="stack">
       <Panel title="Policy Management UI">
         {loading ? <p className="muted-line">Loading operations data...</p> : null}
-        {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
+        {error ? (
+          <p className="error-line">
+            {error.code}: {error.message}
+          </p>
+        ) : null}
         <div className="ops-grid">
           <div>
             <table className="simple-table">
@@ -118,9 +128,7 @@ export function ConsoleOperationsPage() {
                     <td>{policy.name}</td>
                     <td>{policy.version}</td>
                     <td>
-                      <span className={toneClass(policy.active_flag, policy.status)}>
-                        {policy.active_flag ? 'Active' : 'Inactive'}
-                      </span>
+                      <span className={toneClass(policy.active_flag, policy.status)}>{policy.active_flag ? 'Active' : 'Inactive'}</span>
                     </td>
                     <td>{new Date(policy.last_modified).toLocaleString()}</td>
                     <td>{policy.created_by}</td>
@@ -155,28 +163,15 @@ export function ConsoleOperationsPage() {
                 </label>
                 <label>
                   Trigger threshold
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={editor.trigger_threshold}
-                    onChange={(e) => setEditor({ ...editor, trigger_threshold: Number(e.target.value) })}
-                  />
+                  <input type="number" step="0.1" value={editor.trigger_threshold} onChange={(e) => setEditor({ ...editor, trigger_threshold: Number(e.target.value) })} />
                 </label>
                 <label>
                   Dwell window (seconds)
-                  <input
-                    type="number"
-                    value={editor.dwell_window_seconds}
-                    onChange={(e) => setEditor({ ...editor, dwell_window_seconds: Number(e.target.value) })}
-                  />
+                  <input type="number" value={editor.dwell_window_seconds} onChange={(e) => setEditor({ ...editor, dwell_window_seconds: Number(e.target.value) })} />
                 </label>
                 <label>
                   Cooldown (seconds)
-                  <input
-                    type="number"
-                    value={editor.cooldown_seconds}
-                    onChange={(e) => setEditor({ ...editor, cooldown_seconds: Number(e.target.value) })}
-                  />
+                  <input type="number" value={editor.cooldown_seconds} onChange={(e) => setEditor({ ...editor, cooldown_seconds: Number(e.target.value) })} />
                 </label>
                 <label>
                   Max intervention duration (seconds)
@@ -188,11 +183,7 @@ export function ConsoleOperationsPage() {
                 </label>
                 <label>
                   Max interventions/hour
-                  <input
-                    type="number"
-                    value={editor.max_interventions_per_hour}
-                    onChange={(e) => setEditor({ ...editor, max_interventions_per_hour: Number(e.target.value) })}
-                  />
+                  <input type="number" value={editor.max_interventions_per_hour} onChange={(e) => setEditor({ ...editor, max_interventions_per_hour: Number(e.target.value) })} />
                 </label>
                 <label>
                   Escalation ladder
@@ -256,6 +247,7 @@ export function ConsoleOperationsPage() {
           <thead>
             <tr>
               <th>trace_id</th>
+              <th>correlation_id</th>
               <th>timestamp</th>
               <th>agent_id</th>
               <th>policy_id</th>
@@ -270,13 +262,14 @@ export function ConsoleOperationsPage() {
             {filteredAudits.map((row) => (
               <tr key={row.trace_id} className={!row.signature_valid ? 'row-alert' : undefined}>
                 <td>{row.trace_id}</td>
+                <td>{row.correlation_id || 'n/a'}</td>
                 <td>{new Date(row.timestamp).toLocaleString()}</td>
                 <td>{row.agent_id}</td>
                 <td>{row.policy_id}</td>
                 <td>{row.action_decision}</td>
                 <td>{row.confidence_score.toFixed(2)}</td>
                 <td>{row.triggered_by}</td>
-                <td>{row.signature_valid ? '✅' : '❌'}</td>
+                <td>{row.signature_valid ? 'OK' : 'FAIL'}</td>
                 <td>
                   <button
                     onClick={() =>
@@ -290,6 +283,46 @@ export function ConsoleOperationsPage() {
                 </td>
               </tr>
             ))}
+          </tbody>
+        </table>
+      </Panel>
+
+      <Panel title="Active Alerts">
+        <table className="simple-table">
+          <thead>
+            <tr>
+              <th>alert_id</th>
+              <th>type</th>
+              <th>severity</th>
+              <th>service</th>
+              <th>threshold</th>
+              <th>correlation_id</th>
+              <th>last_seen</th>
+              <th>action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {alerts.map((alert) => (
+              <tr key={alert.alert_id} className={alert.severity === 'critical' ? 'row-alert' : undefined}>
+                <td>{alert.alert_id}</td>
+                <td>{alert.alert_type}</td>
+                <td>{alert.severity}</td>
+                <td>{alert.target_service}</td>
+                <td>{alert.threshold}</td>
+                <td>{alert.correlation_id}</td>
+                <td>{new Date(alert.last_seen_at).toLocaleString()}</td>
+                <td>
+                  <button onClick={() => void resolveAlertById(alert.alert_id)}>Resolve</button>
+                </td>
+              </tr>
+            ))}
+            {alerts.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="muted-line">
+                  No active alerts.
+                </td>
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </Panel>
@@ -311,9 +344,9 @@ export function ConsoleOperationsPage() {
                 {(Object.keys(rolePermissions) as RoleName[]).map((role) => (
                   <tr key={role}>
                     <td>{role}</td>
-                    <td>{rolePermissions[role].includes('read') ? '✓' : '-'}</td>
-                    <td>{rolePermissions[role].includes('write') ? '✓' : '-'}</td>
-                    <td>{rolePermissions[role].includes('override') ? '✓' : '-'}</td>
+                    <td>{rolePermissions[role].includes('read') ? 'Y' : '-'}</td>
+                    <td>{rolePermissions[role].includes('write') ? 'Y' : '-'}</td>
+                    <td>{rolePermissions[role].includes('override') ? 'Y' : '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -366,7 +399,9 @@ export function ConsoleOperationsPage() {
               {assignments.slice(0, 10).map((a) => (
                 <li key={`${a.user_id}:${a.assigned_at}`}>
                   <span>
-                    {a.user_id} → {a.role} ({a.scope}:{a.scope_id})
+                    {a.user_id}
+                    {' -> '}
+                    {a.role} ({a.scope}:{a.scope_id})
                   </span>
                   <strong>{new Date(a.assigned_at).toLocaleString()}</strong>
                 </li>
@@ -378,11 +413,30 @@ export function ConsoleOperationsPage() {
 
       <Panel title="Operations Observability">
         <div className="console-metric-grid">
-          <p>policy_changes_total: <strong>{metrics.policy_changes_total}</strong></p>
-          <p>policy_deploy_failures_total: <strong>{metrics.policy_deploy_failures_total}</strong></p>
-          <p>audit_queries_total: <strong>{metrics.audit_queries_total}</strong></p>
-          <p>audit_signature_mismatch_total: <strong>{metrics.audit_signature_mismatch_total}</strong></p>
-          <p>rbac_violations_total: <strong>{metrics.rbac_violations_total}</strong></p>
+          <p>
+            policy_changes_total: <strong>{metrics.policy_changes_total}</strong>
+          </p>
+          <p>
+            policy_deploy_failures_total: <strong>{metrics.policy_deploy_failures_total}</strong>
+          </p>
+          <p>
+            audit_queries_total: <strong>{metrics.audit_queries_total}</strong>
+          </p>
+          <p>
+            audit_signature_mismatch_total: <strong>{metrics.audit_signature_mismatch_total}</strong>
+          </p>
+          <p>
+            rbac_violations_total: <strong>{metrics.rbac_violations_total}</strong>
+          </p>
+          <p>
+            correlation_trace_complete_total: <strong>{metrics.correlation_trace_complete_total}</strong>
+          </p>
+          <p>
+            correlation_trace_incomplete_total: <strong>{metrics.correlation_trace_incomplete_total}</strong>
+          </p>
+          <p>
+            alerts_triggered_total: <strong>{metrics.alerts_triggered_total}</strong>
+          </p>
         </div>
       </Panel>
     </div>

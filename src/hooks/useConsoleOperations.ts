@@ -3,35 +3,42 @@ import {
   assignRole,
   deployPolicy,
   exportAudit,
+  fetchAlerts,
   fetchAuditDecisions,
   fetchConsoleOpsMetrics,
   fetchPolicies,
   fetchRbacAssignments,
+  resolveAlert,
   replayTrace,
   upsertPolicy
 } from '../api/operations';
 import { toApiError, type ApiError } from '../api/client';
-import type { AuditDecisionRecord, ConsoleOpsMetrics, PolicyRecord, RbacAssignment } from '../types/consoleOperations';
+import type { AlertRecord, AuditDecisionRecord, ConsoleOpsMetrics, PolicyRecord, RbacAssignment } from '../types/consoleOperations';
 
 export function useConsoleOperations() {
   const [policies, setPolicies] = useState<PolicyRecord[]>([]);
   const [audits, setAudits] = useState<AuditDecisionRecord[]>([]);
+  const [alerts, setAlerts] = useState<AlertRecord[]>([]);
   const [assignments, setAssignments] = useState<RbacAssignment[]>([]);
   const [metrics, setMetrics] = useState<ConsoleOpsMetrics>({
     policy_changes_total: 0,
     policy_deploy_failures_total: 0,
     audit_queries_total: 0,
     audit_signature_mismatch_total: 0,
-    rbac_violations_total: 0
+    rbac_violations_total: 0,
+    correlation_trace_complete_total: 0,
+    correlation_trace_incomplete_total: 0,
+    alerts_triggered_total: 0
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();
 
   const refresh = async (): Promise<void> => {
     try {
-      const [p, a, r, m] = await Promise.all([fetchPolicies(), fetchAuditDecisions(), fetchRbacAssignments(), fetchConsoleOpsMetrics()]);
+      const [p, a, al, r, m] = await Promise.all([fetchPolicies(), fetchAuditDecisions(), fetchAlerts(false), fetchRbacAssignments(), fetchConsoleOpsMetrics()]);
       setPolicies(p);
       setAudits(a);
+      setAlerts(al);
       setAssignments(r);
       setMetrics(m);
       setError(undefined);
@@ -79,10 +86,16 @@ export function useConsoleOperations() {
     await refresh();
   };
 
+  const resolveAlertById = async (alertId: string): Promise<void> => {
+    await resolveAlert(alertId);
+    await refresh();
+  };
+
   return useMemo(
     () => ({
       policies,
       audits,
+      alerts,
       assignments,
       metrics,
       loading,
@@ -92,9 +105,9 @@ export function useConsoleOperations() {
       replay,
       exportRows,
       assign,
+      resolveAlertById,
       refresh
     }),
-    [policies, audits, assignments, metrics, loading, error]
+    [policies, audits, alerts, assignments, metrics, loading, error]
   );
 }
-

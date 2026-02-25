@@ -26,6 +26,7 @@ export interface PolicyRecord {
 
 export interface AuditDecisionRecord {
   trace_id: string;
+  correlation_id: string;
   timestamp: string;
   agent_id: string;
   policy_id: string;
@@ -34,6 +35,25 @@ export interface AuditDecisionRecord {
   triggered_by: string;
   signature_valid: boolean;
   contributing_primitives: string[];
+}
+
+export interface AlertRecord {
+  alert_id: string;
+  alert_type:
+    | 'high_stress_probability'
+    | 'overload_probability'
+    | 'intervention_failure'
+    | 'policy_version_mismatch'
+    | 'signature_verification_failure'
+    | 'latency_breach';
+  severity: 'warning' | 'critical';
+  status: 'active' | 'resolved';
+  first_seen_at: string;
+  last_seen_at: string;
+  target_service: string;
+  correlation_id: string;
+  threshold: string;
+  reason: string;
 }
 
 export interface RbacAssignment {
@@ -51,5 +71,7 @@ export interface ConsoleOpsMetrics {
   audit_queries_total: number;
   audit_signature_mismatch_total: number;
   rbac_violations_total: number;
+  correlation_trace_complete_total: number;
+  correlation_trace_incomplete_total: number;
+  alerts_triggered_total: number;
 }
-
