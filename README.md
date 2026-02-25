@@ -10,10 +10,14 @@ Enterprise UI surface for 8A control-plane APIs.
 Run npm install then npm run dev.
 
 ## Environment
-- VITE_CONTROL_PLANE_URL (default: http://localhost:8787)
+- VITE_API_BASE_URL (default in dev: http://localhost:8787)
+- VITE_WS_BASE_URL (optional, websocket base for `/v1/stream/console-state`)
 
 ## Structure
 - src/api/*: clients to control-plane endpoints
 - src/hooks/*: fetch/orchestration hooks
 - src/store/*: UI-only state (Zustand)
 - src/pages/*: dashboard + rollout + nodes + config views
+
+## Step 12
+- See `CONSOLE_FOUNDATIONS.md` for concrete production values and rendering rules.

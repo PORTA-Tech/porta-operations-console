@@ -12,6 +12,7 @@ import { NodeList } from './pages/NodeDrilldown/NodeList';
 import { NodeDetails } from './pages/NodeDrilldown/NodeDetails';
 import { ConfigAuditTable } from './pages/ConfigIntegrity/ConfigAuditTable';
 import { ConfigDiffViewer } from './pages/ConfigIntegrity/ConfigDiffViewer';
+import { ConsoleFoundationPage } from './pages/ConsoleFoundation/ConsoleFoundationPage';
 import { useFleetState } from './hooks/useFleetState';
 import { useNodeDrilldown } from './hooks/useNodeDrilldown';
 import { useRolloutDryRun } from './hooks/useRolloutDryRun';
@@ -69,6 +70,7 @@ export default function App() {
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <Routes>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/console" element={<ConsoleFoundationPage />} />
         <Route path="/rollout" element={<RolloutPage />} />
         <Route path="/cohorts" element={<CohortOverview />} />
         <Route path="/nodes" element={<NodePage />} />
