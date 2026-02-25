@@ -10,7 +10,8 @@
     "test": "node -e \"console.log('No tests defined')\"",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "step16:ws-smoke": "node ./scripts/step16-ws-smoke.mjs"
   },
   "dependencies": {
     "plotly.js-dist-min": "^3.4.0",
