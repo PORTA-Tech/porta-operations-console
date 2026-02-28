@@ -512,7 +512,9 @@ export function FleetOverview() {
         key: 'signature-invalid',
         severity: 'critical',
         title: `Signature invalid on ${signatureInvalidMachinesCount} machines`,
-        detail: 'Trust check failed on machine snapshots.',
+        detail: nodes.length > 0
+          ? `${signatureInvalidMachinesCount}/${nodes.length} machines currently failing signature validation.`
+          : `${signatureInvalidMachinesCount} machines currently failing signature validation.`,
         actionLabel: 'View machines',
         targetPath: '/machines?signature=invalid'
       });
@@ -554,7 +556,15 @@ export function FleetOverview() {
     }
 
     return items.sort((a, b) => rankSeverity(b.severity) - rankSeverity(a.severity));
-  }, [experimentalDegraded, offlineMachinesCount, rbacViolationDelta, rollout?.cooldownUntilUtc, rolloutBlockedByCooldown, signatureInvalidMachinesCount]);
+  }, [
+    experimentalDegraded,
+    nodes.length,
+    offlineMachinesCount,
+    rbacViolationDelta,
+    rollout?.cooldownUntilUtc,
+    rolloutBlockedByCooldown,
+    signatureInvalidMachinesCount
+  ]);
 
   const fleetKpis = useMemo<FleetKpiSnapshot>(() => {
     const totalNodes = nodes.length;
@@ -731,7 +741,7 @@ export function FleetOverview() {
                   <span className={`severity-dot ${item.severity}`} aria-hidden="true" />
                   <div>
                     <div className="needs-attention-title">{item.title}</div>
-                    <div className="needs-attention-detail">{item.detail}</div>
+                    {item.detail ? <div className="needs-attention-detail">{item.detail}</div> : null}
                   </div>
                 </div>
                 <button type="button" onClick={() => navigate(item.targetPath)}>
