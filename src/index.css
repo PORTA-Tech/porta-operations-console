@@ -144,6 +144,28 @@ a { color: inherit; text-decoration: none; }
   font-size: 0.9rem;
 }
 
+.freshness-state {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0 4px;
+}
+
+.freshness-state.muted {
+  color: var(--muted);
+}
+
+.freshness-state.warn {
+  color: var(--warn);
+}
+
+.freshness-state.critical {
+  color: var(--critical);
+}
+
+.freshness-state.ok {
+  color: var(--ok);
+}
+
 .glossary-drawer {
   position: fixed;
   top: 0;
@@ -596,6 +618,10 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   font-size: 1rem;
 }
 
+.fleet-snapshot-subline {
+  font-size: 0.92rem;
+}
+
 .fleet-snapshot-actions {
   display: flex;
   flex-wrap: wrap;
@@ -701,6 +727,22 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
 .kpi-label {
   color: var(--muted);
   font-size: 0.85rem;
+}
+
+.kpi-delta.up {
+  color: var(--critical);
+}
+
+.kpi-delta.down {
+  color: var(--ok);
+}
+
+.kpi-delta.flat {
+  color: var(--muted);
+}
+
+.kpi-delta-note {
+  text-transform: lowercase;
 }
 
 .compare-control-row {

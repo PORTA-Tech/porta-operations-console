@@ -124,7 +124,12 @@ export function ViewContextBar({ onOpenGlossary }: ViewContextBarProps) {
           <p className="freshness-pill">
             Data Stream: <strong>{liveConnected ? 'Connected' : 'Delayed'}</strong>
             {' | '}
-            Realtime Channel: <strong>{wsStatus.connected ? 'Connected' : 'Disconnected'}</strong>
+            <span
+              className={`freshness-state ${wsStatus.tone}`}
+              title={wsStatus.detail}
+            >
+              Realtime Channel: <strong>{wsStatus.statusLabel}</strong>
+            </span>
             {' | '}
             Last update: <strong>{formatUtc(lastUpdatedUtc)}</strong>
           </p>

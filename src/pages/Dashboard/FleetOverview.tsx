@@ -129,7 +129,7 @@ function mapTrustStatus(
     return {
       label: 'Invalid',
       tone: 'critical',
-      detail: 'Config trust invalid.',
+      detail: 'One or more configs failed signature validation.',
       targetPath: '/config'
     };
   }
@@ -218,7 +218,6 @@ export function FleetOverview() {
   const rollout = useFleetSlice((s) => s.rollout);
   const cohorts = useFleetSlice((s) => s.cohortDistribution);
   const sloCompliance = useFleetSlice((s) => s.sloCompliance);
-  const lastUpdatedUtc = useFleetSlice((s) => s.lastUpdatedUtc);
   const liveConnected = useFleetSlice((s) => s.liveConnected);
   const { data: integrityData, error: integrityError } = useActiveConfigIntegrity();
   const wsStatus = useWsConnectionStatus();
@@ -422,7 +421,7 @@ export function FleetOverview() {
   }, [compareWindow]);
 
   const fleetStatus = useMemo<StatusIndicatorView>(() => {
-    if (!liveConnected || !wsStatus.connected || trustStatus.label === 'Invalid' || sloStatus.label === 'Breach') {
+    if (!liveConnected || wsStatus.tone === 'critical' || trustStatus.label === 'Invalid' || sloStatus.label === 'Breach') {
       return {
         label: 'Incident',
         tone: 'critical',
@@ -431,7 +430,7 @@ export function FleetOverview() {
       };
     }
 
-    if (rolloutStatus.label !== 'Idle' || trustStatus.label === 'Warning') {
+    if (rolloutStatus.label !== 'Idle' || trustStatus.label === 'Warning' || wsStatus.tone === 'warn') {
       return {
         label: 'Degraded',
         tone: 'warn',
@@ -446,7 +445,7 @@ export function FleetOverview() {
       detail: 'No critical issues.',
       targetPath: '/cohorts'
     };
-  }, [liveConnected, rolloutStatus.label, sloStatus.label, trustStatus.label, wsStatus.connected]);
+  }, [liveConnected, rolloutStatus.label, sloStatus.label, trustStatus.label, wsStatus.tone]);
 
   const latestPolicy = [...policies].sort((a, b) => Date.parse(b.last_modified) - Date.parse(a.last_modified))[0];
 
@@ -647,10 +646,13 @@ export function FleetOverview() {
   const deltaVsStable = stableSummary && experimentalSummary
     ? (experimentalSummary.degradationRatePct - stableSummary.degradationRatePct)
     : 0;
-  const deltaMetricLabel = compareEnabled ? 'Delta vs Baseline' : 'Delta vs Stable';
+  const deltaMetricLabel = compareEnabled ? 'Performance Change vs Baseline' : 'Performance Change vs Stable';
   const deltaMetricValue = compareEnabled && leftSummary && rightSummary
     ? (leftSummary.degradationRatePct - rightSummary.degradationRatePct)
     : deltaVsStable;
+  const deltaDirection = deltaMetricValue > 0 ? 'worse' : deltaMetricValue < 0 ? 'improved' : 'unchanged';
+  const deltaTrendSymbol = deltaMetricValue > 0 ? '^' : deltaMetricValue < 0 ? 'v' : '=';
+  const deltaTrendTone = deltaMetricValue > 0 ? 'up' : deltaMetricValue < 0 ? 'down' : 'flat';
 
   const showInterventions = fleetKpis.interventionsPerMinute > 0;
   return (
@@ -659,9 +661,8 @@ export function FleetOverview() {
         <section className="panel span-all alert-strip critical">
           <div className="fleet-snapshot-row">
             <div className="fleet-snapshot-text">
-              <strong>
-                Incident: Config Trust Failure ({affectedMachinesCount} machines affected)
-              </strong>
+              <strong>Config Trust Failure</strong>
+              <span className="muted-line fleet-snapshot-subline">{affectedMachinesCount} machines affected</span>
             </div>
             <div className="fleet-snapshot-actions">
               <button type="button" onClick={() => navigate(affectedMachinesPath)}>
@@ -675,7 +676,6 @@ export function FleetOverview() {
       <section className="panel span-all">
         <div className="panel-heading-row">
           <h3>Status</h3>
-          <span className="muted-line">Critical health signals</span>
         </div>
         <div className="right-now-grid">
           {statusCards.map((card) => (
@@ -691,17 +691,6 @@ export function FleetOverview() {
               <span className="muted-line">{card.state.detail}</span>
             </button>
           ))}
-        </div>
-        <div className="status-badge-row">
-          <span className="status-health-pill">Data Stream: {liveConnected ? 'Connected' : 'Disconnected'}</span>
-          <button
-            type="button"
-            className={`status-health-pill ${wsStatus.connected ? 'ok' : 'critical'}`}
-            onClick={() => navigate('/system-health')}
-          >
-            Realtime Channel: {wsStatus.statusLabel}
-          </button>
-          <span className="status-health-pill">Last update: {formatUtc(lastUpdatedUtc ?? rollout?.updatedAtUtc)}</span>
         </div>
       </section>
 
@@ -735,7 +724,6 @@ export function FleetOverview() {
       <section className="panel span-all">
         <div className="panel-heading-row">
           <h3>Key Metrics</h3>
-          <span className="muted-line">Fleet essentials only</span>
         </div>
         <div className="key-metrics-grid">
           <div className="kpi-tile">
@@ -752,11 +740,14 @@ export function FleetOverview() {
           </div>
           <div className="kpi-tile">
             <span className="kpi-label">{deltaMetricLabel}</span>
-            <strong>{deltaMetricValue >= 0 ? '+' : ''}{deltaMetricValue.toFixed(3)}%</strong>
+            <strong className={`kpi-delta ${deltaTrendTone}`}>
+              {deltaMetricValue >= 0 ? '+' : ''}{deltaMetricValue.toFixed(3)}% {deltaTrendSymbol}
+            </strong>
+            <span className="muted-line kpi-delta-note">{deltaDirection}</span>
           </div>
           <div className="kpi-tile">
-            <span className="kpi-label">Machines Online/Total</span>
-            <strong>{fleetKpis.onlineNodes}/{fleetKpis.totalNodes}</strong>
+            <span className="kpi-label">Machines Online</span>
+            <strong>{fleetKpis.onlineNodes} / {fleetKpis.totalNodes}</strong>
           </div>
           {showInterventions ? (
             <div className="kpi-tile">
@@ -780,7 +771,7 @@ export function FleetOverview() {
               <tr>
                 <th>Cohort</th>
                 <th>Exposure</th>
-                <th>Status</th>
+                <th>Rollout State</th>
               </tr>
             </thead>
             <tbody>
