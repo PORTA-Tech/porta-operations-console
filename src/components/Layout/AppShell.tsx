@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { Link, NavLink } from 'react-router-dom';
-import { glossaryTerms } from '../../data/glossary';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { getGlossaryTerms } from '../../data/glossary';
 import { GlossaryDrawer } from './GlossaryDrawer';
 import { ViewContextBar } from './ViewContextBar';
 
@@ -23,7 +23,9 @@ const navItems = [
 ];
 
 export function AppShell({ children }: AppShellProps) {
+  const location = useLocation();
   const [glossaryOpen, setGlossaryOpen] = useState(false);
+  const glossaryTerms = getGlossaryTerms(location.pathname);
 
   return (
     <div className="app-shell">
