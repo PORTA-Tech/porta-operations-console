@@ -724,6 +724,23 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   gap: 5px;
 }
 
+.kpi-tile-button {
+  width: 100%;
+  text-align: left;
+}
+
+.kpi-tile-button.ok {
+  border-color: color-mix(in oklab, var(--ok) 60%, var(--line));
+}
+
+.kpi-tile-button.warn {
+  border-color: color-mix(in oklab, var(--warn) 60%, var(--line));
+}
+
+.kpi-tile-button.critical {
+  border-color: color-mix(in oklab, var(--critical) 60%, var(--line));
+}
+
 .kpi-label {
   color: var(--muted);
   font-size: 0.85rem;

@@ -49,13 +49,13 @@ interface FleetKpiSnapshot {
 
 const OFFLINE_HEARTBEAT_THRESHOLD_MS = 2 * 60 * 1000;
 
-function isMachineOffline(lastHeartbeatUtc: string): boolean {
+function isMachineOffline(lastHeartbeatUtc: string, nowMs = Date.now()): boolean {
   const heartbeatMs = Date.parse(lastHeartbeatUtc);
   if (Number.isNaN(heartbeatMs)) {
     return true;
   }
 
-  return (Date.now() - heartbeatMs) > OFFLINE_HEARTBEAT_THRESHOLD_MS;
+  return (nowMs - heartbeatMs) > OFFLINE_HEARTBEAT_THRESHOLD_MS;
 }
 
 function mapRolloutStatus(state: string | undefined): StatusIndicatorView {
@@ -236,6 +236,7 @@ export function FleetOverview() {
   const [adapterControls, setAdapterControls] = useState<AdapterActivationControlsView | undefined>(undefined);
   const [changeFeedEvents, setChangeFeedEvents] = useState<ChangeFeedEntry[]>([]);
   const [rbacViolationDelta, setRbacViolationDelta] = useState(0);
+  const [heartbeatNowMs, setHeartbeatNowMs] = useState(() => Date.now());
 
   const previousRbacViolationsRef = useRef<number | null>(null);
   const previousPolicyVersionsRef = useRef<Map<string, string>>(new Map());
@@ -263,6 +264,14 @@ export function FleetOverview() {
   useEffect(() => {
     rolloutRef.current = rollout;
   }, [rollout]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setHeartbeatNowMs(Date.now());
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -449,7 +458,7 @@ export function FleetOverview() {
 
   const latestPolicy = [...policies].sort((a, b) => Date.parse(b.last_modified) - Date.parse(a.last_modified))[0];
 
-  const offlineMachinesCount = nodes.filter((node) => isMachineOffline(node.last_heartbeat)).length;
+  const offlineMachinesCount = nodes.filter((node) => isMachineOffline(node.last_heartbeat, heartbeatNowMs)).length;
   const signatureInvalidMachinesCount = nodes.filter((node) => !node.signature_valid).length;
   const rolloutBlockedByCooldown = Boolean(
     rollout?.state === 'COOLDOWN'
@@ -550,7 +559,7 @@ export function FleetOverview() {
 
   const fleetKpis = useMemo<FleetKpiSnapshot>(() => {
     const totalNodes = nodes.length;
-    const onlineNodes = nodes.filter((node) => !isMachineOffline(node.last_heartbeat)).length;
+    const onlineNodes = nodes.filter((node) => !isMachineOffline(node.last_heartbeat, heartbeatNowMs)).length;
 
     const errorRatePct = weightedAverage(cohortSummaries, (row) => row.errorRatePct);
     const latencyP95Ms = weightedAverage(cohortSummaries, (row) => row.latencyP95Ms);
@@ -573,7 +582,7 @@ export function FleetOverview() {
       totalNodes,
       interventionsPerMinute: recentInterventions.length
     };
-  }, [auditDecisions, cohortSummaries, nodes]);
+  }, [auditDecisions, cohortSummaries, heartbeatNowMs, nodes]);
 
   const changeFeed = useMemo<ChangeFeedEntry[]>(() => {
     const items: ChangeFeedEntry[] = [...changeFeedEvents];
@@ -653,6 +662,14 @@ export function FleetOverview() {
   const deltaDirection = deltaMetricValue > 0 ? 'worse' : deltaMetricValue < 0 ? 'improved' : 'unchanged';
   const deltaTrendSymbol = deltaMetricValue > 0 ? '^' : deltaMetricValue < 0 ? 'v' : '=';
   const deltaTrendTone = deltaMetricValue > 0 ? 'up' : deltaMetricValue < 0 ? 'down' : 'flat';
+  const offlineNodeCount = Math.max(0, fleetKpis.totalNodes - fleetKpis.onlineNodes);
+  const machineConnectivityTone: IndicatorTone =
+    offlineNodeCount === 0
+      ? 'ok'
+      : fleetKpis.totalNodes > 0 && (offlineNodeCount / fleetKpis.totalNodes) > 0.02
+        ? 'critical'
+        : 'warn';
+  const machinesOnlineTargetPath = offlineNodeCount > 0 ? '/machines?offline=1' : '/machines';
 
   const showInterventions = fleetKpis.interventionsPerMinute > 0;
   return (
@@ -745,10 +762,16 @@ export function FleetOverview() {
             </strong>
             <span className="muted-line kpi-delta-note">{deltaDirection}</span>
           </div>
-          <div className="kpi-tile">
+          <button
+            type="button"
+            className={`kpi-tile kpi-tile-button ${machineConnectivityTone}`}
+            onClick={() => navigate(machinesOnlineTargetPath)}
+            title={offlineNodeCount > 0 ? 'Open offline machines' : 'Open machines list'}
+          >
             <span className="kpi-label">Machines Online</span>
             <strong>{fleetKpis.onlineNodes} / {fleetKpis.totalNodes}</strong>
-          </div>
+            <span className="muted-line kpi-delta-note">120s heartbeat window</span>
+          </button>
           {showInterventions ? (
             <div className="kpi-tile">
               <span className="kpi-label">Interventions/min</span>
