@@ -40,6 +40,20 @@ function formatGuardrailValue(metric: ExperimentGuardrailMetric, value: number):
   return `${value >= 0 ? '+' : ''}${value.toFixed(3)}%`;
 }
 
+function formatNullableNumber(value: number | null, decimals = 4): string {
+  if (value === null || !Number.isFinite(value)) {
+    return 'n/a';
+  }
+  return value.toFixed(decimals);
+}
+
+function formatNullableGuardrailValue(metric: ExperimentGuardrailMetric, value: number | null): string {
+  if (value === null || !Number.isFinite(value)) {
+    return 'n/a';
+  }
+  return formatGuardrailValue(metric, value);
+}
+
 function verdictTone(status: ExperimentEvaluation['verdict']['status']): 'ok' | 'warn' | 'critical' {
   if (status === 'improvement_confirmed') return 'ok';
   if (status === 'inconclusive') return 'warn';
@@ -87,6 +101,9 @@ export function ExperimentsPage() {
   const [thresholdSet, setThresholdSet] = useState('');
   const [primaryMetrics, setPrimaryMetrics] = useState<ExperimentPrimaryMetric[]>(defaultPrimaryMetrics);
   const [guardrailConfig, setGuardrailConfig] = useState(defaultGuardrails);
+  const [minSampleMachines, setMinSampleMachines] = useState(20);
+  const [minCoveragePct, setMinCoveragePct] = useState(70);
+  const [minWindowMinutes, setMinWindowMinutes] = useState(10);
   const [evaluation, setEvaluation] = useState<ExperimentEvaluation | undefined>();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<ApiError | undefined>();
@@ -116,7 +133,10 @@ export function ExperimentsPage() {
     guardrails: guardrailConfig.map((entry) => ({
       metric: entry.metric,
       threshold: entry.threshold
-    }))
+    })),
+    min_sample_machines: minSampleMachines,
+    min_coverage_pct: minCoveragePct,
+    min_window_minutes: minWindowMinutes
   }), [
     baselineCohortId,
     configSeq,
@@ -127,6 +147,9 @@ export function ExperimentsPage() {
     policyVersion,
     primaryMetrics,
     thresholdSet,
+    minSampleMachines,
+    minCoveragePct,
+    minWindowMinutes,
     window
   ]);
 
@@ -270,6 +293,43 @@ export function ExperimentsPage() {
                 />
               </label>
             ))}
+            <h4>Data validity gates</h4>
+            <label>
+              Min machines required
+              <input
+                value={minSampleMachines}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (Number.isFinite(parsed)) {
+                    setMinSampleMachines(Math.max(1, Math.trunc(parsed)));
+                  }
+                }}
+              />
+            </label>
+            <label>
+              Min coverage %
+              <input
+                value={minCoveragePct}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (Number.isFinite(parsed)) {
+                    setMinCoveragePct(Math.max(1, Math.min(100, parsed)));
+                  }
+                }}
+              />
+            </label>
+            <label>
+              Min window minutes
+              <input
+                value={minWindowMinutes}
+                onChange={(event) => {
+                  const parsed = Number(event.target.value);
+                  if (Number.isFinite(parsed)) {
+                    setMinWindowMinutes(Math.max(1, Math.trunc(parsed)));
+                  }
+                }}
+              />
+            </label>
           </div>
         </div>
       </Panel>
@@ -286,12 +346,27 @@ export function ExperimentsPage() {
               Last evaluated: {formatUtc(evaluation.evaluated_at_utc)} | Triggered by: {evaluation.verdict.triggered_by}
             </p>
             <p className="muted-line">
+              Trigger code: {evaluation.verdict.trigger_reason_code}
+            </p>
+            <p className="muted-line">
+              Trigger details:{' '}
+              {Object.entries(evaluation.verdict.trigger_reason_details)
+                .map(([key, value]) => `${key}=${value === null ? 'null' : String(value)}`)
+                .join(', ')}
+            </p>
+            <p className="muted-line">
               Confidence:
               <span className={`delta-chip ${confidenceChip(evaluation.confidence.level)}`}>
                 {evaluation.confidence.level} ({evaluation.confidence.machine_count} machines)
               </span>
               {' '}freshness {evaluation.confidence.freshness_seconds}s
             </p>
+            <p className="muted-line">
+              Data quality: Baseline sample {evaluation.data_quality.baseline_sample_machines} (coverage {evaluation.data_quality.baseline_coverage_pct.toFixed(1)}%) | Experiment sample {evaluation.data_quality.experiment_sample_machines} (coverage {evaluation.data_quality.experiment_coverage_pct.toFixed(1)}%) | Min sample {evaluation.data_quality.min_sample_machines} | Min coverage {evaluation.data_quality.min_coverage_pct.toFixed(1)}% | Window {evaluation.data_quality.window_minutes}m (min {evaluation.data_quality.min_window_minutes}m)
+            </p>
+            {!evaluation.data_quality.valid ? (
+              <p className="error-line">Not enough data to evaluate: {evaluation.data_quality.messages.join(' ')}</p>
+            ) : null}
             <p className="muted-line">{evaluation.confidence.reasons.join(' ')}</p>
           </>
         ) : (
@@ -302,18 +377,36 @@ export function ExperimentsPage() {
       <div className="grid-three">
         <MetricCard
           title="Primary Metrics Improved"
-          value={evaluation ? `${evaluation.metrics.primary.filter((metric) => metric.improved).length}/${evaluation.metrics.primary.length}` : 'n/a'}
-          note="Backend evaluator result"
+          value={
+            evaluation
+              ? evaluation.data_quality.sample_valid
+                ? `${evaluation.metrics.primary.filter((metric) => metric.improved === true).length}/${evaluation.metrics.primary.length}`
+                : 'Not evaluated'
+              : 'n/a'
+          }
+          note={evaluation && !evaluation.data_quality.sample_valid ? 'Insufficient sample' : 'Backend evaluator result'}
         />
         <MetricCard
           title="Guardrail Violations"
-          value={evaluation ? `${evaluation.metrics.guardrails.filter((guardrail) => guardrail.violated).length}` : 'n/a'}
-          note="Backend guardrail checks"
+          value={
+            evaluation
+              ? evaluation.data_quality.sample_valid
+                ? `${evaluation.metrics.guardrails.filter((guardrail) => guardrail.violated === true).length}`
+                : 'Not evaluated'
+              : 'n/a'
+          }
+          note={evaluation && !evaluation.data_quality.sample_valid ? 'Insufficient sample' : 'Backend guardrail checks'}
         />
         <MetricCard
           title="Intervention Thrash Delta"
-          value={evaluation ? `${evaluation.metrics.interventions_per_min_delta.delta.toFixed(3)} /min` : 'n/a'}
-          note="Experiment minus baseline"
+          value={
+            evaluation
+              ? evaluation.metrics.interventions_per_min_delta.delta === null
+                ? 'n/a'
+                : `${evaluation.metrics.interventions_per_min_delta.delta.toFixed(3)} /min`
+              : 'n/a'
+          }
+          note={evaluation && !evaluation.data_quality.sample_valid ? 'Unavailable (insufficient sample)' : 'Experiment minus baseline'}
         />
       </div>
 
@@ -336,22 +429,28 @@ export function ExperimentsPage() {
                 <tr key={`primary-${metric.metric}`}>
                   <td>Primary</td>
                   <td>{metricLabel(metric.metric)}</td>
-                  <td>{metric.baseline_value.toFixed(4)}</td>
-                  <td>{metric.experiment_value.toFixed(4)}</td>
-                  <td>{metric.delta.toFixed(4)}</td>
+                  <td>{formatNullableNumber(metric.baseline_value)}</td>
+                  <td>{formatNullableNumber(metric.experiment_value)}</td>
+                  <td>{formatNullableNumber(metric.delta)}</td>
                   <td>{metric.target_delta.toFixed(4)}</td>
-                  <td>{metric.improved ? 'Improved' : 'Not met'}</td>
+                  <td>{metric.improved === null ? 'Not evaluated' : metric.improved ? 'Improved' : 'Not met'}</td>
                 </tr>
               ))}
               {evaluation.metrics.guardrails.map((guardrail) => (
                 <tr key={`guardrail-${guardrail.metric}`}>
                   <td>Guardrail</td>
                   <td>{guardrailLabel(guardrail.metric)}</td>
-                  <td>{guardrail.baseline_value.toFixed(4)}</td>
-                  <td>{guardrail.experiment_value.toFixed(4)}</td>
-                  <td>{formatGuardrailValue(guardrail.metric, guardrail.delta)}</td>
+                  <td>{formatNullableNumber(guardrail.baseline_value)}</td>
+                  <td>{formatNullableNumber(guardrail.experiment_value)}</td>
+                  <td>{formatNullableGuardrailValue(guardrail.metric, guardrail.delta)}</td>
                   <td>{formatGuardrailValue(guardrail.metric, guardrail.threshold)}</td>
-                  <td>{guardrail.violated ? (guardrail.strong_violation ? 'Strong violation' : 'Violated') : 'Healthy'}</td>
+                  <td>
+                    {guardrail.violated === null
+                      ? 'Not evaluated'
+                      : guardrail.violated
+                        ? (guardrail.strong_violation ? 'Strong violation' : 'Violated')
+                        : 'Healthy'}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -397,6 +496,9 @@ export function ExperimentsPage() {
             <p className="muted-line">
               Correlation IDs: {evaluation.evidence.correlation_ids.length > 0 ? evaluation.evidence.correlation_ids.join(', ') : 'none'}
             </p>
+            {evaluation.evidence.correlation_ids.length === 0 ? (
+              <p className="muted-line">No decision traces were generated for this experiment window.</p>
+            ) : null}
             <div className="cohort-row-actions">
               <button
                 type="button"
@@ -417,6 +519,13 @@ export function ExperimentsPage() {
                 onClick={() => navigate(`/machines?cohort=${encodeURIComponent(evaluation.definition.experiment_cohort_id)}`)}
               >
                 Open machine list
+              </button>
+              <button
+                type="button"
+                disabled={evaluation.evidence.correlation_ids.length === 0}
+                title={evaluation.evidence.correlation_ids.length === 0 ? 'No correlation IDs available' : 'Generate trace pack'}
+              >
+                Generate trace pack
               </button>
             </div>
             <h4>Experiment events</h4>

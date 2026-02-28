@@ -30,6 +30,9 @@ export interface ExperimentEvaluationRequest {
     metric: ExperimentGuardrailMetric;
     threshold: number;
   }>;
+  min_sample_machines?: number;
+  min_coverage_pct?: number;
+  min_window_minutes?: number;
 }
 
 export interface ExperimentEvaluation {
@@ -51,30 +54,48 @@ export interface ExperimentEvaluation {
       metric: ExperimentGuardrailMetric;
       threshold: number;
     }>;
+    min_sample_machines: number;
+    min_coverage_pct: number;
+    min_window_minutes: number;
+  };
+  data_quality: {
+    baseline_sample_machines: number;
+    experiment_sample_machines: number;
+    min_sample_machines: number;
+    baseline_coverage_pct: number;
+    experiment_coverage_pct: number;
+    min_coverage_pct: number;
+    window_minutes: number;
+    min_window_minutes: number;
+    sample_valid: boolean;
+    coverage_valid: boolean;
+    window_valid: boolean;
+    valid: boolean;
+    messages: string[];
   };
   metrics: {
     primary: Array<{
       metric: ExperimentPrimaryMetric;
-      baseline_value: number;
-      experiment_value: number;
-      delta: number;
+      baseline_value: number | null;
+      experiment_value: number | null;
+      delta: number | null;
       direction: 'up' | 'down';
       target_delta: number;
-      improved: boolean;
+      improved: boolean | null;
     }>;
     guardrails: Array<{
       metric: ExperimentGuardrailMetric;
-      baseline_value: number;
-      experiment_value: number;
-      delta: number;
+      baseline_value: number | null;
+      experiment_value: number | null;
+      delta: number | null;
       threshold: number;
-      violated: boolean;
-      strong_violation: boolean;
+      violated: boolean | null;
+      strong_violation: boolean | null;
     }>;
     interventions_per_min_delta: {
-      baseline_value: number;
-      experiment_value: number;
-      delta: number;
+      baseline_value: number | null;
+      experiment_value: number | null;
+      delta: number | null;
     };
   };
   confidence: {
@@ -88,6 +109,16 @@ export interface ExperimentEvaluation {
     status: ExperimentVerdictStatus;
     summary: string;
     triggered_by: string;
+    trigger_reason_code:
+      | 'INSUFFICIENT_SAMPLE'
+      | 'INSUFFICIENT_COVERAGE'
+      | 'WINDOW_TOO_SHORT'
+      | 'GUARDRAIL_STRONG_VIOLATION'
+      | 'GUARDRAIL_VIOLATION'
+      | 'IMPROVEMENT_CONFIRMED'
+      | 'INCONCLUSIVE_LOW_CONFIDENCE'
+      | 'INCONCLUSIVE_NO_PRIMARY_IMPROVEMENT';
+    trigger_reason_details: Record<string, string | number | boolean | null>;
     auto_stop_recommended: boolean;
   };
   evidence: {
