@@ -99,14 +99,16 @@ a { color: inherit; text-decoration: none; }
   color: var(--muted);
 }
 
-.view-question {
+.view-subtitle {
   margin: 6px 0 0;
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 500;
 }
 
 .context-actions {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
@@ -557,25 +559,77 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   color: var(--muted);
 }
 
+.status-card-title {
+  font-size: 0.82rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
 .right-now-value {
   font-size: 1.35rem;
 }
 
-.right-now-meta {
+.status-badge-row {
   margin-top: 10px;
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 16px;
+  gap: 8px;
 }
 
-.right-now-meta p {
+.status-health-pill {
   margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #fff;
   font-size: 0.9rem;
+}
+
+.status-health-pill.ok {
+  border-color: color-mix(in oklab, var(--ok) 60%, var(--line));
+}
+
+.status-health-pill.critical {
+  border-color: color-mix(in oklab, var(--critical) 60%, var(--line));
 }
 
 .needs-attention-list {
   display: grid;
   gap: 8px;
+}
+
+.needs-attention-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+}
+
+.needs-attention-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.severity-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  margin-top: 6px;
+  flex: 0 0 auto;
+}
+
+.severity-dot.critical {
+  background: var(--critical);
+}
+
+.severity-dot.warn {
+  background: var(--warn);
 }
 
 .needs-attention-item {
@@ -602,6 +656,47 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
 
 .needs-attention-detail {
   color: var(--muted);
+}
+
+.key-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 8px;
+}
+
+.kpi-tile {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #fff;
+  display: grid;
+  gap: 5px;
+}
+
+.kpi-label {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.compare-control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin-bottom: 10px;
+}
+
+.compare-control-row label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.compare-control-row select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  background: #fff;
 }
 
 .change-feed-list {
@@ -731,5 +826,9 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   .view-context-head { flex-direction: column; }
   .freshness-pill { margin-left: 0; }
   .right-now-grid { grid-template-columns: 1fr; }
-  .right-now-meta { flex-direction: column; }
+  .status-badge-row { flex-direction: column; }
+  .needs-attention-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }

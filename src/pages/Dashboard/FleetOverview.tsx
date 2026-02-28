@@ -1,22 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useFleetSlice } from '../../store/fleetSlice';
-import { MetricCard } from '../../components/Tables/MetricCard';
 import { formatUtc } from '../../utils/date';
-import { useNavigate } from 'react-router-dom';
 import { useActiveConfigIntegrity } from '../../hooks/useActiveConfigIntegrity';
 import { useWsConnectionStatus } from '../../hooks/useWsConnectionStatus';
 import { fetchAuditDecisions, fetchConsoleOpsMetrics, fetchPolicies } from '../../api/operations';
-import type { AuditDecisionRecord, ConsoleOpsMetrics, PolicyRecord } from '../../types/consoleOperations';
+import type { AuditDecisionRecord, PolicyRecord } from '../../types/consoleOperations';
 import { getNodeSnapshot, type NodeSnapshotRow } from '../../api/nodes';
 import { getCohortSummary, type CohortSummary } from '../../api/cohorts';
 import { getAdapterControls, type AdapterActivationControlsView } from '../../api/adapter';
 
 type IndicatorTone = 'ok' | 'warn' | 'critical';
+type CohortWindow = '15m' | '1h' | '6h' | '24h';
+type CompareMetric = 'error' | 'p99' | 'degradation';
 
 interface StatusIndicatorView {
   label: string;
   tone: IndicatorTone;
-  plainEnglish: string;
   detail: string;
   targetPath: string;
 }
@@ -26,6 +26,7 @@ interface AttentionItem {
   severity: IndicatorTone;
   title: string;
   detail: string;
+  actionLabel: string;
   targetPath: string;
 }
 
@@ -63,8 +64,7 @@ function mapRolloutStatus(state: string | undefined): StatusIndicatorView {
     return {
       label: 'Promoting',
       tone: 'warn',
-      plainEnglish: 'Are changes being deployed right now?',
-      detail: 'Rollout is actively promoting changes.',
+      detail: 'Changes are deploying now.',
       targetPath: '/rollouts'
     };
   }
@@ -73,8 +73,7 @@ function mapRolloutStatus(state: string | undefined): StatusIndicatorView {
     return {
       label: 'Monitoring',
       tone: 'warn',
-      plainEnglish: 'Are changes being deployed right now?',
-      detail: 'Rollout is paused for monitoring before the next stage.',
+      detail: 'Promotion paused for checks.',
       targetPath: '/rollouts'
     };
   }
@@ -83,8 +82,7 @@ function mapRolloutStatus(state: string | undefined): StatusIndicatorView {
     return {
       label: 'Halted',
       tone: 'critical',
-      plainEnglish: 'Are changes being deployed right now?',
-      detail: 'Rollout is halted, rolled back, or blocked by cooldown.',
+      detail: 'Promotion blocked or rolled back.',
       targetPath: '/rollouts'
     };
   }
@@ -92,8 +90,7 @@ function mapRolloutStatus(state: string | undefined): StatusIndicatorView {
   return {
     label: 'Idle',
     tone: 'ok',
-    plainEnglish: 'Are changes being deployed right now?',
-    detail: 'No active rollout promotion at this moment.',
+    detail: 'No promotion running.',
     targetPath: '/rollouts'
   };
 }
@@ -103,8 +100,7 @@ function mapSloStatus(label: 'Compliant' | 'Degraded' | 'Breached'): StatusIndic
     return {
       label: 'Compliant',
       tone: 'ok',
-      plainEnglish: 'Are we meeting reliability targets?',
-      detail: 'SLO posture is healthy.',
+      detail: 'Targets met.',
       targetPath: '/cohorts'
     };
   }
@@ -112,8 +108,7 @@ function mapSloStatus(label: 'Compliant' | 'Degraded' | 'Breached'): StatusIndic
   return {
     label: 'Breach',
     tone: 'critical',
-    plainEnglish: 'Are we meeting reliability targets?',
-    detail: 'SLO posture is degraded or breached.',
+    detail: 'Targets are breached.',
     targetPath: '/alerts'
   };
 }
@@ -122,22 +117,11 @@ function mapTrustStatus(
   integrity: ReturnType<typeof useActiveConfigIntegrity>['data'],
   integrityError: ReturnType<typeof useActiveConfigIntegrity>['error']
 ): StatusIndicatorView {
-  if (integrityError) {
+  if (integrityError || !integrity) {
     return {
       label: 'Warning',
       tone: 'warn',
-      plainEnglish: 'Are configs/policies signed and valid?',
-      detail: 'Trust telemetry is temporarily unavailable.',
-      targetPath: '/config'
-    };
-  }
-
-  if (!integrity) {
-    return {
-      label: 'Warning',
-      tone: 'warn',
-      plainEnglish: 'Are configs/policies signed and valid?',
-      detail: 'Waiting for trust verification data.',
+      detail: 'Trust signal is unavailable.',
       targetPath: '/config'
     };
   }
@@ -146,8 +130,7 @@ function mapTrustStatus(
     return {
       label: 'Invalid',
       tone: 'critical',
-      plainEnglish: 'Are configs/policies signed and valid?',
-      detail: 'Signature check failed or active config expired.',
+      detail: 'Signature check failed.',
       targetPath: '/config'
     };
   }
@@ -156,8 +139,7 @@ function mapTrustStatus(
     return {
       label: 'Warning',
       tone: 'warn',
-      plainEnglish: 'Are configs/policies signed and valid?',
-      detail: 'Config signature is valid but nearing expiry.',
+      detail: 'Signature near expiry.',
       targetPath: '/config'
     };
   }
@@ -165,8 +147,7 @@ function mapTrustStatus(
   return {
     label: 'Trusted',
     tone: 'ok',
-    plainEnglish: 'Are configs/policies signed and valid?',
-    detail: 'Config signature and trust checks are valid.',
+    detail: 'Signatures valid.',
     targetPath: '/config'
   };
 }
@@ -177,10 +158,7 @@ function rankSeverity(severity: IndicatorTone): number {
   return 1;
 }
 
-function weightedAverage(
-  rows: CohortSummary[],
-  selector: (row: CohortSummary) => number
-): number {
+function weightedAverage(rows: CohortSummary[], selector: (row: CohortSummary) => number): number {
   const totalWeight = rows.reduce((sum, row) => sum + row.nodeCount, 0);
   if (totalWeight <= 0) {
     return 0;
@@ -190,8 +168,54 @@ function weightedAverage(
   return weightedSum / totalWeight;
 }
 
+function polylinePoints(values: number[]): string {
+  if (values.length === 0) return '';
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const range = Math.max(1, max - min);
+
+  return values
+    .map((value, index) => {
+      const x = (index / Math.max(1, values.length - 1)) * 100;
+      const y = 92 - ((value - min) / range) * 84;
+      return `${x},${y}`;
+    })
+    .join(' ');
+}
+
+function metricSeries(summary: CohortSummary | undefined, metric: CompareMetric): number[] {
+  if (!summary) {
+    return [];
+  }
+
+  if (metric === 'p99') {
+    return summary.trend.map((point) => point.p99LatencyMs);
+  }
+
+  if (metric === 'degradation') {
+    return summary.trend.map((point) => point.degradationRatePct);
+  }
+
+  return summary.trend.map((point) => point.errorRatePct);
+}
+
+function metricLabel(metric: CompareMetric): string {
+  if (metric === 'p99') return 'P99 latency';
+  if (metric === 'degradation') return 'Performance regression';
+  return 'Error rate';
+}
+
+function formatMetricValue(metric: CompareMetric, value: number): string {
+  if (metric === 'p99') {
+    return `${Math.round(value)} ms`;
+  }
+
+  return `${value.toFixed(3)}%`;
+}
+
 export function FleetOverview() {
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const rollout = useFleetSlice((s) => s.rollout);
   const cohorts = useFleetSlice((s) => s.cohortDistribution);
   const sloCompliance = useFleetSlice((s) => s.sloCompliance);
@@ -199,15 +223,23 @@ export function FleetOverview() {
   const liveConnected = useFleetSlice((s) => s.liveConnected);
   const { data: integrityData, error: integrityError } = useActiveConfigIntegrity();
   const wsStatus = useWsConnectionStatus();
+
+  const compareMode = params.get('compare') ?? 'none';
+  const compareEnabled = compareMode !== 'none';
+  const compareLeft = params.get('cmpA') ?? 'stable';
+  const compareRight = params.get('cmpB') ?? 'experimental';
+  const compareWindow = (params.get('cmpWindow') ?? '1h') as CohortWindow;
+  const compareMetric = (params.get('cmpMetric') ?? 'error') as CompareMetric;
+
   const [policies, setPolicies] = useState<PolicyRecord[]>([]);
   const [nodes, setNodes] = useState<NodeSnapshotRow[]>([]);
   const [cohortSummaries, setCohortSummaries] = useState<CohortSummary[]>([]);
   const [auditDecisions, setAuditDecisions] = useState<AuditDecisionRecord[]>([]);
   const [adapterControls, setAdapterControls] = useState<AdapterActivationControlsView | undefined>(undefined);
-  const [opsMetrics, setOpsMetrics] = useState<ConsoleOpsMetrics | undefined>(undefined);
   const [changeFeedEvents, setChangeFeedEvents] = useState<ChangeFeedEntry[]>([]);
   const [decisionRateFromMetrics, setDecisionRateFromMetrics] = useState(0);
   const [rbacViolationDelta, setRbacViolationDelta] = useState(0);
+
   const previousRbacViolationsRef = useRef<number | null>(null);
   const previousAuditQueriesRef = useRef<number | null>(null);
   const previousMetricsTimestampRef = useRef<number | null>(null);
@@ -217,6 +249,17 @@ export function FleetOverview() {
   const previousConfigSeqRef = useRef<number | undefined>(undefined);
   const previousFeatureGateRef = useRef<boolean | undefined>(undefined);
   const rolloutRef = useRef(rollout);
+
+  const updateParam = (key: string, value: string, clearValue?: string) => {
+    const next = new URLSearchParams(params);
+    if (value === '' || (clearValue && value === clearValue)) {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+
+    setParams(next, { replace: true });
+  };
 
   const rolloutStatus = mapRolloutStatus(rollout?.state);
   const sloStatus = mapSloStatus(sloCompliance.label);
@@ -256,17 +299,18 @@ export function FleetOverview() {
             correlation_trace_incomplete_total: 0,
             alerts_triggered_total: 0
           })),
-          getCohortSummary('1h').catch(() => []),
+          getCohortSummary(compareWindow).catch(() => []),
           fetchAuditDecisions().catch(() => []),
           getAdapterControls().catch(() => undefined)
         ]);
+
         if (!mounted) return;
+
         setPolicies(nextPolicies);
         setNodes(nextNodes);
         setCohortSummaries(nextCohorts);
         setAuditDecisions(nextAuditDecisions);
         setAdapterControls(nextAdapterControls);
-        setOpsMetrics(nextMetrics);
 
         const previousRbac = previousRbacViolationsRef.current;
         const currentRbac = nextMetrics.rbac_violations_total;
@@ -275,7 +319,6 @@ export function FleetOverview() {
         } else {
           setRbacViolationDelta(0);
         }
-
         previousRbacViolationsRef.current = currentRbac;
 
         const nowMs = Date.now();
@@ -348,11 +391,7 @@ export function FleetOverview() {
         for (const policy of nextPolicies) {
           const previousThresholdSignature = previousThresholdMap.get(policy.policy_id);
           const nextThresholdSignature = nextThresholdMap.get(policy.policy_id);
-          if (
-            previousThresholdSignature
-            && nextThresholdSignature
-            && previousThresholdSignature !== nextThresholdSignature
-          ) {
+          if (previousThresholdSignature && nextThresholdSignature && previousThresholdSignature !== nextThresholdSignature) {
             detectedEvents.push({
               key: `policy-threshold-${policy.policy_id}-${policy.last_modified}`,
               timestampUtc: policy.last_modified,
@@ -395,15 +434,14 @@ export function FleetOverview() {
       mounted = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [compareWindow]);
 
   const fleetStatus = useMemo<StatusIndicatorView>(() => {
     if (!liveConnected || !wsStatus.connected || trustStatus.label === 'Invalid' || sloStatus.label === 'Breach') {
       return {
         label: 'Incident',
         tone: 'critical',
-        plainEnglish: 'Are we safe or is something broken?',
-        detail: 'One or more critical reliability/trust signals are failing.',
+        detail: 'Critical signal failing.',
         targetPath: '/alerts'
       };
     }
@@ -412,8 +450,7 @@ export function FleetOverview() {
       return {
         label: 'Degraded',
         tone: 'warn',
-        plainEnglish: 'Are we safe or is something broken?',
-        detail: 'System is operating but needs attention before promotion.',
+        detail: 'Needs operator review.',
         targetPath: '/cohorts'
       };
     }
@@ -421,8 +458,7 @@ export function FleetOverview() {
     return {
       label: 'Healthy',
       tone: 'ok',
-      plainEnglish: 'Are we safe or is something broken?',
-      detail: 'No critical fleet-level risks detected.',
+      detail: 'No critical issues.',
       targetPath: '/cohorts'
     };
   }, [liveConnected, rolloutStatus.label, sloStatus.label, trustStatus.label, wsStatus.connected]);
@@ -457,7 +493,8 @@ export function FleetOverview() {
         key: 'machines-offline',
         severity: 'critical',
         title: `${offlineMachinesCount} machines offline`,
-        detail: `Heartbeat older than ${Math.round(OFFLINE_HEARTBEAT_THRESHOLD_MS / 1000)} seconds.`,
+        detail: `Heartbeat older than ${Math.round(OFFLINE_HEARTBEAT_THRESHOLD_MS / 1000)}s.`,
+        actionLabel: 'View machines',
         targetPath: '/machines?offline=1'
       });
     }
@@ -467,7 +504,8 @@ export function FleetOverview() {
         key: 'signature-invalid',
         severity: 'critical',
         title: `Signature invalid on ${signatureInvalidMachinesCount} machines`,
-        detail: 'Trust check failed on one or more machine snapshots.',
+        detail: 'Trust check failed on machine snapshots.',
+        actionLabel: 'View machines',
         targetPath: '/machines?signature=invalid'
       });
     }
@@ -477,7 +515,8 @@ export function FleetOverview() {
         key: 'experimental-degraded',
         severity: 'warn',
         title: "Cohort 'experimental' degraded",
-        detail: 'Experimental cohort is underperforming against stable baseline.',
+        detail: 'Experimental underperforming versus stable baseline.',
+        actionLabel: 'Open cohort compare',
         targetPath: '/cohorts?cohort=experimental&cohortCompare=1&cohortB=stable'
       });
     }
@@ -488,6 +527,7 @@ export function FleetOverview() {
         severity: 'warn',
         title: 'RBAC violations increased',
         detail: `+${rbacViolationDelta} violations since last refresh.`,
+        actionLabel: 'View security events',
         targetPath: '/security-access?focus=rbac-violations'
       });
     }
@@ -498,21 +538,15 @@ export function FleetOverview() {
         severity: 'warn',
         title: 'Rollout blocked by cooldown',
         detail: rollout?.cooldownUntilUtc
-          ? `Cooldown active until ${formatUtc(rollout.cooldownUntilUtc)}.`
-          : 'Rollout is blocked by cooldown state.',
+          ? `Cooldown until ${formatUtc(rollout.cooldownUntilUtc)}.`
+          : 'Rollout is currently blocked by cooldown state.',
+        actionLabel: 'Open rollouts',
         targetPath: '/rollouts?cooldown=active'
       });
     }
 
     return items.sort((a, b) => rankSeverity(b.severity) - rankSeverity(a.severity));
-  }, [
-    experimentalDegraded,
-    offlineMachinesCount,
-    rbacViolationDelta,
-    rollout?.cooldownUntilUtc,
-    rolloutBlockedByCooldown,
-    signatureInvalidMachinesCount
-  ]);
+  }, [experimentalDegraded, offlineMachinesCount, rbacViolationDelta, rollout?.cooldownUntilUtc, rolloutBlockedByCooldown, signatureInvalidMachinesCount]);
 
   const fleetKpis = useMemo<FleetKpiSnapshot>(() => {
     const totalNodes = nodes.length;
@@ -577,64 +611,247 @@ export function FleetOverview() {
       .slice(0, 8);
   }, [adapterControls, changeFeedEvents, latestPolicy, rollout]);
 
+  const statusCards = [
+    { title: 'Fleet', state: fleetStatus },
+    { title: 'Rollout', state: rolloutStatus },
+    { title: 'SLO', state: sloStatus },
+    { title: 'Trust', state: trustStatus }
+  ];
+
+  const compareOptions = useMemo(
+    () => cohortSummaries.map((row) => row.cohortId),
+    [cohortSummaries]
+  );
+  const leftSummary = cohortSummaries.find((row) => row.cohortId === compareLeft) ?? cohortSummaries[0];
+  const rightSummary = cohortSummaries.find((row) => row.cohortId === compareRight) ?? cohortSummaries[1] ?? cohortSummaries[0];
+
+  const leftMetricValue = useMemo(() => {
+    if (!leftSummary) return 0;
+    if (compareMetric === 'p99') return leftSummary.latencyP99Ms;
+    if (compareMetric === 'degradation') return leftSummary.degradationRatePct;
+    return leftSummary.errorRatePct;
+  }, [compareMetric, leftSummary]);
+
+  const rightMetricValue = useMemo(() => {
+    if (!rightSummary) return 0;
+    if (compareMetric === 'p99') return rightSummary.latencyP99Ms;
+    if (compareMetric === 'degradation') return rightSummary.degradationRatePct;
+    return rightSummary.errorRatePct;
+  }, [compareMetric, rightSummary]);
+
+  const delta = leftMetricValue - rightMetricValue;
+  const leftSeries = metricSeries(leftSummary, compareMetric);
+  const rightSeries = metricSeries(rightSummary, compareMetric);
+
+  const showPolicyDecisions = fleetKpis.policyDecisionsPerMinute > 0;
+  const showInterventions = fleetKpis.interventionsPerMinute > 0;
+
   return (
     <div className="grid-three">
       <section className="panel span-all">
-        <div className="right-now-header">
-          <h3>Right now status bar</h3>
-          <p className="muted-line">Is the fleet okay right now, and what should I look at first?</p>
+        <div className="panel-heading-row">
+          <h3>Status</h3>
+          <span className="muted-line">Critical health signals</span>
         </div>
         <div className="right-now-grid">
-          {[fleetStatus, rolloutStatus, sloStatus, trustStatus].map((item) => (
+          {statusCards.map((card) => (
             <button
-              key={item.plainEnglish}
+              key={card.title}
               type="button"
-              className={`right-now-card ${item.tone}`}
-              onClick={() => navigate(item.targetPath)}
-              title={item.detail}
+              className={`right-now-card ${card.state.tone}`}
+              onClick={() => navigate(card.state.targetPath)}
+              title={card.state.detail}
             >
-              <span className="right-now-label">{item.plainEnglish}</span>
-              <strong className="right-now-value">{item.label}</strong>
-              <span className="muted-line">{item.detail}</span>
+              <span className="status-card-title">{card.title}</span>
+              <strong className="right-now-value">{card.state.label.toUpperCase()}</strong>
+              <span className="muted-line">{card.state.detail}</span>
             </button>
           ))}
         </div>
-        <div className="right-now-meta">
-          <p>
-            Last updated: <strong>{formatUtc(lastUpdatedUtc ?? rollout?.updatedAtUtc)}</strong>
-          </p>
-          <p>
-            Live connection status: <strong>{liveConnected ? 'Connected' : 'Disconnected'}</strong>
-          </p>
-          <p>
-            WS stream: <strong>{wsStatus.statusLabel}</strong> ({wsStatus.detail})
-          </p>
+        <div className="status-badge-row">
+          <span className="status-health-pill">Live: {liveConnected ? 'Connected' : 'Disconnected'}</span>
+          <button
+            type="button"
+            className={`status-health-pill ${wsStatus.connected ? 'ok' : 'critical'}`}
+            onClick={() => navigate('/system-health')}
+          >
+            WS: {wsStatus.statusLabel}
+          </button>
+          <span className="status-health-pill">Last update: {formatUtc(lastUpdatedUtc ?? rollout?.updatedAtUtc)}</span>
         </div>
       </section>
 
       <section className="panel span-all">
         <div className="panel-heading-row">
           <h3>Needs attention</h3>
-          <span className="muted-line">Auto-prioritized triage queue</span>
+          <span className="muted-line">Sorted by severity</span>
         </div>
         {needsAttention.length === 0 ? (
           <p className="muted-line">No active issues. Fleet appears stable.</p>
         ) : (
           <div className="needs-attention-list">
             {needsAttention.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={`needs-attention-item ${item.severity}`}
-                onClick={() => navigate(item.targetPath)}
-              >
-                <span className="needs-attention-title">{item.title}</span>
-                <span className="needs-attention-detail">{item.detail}</span>
-              </button>
+              <div key={item.key} className="needs-attention-row">
+                <div className="needs-attention-main">
+                  <span className={`severity-dot ${item.severity}`} aria-hidden="true" />
+                  <div>
+                    <div className="needs-attention-title">{item.title}</div>
+                    <div className="needs-attention-detail">{item.detail}</div>
+                  </div>
+                </div>
+                <button type="button" onClick={() => navigate(item.targetPath)}>
+                  {item.actionLabel}
+                </button>
+              </div>
             ))}
           </div>
         )}
       </section>
+
+      <section className="panel span-all">
+        <div className="panel-heading-row">
+          <h3>Key metrics</h3>
+          <span className="muted-line">Fleet essentials only</span>
+        </div>
+        <div className="key-metrics-grid">
+          <div className="kpi-tile">
+            <span className="kpi-label">Error rate</span>
+            <strong>{fleetKpis.errorRatePct.toFixed(3)}%</strong>
+          </div>
+          <div className="kpi-tile">
+            <span className="kpi-label">P95 latency</span>
+            <strong>{Math.round(fleetKpis.latencyP95Ms)} ms</strong>
+          </div>
+          <div className="kpi-tile">
+            <span className="kpi-label">P99 latency</span>
+            <strong>{Math.round(fleetKpis.latencyP99Ms)} ms</strong>
+          </div>
+          <div className="kpi-tile">
+            <span className="kpi-label">Regression %</span>
+            <strong>{fleetKpis.degradationPct.toFixed(3)}%</strong>
+          </div>
+          <div className="kpi-tile">
+            <span className="kpi-label">Nodes online</span>
+            <strong>{fleetKpis.onlineNodes}/{fleetKpis.totalNodes}</strong>
+          </div>
+          {showPolicyDecisions ? (
+            <div className="kpi-tile">
+              <span className="kpi-label">Policy decisions/min</span>
+              <strong>{fleetKpis.policyDecisionsPerMinute.toFixed(1)}</strong>
+            </div>
+          ) : null}
+          {showInterventions ? (
+            <div className="kpi-tile">
+              <span className="kpi-label">Interventions/min</span>
+              <strong>{fleetKpis.interventionsPerMinute.toFixed(1)}</strong>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="panel span-all">
+        <div className="panel-heading-row">
+          <h3>Cohort distribution</h3>
+          <span className="muted-line">Exposure overview</span>
+        </div>
+        {cohorts.length === 0 ? (
+          <p className="muted-line">No cohort data is available yet.</p>
+        ) : (
+          <table className="simple-table">
+            <thead>
+              <tr>
+                <th>Cohort</th>
+                <th>Exposure</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cohorts.map((cohort) => (
+                <tr
+                  key={cohort.cohortId}
+                  className="click-row"
+                  onClick={() => navigate(`/cohorts?cohort=${encodeURIComponent(cohort.cohortId)}`)}
+                >
+                  <td>{cohort.cohortId}</td>
+                  <td>{cohort.exposurePct}%</td>
+                  <td>{cohort.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
+
+      {compareEnabled ? (
+        <section className="panel span-all">
+          <div className="panel-heading-row">
+            <h3>Compare</h3>
+            <span className="muted-line">Baseline vs canary</span>
+          </div>
+          <div className="compare-control-row">
+            <label>
+              Left cohort
+              <select value={compareLeft} onChange={(event) => updateParam('cmpA', event.target.value, 'stable')}>
+                {compareOptions.map((cohort) => (
+                  <option key={cohort} value={cohort}>{cohort}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Right cohort
+              <select value={compareRight} onChange={(event) => updateParam('cmpB', event.target.value, 'experimental')}>
+                {compareOptions.map((cohort) => (
+                  <option key={cohort} value={cohort}>{cohort}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Time window
+              <select value={compareWindow} onChange={(event) => updateParam('cmpWindow', event.target.value, '1h')}>
+                <option value="15m">15m</option>
+                <option value="1h">1h</option>
+                <option value="6h">6h</option>
+                <option value="24h">24h</option>
+              </select>
+            </label>
+            <label>
+              Metric
+              <select value={compareMetric} onChange={(event) => updateParam('cmpMetric', event.target.value, 'error')}>
+                <option value="error">Error</option>
+                <option value="p99">P99</option>
+                <option value="degradation">Regression</option>
+              </select>
+            </label>
+          </div>
+
+          <table className="simple-table">
+            <thead>
+              <tr>
+                <th>Metric</th>
+                <th>{leftSummary?.cohortId ?? compareLeft}</th>
+                <th>{rightSummary?.cohortId ?? compareRight}</th>
+                <th>Delta</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>{metricLabel(compareMetric)}</td>
+                <td>{formatMetricValue(compareMetric, leftMetricValue)}</td>
+                <td>{formatMetricValue(compareMetric, rightMetricValue)}</td>
+                <td>{delta >= 0 ? '+' : ''}{formatMetricValue(compareMetric, delta)}</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div className="trend-panel">
+            <h4>{metricLabel(compareMetric)} trend</h4>
+            <svg viewBox="0 0 100 100" className="trend-svg" role="img" aria-label="Compare trend chart">
+              <polyline className="trend-line-primary" fill="none" strokeWidth="2.5" points={polylinePoints(leftSeries)} />
+              <polyline className="trend-line-secondary" fill="none" strokeWidth="2.5" points={polylinePoints(rightSeries)} />
+            </svg>
+          </div>
+        </section>
+      ) : null}
 
       <section className="panel span-all">
         <div className="panel-heading-row">
@@ -656,100 +873,6 @@ export function FleetOverview() {
           </ul>
         )}
       </section>
-
-      <MetricCard
-        title="Error rate (fleet)"
-        value={`${fleetKpis.errorRatePct.toFixed(3)}%`}
-        note="Weighted across cohorts by node count."
-        tooltip={{
-          meaning: 'Fleet-wide error percentage across all cohorts.',
-          whyItMatters: 'It is the fastest signal for production reliability regression.',
-          goodLooksLike: 'Low and stable with no sustained spikes.'
-        }}
-      />
-      <MetricCard
-        title="P95 latency"
-        value={`${Math.round(fleetKpis.latencyP95Ms)} ms`}
-        note="Weighted across cohorts by node count."
-        tooltip={{
-          meaning: '95th percentile response latency across the fleet.',
-          whyItMatters: 'Shows tail performance degradation before incidents escalate.',
-          goodLooksLike: 'Within SLO target and not trending upward.'
-        }}
-      />
-      <MetricCard
-        title="P99 latency"
-        value={`${Math.round(fleetKpis.latencyP99Ms)} ms`}
-        note="Weighted across cohorts by node count."
-        tooltip={{
-          meaning: '99th percentile response latency across the fleet.',
-          whyItMatters: 'Captures worst-case user experience under load.',
-          goodLooksLike: 'Predictable and bounded during experiments/rollouts.'
-        }}
-      />
-      <MetricCard
-        title="Degradation %"
-        value={`${fleetKpis.degradationPct.toFixed(3)}%`}
-        note="Weighted across cohorts by node count."
-        tooltip={{
-          meaning: 'Overall performance regression rate observed in fleet telemetry.',
-          whyItMatters: 'Highlights performance drift even when error rate is stable.',
-          goodLooksLike: 'Near zero with short-lived deviations.'
-        }}
-      />
-      <MetricCard
-        title="Nodes online/total"
-        value={`${fleetKpis.onlineNodes}/${fleetKpis.totalNodes}`}
-        note={`Offline threshold: ${Math.round(OFFLINE_HEARTBEAT_THRESHOLD_MS / 1000)}s heartbeat gap.`}
-        tooltip={{
-          meaning: 'How many machines are currently online versus total tracked machines.',
-          whyItMatters: 'Fleet coverage quality determines confidence in all other metrics.',
-          goodLooksLike: 'Online count stays near total with minimal churn.'
-        }}
-      />
-      <MetricCard
-        title="Policy decisions/min"
-        value={fleetKpis.policyDecisionsPerMinute.toFixed(1)}
-        note={opsMetrics ? `Audit queries total: ${opsMetrics.audit_queries_total}` : 'No audit metric source available.'}
-        tooltip={{
-          meaning: 'Estimated policy decision throughput per minute.',
-          whyItMatters: 'Shows policy engine activity level and evaluation pressure.',
-          goodLooksLike: 'Consistent with expected traffic and rollout state.'
-        }}
-      />
-      <MetricCard
-        title="Interventions/min"
-        value={fleetKpis.interventionsPerMinute.toFixed(1)}
-        note="Computed from recent audit decisions (action=intervene)."
-        tooltip={{
-          meaning: 'Intervention actions executed per minute.',
-          whyItMatters: 'Tracks regulation intensity and catches thrash conditions.',
-          goodLooksLike: 'Controlled rate aligned with policy and workload.'
-        }}
-      />
-      <section className="panel span-all">
-        <h3>Cohort distribution</h3>
-        {cohorts.length === 0 ? (
-          <p>No cohort data is available yet.</p>
-        ) : (
-          <div className="cohort-grid">
-            {cohorts.map((cohort) => (
-              <button
-                className="cohort-item"
-                type="button"
-                key={cohort.cohortId}
-                onClick={() => navigate(`/cohorts?cohort=${encodeURIComponent(cohort.cohortId)}`)}
-                title="Open cohort details"
-              >
-                <strong>{cohort.cohortId}</strong>
-                <span>{cohort.exposurePct}% exposure</span>
-                <span>Status: {cohort.status}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
-

@@ -5,62 +5,55 @@ import { formatUtc } from '../../utils/date';
 
 type ViewMeta = {
   title: string;
-  question: string;
+  subtitle: string;
 };
 
 const viewMap: Record<string, ViewMeta> = {
   '/': {
     title: 'Fleet Overview',
-    question: 'Is the fleet healthy right now, and what should we inspect first?'
+    subtitle: 'Fleet health and top risks (last 1h)'
   },
   '/alerts': {
     title: 'Alerts',
-    question: 'What needs immediate attention, and what should we do next?'
+    subtitle: 'Live triage queue and response actions'
   },
   '/cohorts': {
     title: 'Cohorts',
-    question: 'Which cohort is regressing against baseline, and by how much?'
+    subtitle: 'Compare cohort performance and regressions'
   },
   '/machines': {
     title: 'Machines',
-    question: 'Which machine needs action now, and what changed most recently?'
+    subtitle: 'Machine-level health, trust, and state drilldown'
   },
   '/experiments': {
     title: 'Experiments',
-    question: 'Did this change improve outcomes compared to baseline?'
+    subtitle: 'Validate hypotheses against baseline outcomes'
   },
   '/rollouts': {
     title: 'Rollouts',
-    question: 'Can we safely promote this change to a wider audience?'
+    subtitle: 'Promote safely with guardrails and cooldown awareness'
   },
   '/policies': {
     title: 'Policies',
-    question: 'Which rules are active, and are they configured correctly?'
+    subtitle: 'Policy library, versions, and decision coverage'
   },
   '/audit-traces': {
     title: 'Audit & Traces',
-    question: 'What decisions were made, and can we replay them with evidence?'
+    subtitle: 'Trace replay and immutable decision evidence'
   },
   '/config': {
     title: 'Config Integrity',
-    question: 'Are we running trusted configuration versions without drift?'
+    subtitle: 'Trust checks, signatures, and drift visibility'
   },
   '/security-access': {
     title: 'Security And Access',
-    question: 'Who can perform sensitive actions, and were unsafe attempts blocked?'
+    subtitle: 'RBAC controls and sensitive access monitoring'
   },
   '/system-health': {
     title: 'System Health',
-    question: 'Are ingestion, inference, and control loops flowing end-to-end?'
+    subtitle: 'Console, API, and stream reliability signals'
   }
 };
-
-const compareOptions = [
-  { value: 'none', label: 'No compare' },
-  { value: 'baseline-canary', label: 'Baseline vs canary' },
-  { value: 'before-after', label: 'Before vs after' },
-  { value: 'config-a-b', label: 'Config A vs Config B' }
-];
 
 interface ViewContextBarProps {
   onOpenGlossary: () => void;
@@ -76,13 +69,11 @@ export function ViewContextBar({ onOpenGlossary }: ViewContextBarProps) {
   const viewMeta = useMemo<ViewMeta>(() => {
     return viewMap[location.pathname] ?? {
       title: 'Operations Console',
-      question: 'What is the current state, and where should we drill down next?'
+      subtitle: 'Live operations visibility and controls'
     };
   }, [location.pathname]);
 
   const compareMode = params.get('compare') ?? 'none';
-  const compareLeft = params.get('cmpA') ?? 'stable';
-  const compareRight = params.get('cmpB') ?? 'experimental';
 
   const updateParam = (key: string, value: string, clearIf?: string) => {
     const next = new URLSearchParams(params);
@@ -107,47 +98,33 @@ export function ViewContextBar({ onOpenGlossary }: ViewContextBarProps) {
     window.setTimeout(() => setCopyState('idle'), 1600);
   };
 
+  const toggleCompare = () => {
+    updateParam('compare', compareMode === 'none' ? 'baseline-canary' : 'none', 'none');
+  };
+
   return (
     <section className="view-context-bar">
       <div className="view-context-head">
         <div>
           <p className="view-title">{viewMeta.title}</p>
-          <p className="view-question">{viewMeta.question}</p>
+          <p className="view-subtitle">{viewMeta.subtitle}</p>
         </div>
         <div className="context-actions">
           <button type="button" onClick={copyLink}>
             {copyState === 'copied' ? 'Link Copied' : copyState === 'error' ? 'Copy Failed' : 'Copy Link'}
           </button>
+          <button type="button" onClick={toggleCompare}>
+            Compare: {compareMode === 'none' ? 'Off' : 'On'}
+          </button>
           <button type="button" onClick={onOpenGlossary}>
             Glossary
           </button>
+          <p className="freshness-pill">
+            Live: <strong>{liveConnected ? 'Connected' : 'Delayed'}</strong>
+            {' | '}
+            Last update: <strong>{formatUtc(lastUpdatedUtc)}</strong>
+          </p>
         </div>
-      </div>
-
-      <div className="view-context-controls">
-        <label>
-          Compare lens
-          <select value={compareMode} onChange={(event) => updateParam('compare', event.target.value, 'none')}>
-            {compareOptions.map((option) => (
-              <option value={option.value} key={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Left side
-          <input value={compareLeft} onChange={(event) => updateParam('cmpA', event.target.value, 'stable')} />
-        </label>
-        <label>
-          Right side
-          <input value={compareRight} onChange={(event) => updateParam('cmpB', event.target.value, 'experimental')} />
-        </label>
-        <p className="freshness-pill">
-          Data freshness: <strong>{liveConnected ? 'Live' : 'Delayed'}</strong>
-          {' · '}
-          Last update: <strong>{formatUtc(lastUpdatedUtc)}</strong>
-        </p>
       </div>
     </section>
   );
