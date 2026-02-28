@@ -1,12 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CohortId } from '../types/apiContracts';
-import { getCohortSummary, type CohortSummary } from '../api/cohorts';
+import {
+  getCohortEvaluation,
+  type CohortEvaluationSnapshot,
+  type CohortRegressionEvent,
+  type CohortSummary
+} from '../api/cohorts';
 import { toApiError, type ApiError } from '../api/client';
 import { useCohortSlice } from '../store/cohortSlice';
 import type { CohortWindow } from '../types/ui';
 
 export function useCohortMetrics(): {
+  snapshot: CohortEvaluationSnapshot | undefined;
   rows: CohortSummary[];
+  generatedAtUtc: string | undefined;
+  source: string | undefined;
+  activeEvents: CohortRegressionEvent[];
+  recentEvents: CohortRegressionEvent[];
   loading: boolean;
   error: ApiError | undefined;
   window: CohortWindow;
@@ -20,6 +30,7 @@ export function useCohortMetrics(): {
   setPrimaryCohort: (cohort: CohortId) => void;
   setSecondaryCohort: (cohort: CohortId) => void;
 } {
+  const [snapshot, setSnapshot] = useState<CohortEvaluationSnapshot | undefined>();
   const [rows, setRows] = useState<CohortSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();
@@ -38,9 +49,10 @@ export function useCohortMetrics(): {
 
     const refresh = async (): Promise<void> => {
       try {
-        const data = await getCohortSummary(window);
+        const data = await getCohortEvaluation(window, secondaryCohort);
         if (!mounted) return;
-        setRows(data);
+        setSnapshot(data);
+        setRows(data.rows);
         setError(undefined);
       } catch (err) {
         if (!mounted) return;
@@ -59,13 +71,18 @@ export function useCohortMetrics(): {
       mounted = false;
       globalThis.window.clearInterval(timer);
     };
-  }, [window]);
+  }, [secondaryCohort, window]);
 
   const primary = useMemo(() => rows.find((row) => row.cohortId === primaryCohort), [rows, primaryCohort]);
   const secondary = useMemo(() => rows.find((row) => row.cohortId === secondaryCohort), [rows, secondaryCohort]);
 
   return {
+    snapshot,
     rows,
+    generatedAtUtc: snapshot?.generatedAtUtc,
+    source: snapshot?.source,
+    activeEvents: snapshot?.activeEvents ?? [],
+    recentEvents: snapshot?.recentEvents ?? [],
     loading,
     error,
     window,
