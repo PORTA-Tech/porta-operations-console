@@ -577,6 +577,31 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   gap: 8px;
 }
 
+.fleet-snapshot-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fleet-snapshot-text {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.fleet-snapshot-text strong {
+  font-size: 1rem;
+}
+
+.fleet-snapshot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .status-health-pill {
   margin: 0;
   border: 1px solid var(--line);
@@ -827,6 +852,7 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   .freshness-pill { margin-left: 0; }
   .right-now-grid { grid-template-columns: 1fr; }
   .status-badge-row { flex-direction: column; }
+  .fleet-snapshot-row { flex-direction: column; align-items: flex-start; }
   .needs-attention-row {
     flex-direction: column;
     align-items: flex-start;

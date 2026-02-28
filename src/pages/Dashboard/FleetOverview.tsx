@@ -239,6 +239,7 @@ export function FleetOverview() {
   const [changeFeedEvents, setChangeFeedEvents] = useState<ChangeFeedEntry[]>([]);
   const [decisionRateFromMetrics, setDecisionRateFromMetrics] = useState(0);
   const [rbacViolationDelta, setRbacViolationDelta] = useState(0);
+  const [lastRefreshUtc, setLastRefreshUtc] = useState<string | undefined>(undefined);
 
   const previousRbacViolationsRef = useRef<number | null>(null);
   const previousAuditQueriesRef = useRef<number | null>(null);
@@ -311,6 +312,7 @@ export function FleetOverview() {
         setCohortSummaries(nextCohorts);
         setAuditDecisions(nextAuditDecisions);
         setAdapterControls(nextAdapterControls);
+        setLastRefreshUtc(new Date().toISOString());
 
         const previousRbac = previousRbacViolationsRef.current;
         const currentRbac = nextMetrics.rbac_violations_total;
@@ -428,7 +430,7 @@ export function FleetOverview() {
     void refreshSignals();
     const timer = window.setInterval(() => {
       void refreshSignals();
-    }, 8000);
+    }, 3000);
 
     return () => {
       mounted = false;
@@ -471,6 +473,12 @@ export function FleetOverview() {
     rollout?.state === 'COOLDOWN'
     || (rollout?.cooldownUntilUtc && Date.parse(rollout.cooldownUntilUtc) > Date.now())
   );
+  const affectedMachinesCount = signatureInvalidMachinesCount > 0 ? signatureInvalidMachinesCount : offlineMachinesCount;
+  const affectedMachinesPath = signatureInvalidMachinesCount > 0
+    ? '/machines?signature=invalid'
+    : offlineMachinesCount > 0
+      ? '/machines?offline=1'
+      : '/machines';
 
   const experimentalDegraded = useMemo(() => {
     const experimental = cohortSummaries.find((row) => row.cohortId === 'experimental');
@@ -643,11 +651,38 @@ export function FleetOverview() {
   const leftSeries = metricSeries(leftSummary, compareMetric);
   const rightSeries = metricSeries(rightSummary, compareMetric);
 
-  const showPolicyDecisions = fleetKpis.policyDecisionsPerMinute > 0;
   const showInterventions = fleetKpis.interventionsPerMinute > 0;
+  const openQuickCompare = () => {
+    updateParam('compare', 'baseline-canary', 'none');
+    updateParam('cmpA', compareOptions.includes('stable') ? 'stable' : (compareOptions[0] ?? 'stable'), 'stable');
+    updateParam(
+      'cmpB',
+      compareOptions.includes('experimental') ? 'experimental' : (compareOptions[1] ?? compareOptions[0] ?? 'experimental'),
+      'experimental'
+    );
+  };
 
   return (
     <div className="grid-three">
+      <section className="panel span-all">
+        <div className="fleet-snapshot-row">
+          <div className="fleet-snapshot-text">
+            <strong>{fleetStatus.label}</strong>
+            <span>Trust: {trustStatus.label}</span>
+            <span>Affected machines: {affectedMachinesCount}</span>
+            <span>Live refresh: {formatUtc(lastRefreshUtc ?? lastUpdatedUtc ?? rollout?.updatedAtUtc)}</span>
+          </div>
+          <div className="fleet-snapshot-actions">
+            <button type="button" onClick={() => navigate(affectedMachinesPath)}>
+              Open affected machines
+            </button>
+            <button type="button" onClick={openQuickCompare}>
+              Compare experimental vs stable
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section className="panel span-all">
         <div className="panel-heading-row">
           <h3>Status</h3>
@@ -734,12 +769,6 @@ export function FleetOverview() {
             <span className="kpi-label">Nodes online</span>
             <strong>{fleetKpis.onlineNodes}/{fleetKpis.totalNodes}</strong>
           </div>
-          {showPolicyDecisions ? (
-            <div className="kpi-tile">
-              <span className="kpi-label">Policy decisions/min</span>
-              <strong>{fleetKpis.policyDecisionsPerMinute.toFixed(1)}</strong>
-            </div>
-          ) : null}
           {showInterventions ? (
             <div className="kpi-tile">
               <span className="kpi-label">Interventions/min</span>
