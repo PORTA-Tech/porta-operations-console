@@ -15,7 +15,12 @@ import {
 import { toApiError, type ApiError } from '../api/client';
 import type { AlertRecord, AuditDecisionRecord, ConsoleOpsMetrics, PolicyRecord, RbacAssignment } from '../types/consoleOperations';
 
-export function useConsoleOperations() {
+interface UseConsoleOperationsOptions {
+  includeAlertHistory?: boolean;
+}
+
+export function useConsoleOperations(options: UseConsoleOperationsOptions = {}) {
+  const includeAlertHistory = options.includeAlertHistory ?? false;
   const [policies, setPolicies] = useState<PolicyRecord[]>([]);
   const [audits, setAudits] = useState<AuditDecisionRecord[]>([]);
   const [alerts, setAlerts] = useState<AlertRecord[]>([]);
@@ -35,7 +40,13 @@ export function useConsoleOperations() {
 
   const refresh = async (): Promise<void> => {
     try {
-      const [p, a, al, r, m] = await Promise.all([fetchPolicies(), fetchAuditDecisions(), fetchAlerts(false), fetchRbacAssignments(), fetchConsoleOpsMetrics()]);
+      const [p, a, al, r, m] = await Promise.all([
+        fetchPolicies(),
+        fetchAuditDecisions(),
+        fetchAlerts(includeAlertHistory),
+        fetchRbacAssignments(),
+        fetchConsoleOpsMetrics()
+      ]);
       setPolicies(p);
       setAudits(a);
       setAlerts(al);
@@ -61,7 +72,7 @@ export function useConsoleOperations() {
       mounted = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [includeAlertHistory]);
 
   const savePolicy = async (policy: PolicyRecord): Promise<void> => {
     await upsertPolicy(policy);
@@ -91,6 +102,15 @@ export function useConsoleOperations() {
     await refresh();
   };
 
+  const resolveAlertsByIds = async (alertIds: string[]): Promise<void> => {
+    if (alertIds.length === 0) {
+      return;
+    }
+
+    await Promise.all(alertIds.map((id) => resolveAlert(id)));
+    await refresh();
+  };
+
   return useMemo(
     () => ({
       policies,
@@ -106,6 +126,7 @@ export function useConsoleOperations() {
       exportRows,
       assign,
       resolveAlertById,
+      resolveAlertsByIds,
       refresh
     }),
     [policies, audits, alerts, assignments, metrics, loading, error]

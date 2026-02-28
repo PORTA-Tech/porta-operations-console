@@ -785,6 +785,118 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   gap: 5px;
 }
 
+.alerts-triage-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 10px;
+}
+
+.alert-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  display: grid;
+  gap: 10px;
+}
+
+.alert-card.critical {
+  border-color: color-mix(in oklab, var(--critical) 70%, var(--line));
+}
+
+.alert-card.warn {
+  border-color: color-mix(in oklab, var(--warn) 70%, var(--line));
+}
+
+.alert-card.info {
+  border-color: color-mix(in oklab, var(--accent-2) 55%, var(--line));
+}
+
+.alert-card-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.alert-severity-pill,
+.alert-scope-pill {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 3px 9px;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: #fff;
+}
+
+.alert-severity-pill.critical {
+  border-color: color-mix(in oklab, var(--critical) 60%, var(--line));
+  color: var(--critical);
+}
+
+.alert-severity-pill.warn {
+  border-color: color-mix(in oklab, var(--warn) 60%, var(--line));
+  color: var(--warn);
+}
+
+.alert-severity-pill.info {
+  border-color: color-mix(in oklab, var(--accent-2) 60%, var(--line));
+  color: var(--accent-2);
+}
+
+.alert-type-label {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.alert-what-happened {
+  margin: 0;
+  line-height: 1.35;
+}
+
+.alert-count-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.alert-meta-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.alert-meta-grid div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  background: #fffdf9;
+}
+
+.alert-meta-grid dt {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.alert-meta-grid dd {
+  margin: 2px 0 0;
+  font-size: 0.9rem;
+}
+
+.alert-meta-span {
+  grid-column: 1 / -1;
+  word-break: break-all;
+}
+
+.alert-card-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .risk-gauge {
   border: 1px solid var(--line);
   border-radius: 10px;

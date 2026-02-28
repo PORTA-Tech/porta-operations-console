@@ -40,13 +40,23 @@ export interface AuditDecisionRecord {
 export interface AlertRecord {
   alert_id: string;
   alert_type:
+    | 'agent_offline'
+    | 'backend_disconnected'
+    | 'signature_invalid'
+    | 'config_drift'
+    | 'slo_breach'
+    | 'cohort_regression_spike'
+    | 'policy_thrash'
+    | 'circuit_breaker_open'
+    | 'ws_drop_spikes'
     | 'high_stress_probability'
     | 'overload_probability'
     | 'intervention_failure'
     | 'policy_version_mismatch'
     | 'signature_verification_failure'
-    | 'latency_breach';
-  severity: 'warning' | 'critical';
+    | 'latency_breach'
+    | string;
+  severity: 'info' | 'warning' | 'critical';
   status: 'active' | 'resolved';
   first_seen_at: string;
   last_seen_at: string;
