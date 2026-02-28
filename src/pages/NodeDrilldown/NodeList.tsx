@@ -139,7 +139,7 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
             <tr
               key={node.nodeId}
               className="click-row"
-              onClick={() => navigate(`/operations?agent=${encodeURIComponent(node.nodeId)}`)}
+              onClick={() => navigate(`/audit-traces?agent=${encodeURIComponent(node.nodeId)}`)}
               title="Open policy decisions for this machine"
             >
               <td>{node.nodeId}</td>

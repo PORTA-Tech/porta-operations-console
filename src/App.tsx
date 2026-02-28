@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/Layout/AppShell';
 import { FleetOverview } from './pages/Dashboard/FleetOverview';
 import { CohortOverview } from './pages/Dashboard/CohortOverview';
@@ -13,10 +13,14 @@ import { NodeDetails } from './pages/NodeDrilldown/NodeDetails';
 import { ConfigAuditTable } from './pages/ConfigIntegrity/ConfigAuditTable';
 import { ConfigDiffViewer } from './pages/ConfigIntegrity/ConfigDiffViewer';
 import { ConsoleFoundationPage } from './pages/ConsoleFoundation/ConsoleFoundationPage';
-import { ConsoleOperationsPage } from './pages/Operations/ConsoleOperationsPage';
 import { useFleetState } from './hooks/useFleetState';
 import { useNodeDrilldown } from './hooks/useNodeDrilldown';
 import { useRolloutDryRun } from './hooks/useRolloutDryRun';
+import { AlertsPage } from './pages/Alerts/AlertsPage';
+import { ExperimentsPage } from './pages/Experiments/ExperimentsPage';
+import { PoliciesPage } from './pages/Policies/PoliciesPage';
+import { AuditTracesPage } from './pages/Audit/AuditTracesPage';
+import { SecurityAccessPage } from './pages/Security/SecurityAccessPage';
 
 function DashboardPage() {
   return (
@@ -71,12 +75,20 @@ export default function App() {
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <Routes>
         <Route path="/" element={<DashboardPage />} />
-        <Route path="/console" element={<ConsoleFoundationPage />} />
-        <Route path="/operations" element={<ConsoleOperationsPage />} />
-        <Route path="/rollout" element={<RolloutPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/cohorts" element={<CohortOverview />} />
-        <Route path="/nodes" element={<NodePage />} />
+        <Route path="/machines" element={<NodePage />} />
+        <Route path="/experiments" element={<ExperimentsPage />} />
+        <Route path="/rollouts" element={<RolloutPage />} />
+        <Route path="/policies" element={<PoliciesPage />} />
+        <Route path="/audit-traces" element={<AuditTracesPage />} />
         <Route path="/config" element={<ConfigPage />} />
+        <Route path="/security-access" element={<SecurityAccessPage />} />
+        <Route path="/system-health" element={<ConsoleFoundationPage />} />
+        <Route path="/console" element={<Navigate to="/system-health" replace />} />
+        <Route path="/operations" element={<Navigate to="/audit-traces" replace />} />
+        <Route path="/nodes" element={<Navigate to="/machines" replace />} />
+        <Route path="/rollout" element={<Navigate to="/rollouts" replace />} />
       </Routes>
     </AppShell>
   );

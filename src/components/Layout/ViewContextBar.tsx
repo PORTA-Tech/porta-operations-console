@@ -13,27 +13,43 @@ const viewMap: Record<string, ViewMeta> = {
     title: 'Fleet Overview',
     question: 'Is the fleet healthy right now, and what should we inspect first?'
   },
+  '/alerts': {
+    title: 'Alerts',
+    question: 'What needs immediate attention, and what should we do next?'
+  },
   '/cohorts': {
     title: 'Cohorts',
     question: 'Which cohort is regressing against baseline, and by how much?'
   },
-  '/nodes': {
+  '/machines': {
     title: 'Machines',
     question: 'Which machine needs action now, and what changed most recently?'
   },
-  '/rollout': {
+  '/experiments': {
+    title: 'Experiments',
+    question: 'Did this change improve outcomes compared to baseline?'
+  },
+  '/rollouts': {
     title: 'Rollouts',
     question: 'Can we safely promote this change to a wider audience?'
   },
-  '/operations': {
-    title: 'Policies And Traces',
+  '/policies': {
+    title: 'Policies',
+    question: 'Which rules are active, and are they configured correctly?'
+  },
+  '/audit-traces': {
+    title: 'Audit & Traces',
     question: 'What decisions were made, and can we replay them with evidence?'
   },
   '/config': {
     title: 'Config Integrity',
     question: 'Are we running trusted configuration versions without drift?'
   },
-  '/console': {
+  '/security-access': {
+    title: 'Security And Access',
+    question: 'Who can perform sensitive actions, and were unsafe attempts blocked?'
+  },
+  '/system-health': {
     title: 'System Health',
     question: 'Are ingestion, inference, and control loops flowing end-to-end?'
   }
@@ -136,4 +152,3 @@ export function ViewContextBar({ onOpenGlossary }: ViewContextBarProps) {
     </section>
   );
 }
-

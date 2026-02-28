@@ -10,12 +10,16 @@ interface AppShellProps {
 
 const navItems = [
   { to: '/', label: 'Fleet Overview' },
-  { to: '/console', label: 'System Health' },
-  { to: '/operations', label: 'Audit & Traces' },
-  { to: '/rollout', label: 'Rollouts' },
+  { to: '/alerts', label: 'Alerts' },
   { to: '/cohorts', label: 'Cohorts' },
-  { to: '/nodes', label: 'Machines' },
-  { to: '/config', label: 'Config Integrity' }
+  { to: '/machines', label: 'Machines' },
+  { to: '/experiments', label: 'Experiments' },
+  { to: '/rollouts', label: 'Rollouts' },
+  { to: '/policies', label: 'Policies' },
+  { to: '/audit-traces', label: 'Audit & Traces' },
+  { to: '/config', label: 'Config Integrity' },
+  { to: '/security-access', label: 'Security & Access' },
+  { to: '/system-health', label: 'System Health' }
 ];
 
 export function AppShell({ children }: AppShellProps) {

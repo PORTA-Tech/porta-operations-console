@@ -137,7 +137,7 @@ export function CohortOverview() {
               <tr
                 key={row.cohortId}
                 className="click-row"
-                onClick={() => navigate(`/nodes?cohort=${encodeURIComponent(row.cohortId)}`)}
+                onClick={() => navigate(`/machines?cohort=${encodeURIComponent(row.cohortId)}`)}
                 title="Open machines in this cohort"
               >
                 <td>{row.cohortId}</td>
