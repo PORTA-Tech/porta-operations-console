@@ -38,9 +38,9 @@ export function ExperimentsPage() {
 
   const summaryText = scorecard
     ? `${primary?.cohortId ?? 'Primary'} vs ${secondary?.cohortId ?? 'Secondary'}: `
-      + `${scorecard.errorDelta >= 0 ? '+' : ''}${scorecard.errorDelta.toFixed(3)}% errors, `
+      + `${scorecard.errorDelta >= 0 ? '+' : ''}${scorecard.errorDelta.toFixed(3)}% Error Rate, `
       + `${scorecard.p99Delta >= 0 ? '+' : ''}${scorecard.p99Delta}ms p99, `
-      + `${scorecard.degradationDelta >= 0 ? '+' : ''}${scorecard.degradationDelta.toFixed(3)}% performance regression.`
+      + `${scorecard.degradationDelta >= 0 ? '+' : ''}${scorecard.degradationDelta.toFixed(3)}% Delta vs Baseline.`
     : 'Choose baseline and experiment cohorts to generate a scorecard.';
 
   return (
@@ -100,17 +100,17 @@ export function ExperimentsPage() {
 
       <div className="grid-three">
         <MetricCard
-          title="Error delta"
+          title="Error Rate Delta"
           value={scorecard ? `${scorecard.errorDelta.toFixed(3)}%` : 'n/a'}
           note="Experiment minus baseline"
         />
         <MetricCard
-          title="P99 delta"
+          title="P99 Latency Delta"
           value={scorecard ? `${scorecard.p99Delta} ms` : 'n/a'}
           note="Experiment minus baseline"
         />
         <MetricCard
-          title="Performance regression delta"
+          title="Delta vs Baseline"
           value={scorecard ? `${scorecard.degradationDelta.toFixed(3)}%` : 'n/a'}
           note="Experiment minus baseline"
         />
@@ -124,4 +124,3 @@ export function ExperimentsPage() {
     </div>
   );
 }
-

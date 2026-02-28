@@ -26,13 +26,13 @@ export function ConfigDiffViewer() {
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       {data ? (
         <div className={`integrity-panel-body ${toneClass}`}>
-          <p>config_seq: <strong>{data.config_seq}</strong></p>
-          <p>config_version: <strong>{data.config_version}</strong></p>
-          <p>issuer: <strong>{data.issuer}</strong></p>
-          <p>signature validity: <strong>{data.signature_validity ? 'Verified' : 'Invalid'}</strong></p>
-          <p>expiry countdown: <strong>{countdownLabel(data.expiry_countdown_seconds)}</strong></p>
-          <p>hash fingerprint: <strong>{shortHash(data.hash_fingerprint) || 'n/a'}</strong></p>
-          <p>full diff from previous:</p>
+          <p>Config Version: <strong>{data.config_version}</strong></p>
+          <p>Config Version Number: <strong>{data.config_seq}</strong></p>
+          <p>Issuer: <strong>{data.issuer}</strong></p>
+          <p>Config Trust: <strong>{data.signature_validity ? 'Verified' : 'Invalid'}</strong></p>
+          <p>Expiry Countdown: <strong>{countdownLabel(data.expiry_countdown_seconds)}</strong></p>
+          <p>Hash Fingerprint: <strong>{shortHash(data.hash_fingerprint) || 'n/a'}</strong></p>
+          <p>Full diff from previous:</p>
 
           <div className="grid-three">
             <div>

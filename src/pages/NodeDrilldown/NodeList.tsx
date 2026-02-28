@@ -92,7 +92,7 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
 
   return (
     <Panel title="Machine snapshot">
-      {loading ? <p className="muted-line">Loading node snapshot...</p> : null}
+      {loading ? <p className="muted-line">Loading machine snapshot...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <div className="table-controls">
         <input
@@ -177,12 +177,12 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
         <thead>
           <tr>
             <th>Machine ID</th>
-            <th>cohort</th>
-            <th>Config version</th>
-            <th>Trust check</th>
-            <th>Last heartbeat</th>
-            <th>Performance state</th>
-            <th>SLO state</th>
+            <th>Cohort</th>
+            <th>Config Version</th>
+            <th>Config Trust</th>
+            <th>Last Heartbeat</th>
+            <th>Performance State</th>
+            <th>SLO State</th>
           </tr>
         </thead>
         <tbody>
@@ -210,7 +210,7 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
           ))}
           {filteredNodes.length === 0 ? (
             <tr>
-              <td colSpan={7} className="muted-line">No nodes match the current search and filters.</td>
+              <td colSpan={7} className="muted-line">No machines match the current search and filters.</td>
             </tr>
           ) : null}
         </tbody>

@@ -23,12 +23,7 @@ import { AuditTracesPage } from './pages/Audit/AuditTracesPage';
 import { SecurityAccessPage } from './pages/Security/SecurityAccessPage';
 
 function DashboardPage() {
-  return (
-    <div className="stack">
-      <FleetOverview />
-      <CohortOverview />
-    </div>
-  );
+  return <FleetOverview />;
 }
 
 function RolloutPage() {

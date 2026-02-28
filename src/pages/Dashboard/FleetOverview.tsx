@@ -44,7 +44,6 @@ interface FleetKpiSnapshot {
   degradationPct: number;
   onlineNodes: number;
   totalNodes: number;
-  policyDecisionsPerMinute: number;
   interventionsPerMinute: number;
 }
 
@@ -121,7 +120,7 @@ function mapTrustStatus(
     return {
       label: 'Warning',
       tone: 'warn',
-      detail: 'Trust signal is unavailable.',
+      detail: 'Config trust signal unavailable.',
       targetPath: '/config'
     };
   }
@@ -130,7 +129,7 @@ function mapTrustStatus(
     return {
       label: 'Invalid',
       tone: 'critical',
-      detail: 'Signature check failed.',
+      detail: 'Config trust invalid.',
       targetPath: '/config'
     };
   }
@@ -139,7 +138,7 @@ function mapTrustStatus(
     return {
       label: 'Warning',
       tone: 'warn',
-      detail: 'Signature near expiry.',
+      detail: 'Config signature near expiry.',
       targetPath: '/config'
     };
   }
@@ -147,7 +146,7 @@ function mapTrustStatus(
   return {
     label: 'Trusted',
     tone: 'ok',
-    detail: 'Signatures valid.',
+    detail: 'Config signatures valid.',
     targetPath: '/config'
   };
 }
@@ -200,9 +199,9 @@ function metricSeries(summary: CohortSummary | undefined, metric: CompareMetric)
 }
 
 function metricLabel(metric: CompareMetric): string {
-  if (metric === 'p99') return 'P99 latency';
-  if (metric === 'degradation') return 'Performance regression';
-  return 'Error rate';
+  if (metric === 'p99') return 'P99 Latency';
+  if (metric === 'degradation') return 'Delta vs Baseline';
+  return 'Error Rate';
 }
 
 function formatMetricValue(metric: CompareMetric, value: number): string {
@@ -237,13 +236,10 @@ export function FleetOverview() {
   const [auditDecisions, setAuditDecisions] = useState<AuditDecisionRecord[]>([]);
   const [adapterControls, setAdapterControls] = useState<AdapterActivationControlsView | undefined>(undefined);
   const [changeFeedEvents, setChangeFeedEvents] = useState<ChangeFeedEntry[]>([]);
-  const [decisionRateFromMetrics, setDecisionRateFromMetrics] = useState(0);
   const [rbacViolationDelta, setRbacViolationDelta] = useState(0);
   const [lastRefreshUtc, setLastRefreshUtc] = useState<string | undefined>(undefined);
 
   const previousRbacViolationsRef = useRef<number | null>(null);
-  const previousAuditQueriesRef = useRef<number | null>(null);
-  const previousMetricsTimestampRef = useRef<number | null>(null);
   const previousPolicyVersionsRef = useRef<Map<string, string>>(new Map());
   const previousPolicyThresholdsRef = useRef<Map<string, string>>(new Map());
   const previousRolloutStateRef = useRef<string | undefined>(undefined);
@@ -324,17 +320,6 @@ export function FleetOverview() {
         previousRbacViolationsRef.current = currentRbac;
 
         const nowMs = Date.now();
-        const previousMetricsTs = previousMetricsTimestampRef.current;
-        const previousAuditQueries = previousAuditQueriesRef.current;
-        if (previousMetricsTs !== null && previousAuditQueries !== null) {
-          const elapsedMinutes = (nowMs - previousMetricsTs) / 60000;
-          const delta = Math.max(0, nextMetrics.audit_queries_total - previousAuditQueries);
-          if (elapsedMinutes > 0) {
-            setDecisionRateFromMetrics(delta / elapsedMinutes);
-          }
-        }
-        previousMetricsTimestampRef.current = nowMs;
-        previousAuditQueriesRef.current = nextMetrics.audit_queries_total;
 
         const detectedEvents: ChangeFeedEntry[] = [];
         const currentRollout = rolloutRef.current;
@@ -358,7 +343,7 @@ export function FleetOverview() {
           detectedEvents.push({
             key: `config-seq-${currentRollout?.updatedAtUtc ?? nowMs}`,
             timestampUtc: currentRollout?.updatedAtUtc ?? new Date(nowMs).toISOString(),
-            summary: `config_seq changed: ${previousConfigSeqRef.current} -> ${configSeq}.`,
+            summary: `Config Version changed: ${previousConfigSeqRef.current} -> ${configSeq}.`,
             targetPath: '/config'
           });
         }
@@ -589,10 +574,9 @@ export function FleetOverview() {
       degradationPct,
       onlineNodes,
       totalNodes,
-      policyDecisionsPerMinute: recentDecisions.length > 0 ? recentDecisions.length : decisionRateFromMetrics,
       interventionsPerMinute: recentInterventions.length
     };
-  }, [auditDecisions, cohortSummaries, decisionRateFromMetrics, nodes]);
+  }, [auditDecisions, cohortSummaries, nodes]);
 
   const changeFeed = useMemo<ChangeFeedEntry[]>(() => {
     const items: ChangeFeedEntry[] = [...changeFeedEvents];
@@ -633,7 +617,7 @@ export function FleetOverview() {
     { title: 'Fleet', state: fleetStatus },
     { title: 'Rollout', state: rolloutStatus },
     { title: 'SLO', state: sloStatus },
-    { title: 'Trust', state: trustStatus }
+    { title: 'Config Trust', state: trustStatus }
   ];
 
   const compareOptions = useMemo(
@@ -660,6 +644,15 @@ export function FleetOverview() {
   const delta = leftMetricValue - rightMetricValue;
   const leftSeries = metricSeries(leftSummary, compareMetric);
   const rightSeries = metricSeries(rightSummary, compareMetric);
+  const stableSummary = cohortSummaries.find((row) => row.cohortId === 'stable');
+  const experimentalSummary = cohortSummaries.find((row) => row.cohortId === 'experimental');
+  const deltaVsStable = stableSummary && experimentalSummary
+    ? (experimentalSummary.degradationRatePct - stableSummary.degradationRatePct)
+    : 0;
+  const deltaMetricLabel = compareEnabled ? 'Delta vs Baseline' : 'Delta vs Stable';
+  const deltaMetricValue = compareEnabled && leftSummary && rightSummary
+    ? (leftSummary.degradationRatePct - rightSummary.degradationRatePct)
+    : deltaVsStable;
 
   const showInterventions = fleetKpis.interventionsPerMinute > 0;
   const openQuickCompare = () => {
@@ -674,11 +667,28 @@ export function FleetOverview() {
 
   return (
     <div className="grid-three">
+      {fleetStatus.label === 'Incident' && trustStatus.label === 'Invalid' ? (
+        <section className="panel span-all alert-strip critical">
+          <div className="fleet-snapshot-row">
+            <div className="fleet-snapshot-text">
+              <strong>
+                Incident: Config Trust Failure ({affectedMachinesCount} machines affected)
+              </strong>
+            </div>
+            <div className="fleet-snapshot-actions">
+              <button type="button" onClick={() => navigate(affectedMachinesPath)}>
+                View affected machines
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="panel span-all">
         <div className="fleet-snapshot-row">
           <div className="fleet-snapshot-text">
             <strong>{fleetStatus.label}</strong>
-            <span>Trust: {trustStatus.label}</span>
+            <span>Config Trust: {trustStatus.label}</span>
             <span>Affected machines: {affectedMachinesCount}</span>
             <span>Live refresh: {formatUtc(lastRefreshUtc ?? lastUpdatedUtc ?? rollout?.updatedAtUtc)}</span>
           </div>
@@ -714,13 +724,13 @@ export function FleetOverview() {
           ))}
         </div>
         <div className="status-badge-row">
-          <span className="status-health-pill">Live: {liveConnected ? 'Connected' : 'Disconnected'}</span>
+          <span className="status-health-pill">Data Stream: {liveConnected ? 'Connected' : 'Disconnected'}</span>
           <button
             type="button"
             className={`status-health-pill ${wsStatus.connected ? 'ok' : 'critical'}`}
             onClick={() => navigate('/system-health')}
           >
-            WS: {wsStatus.statusLabel}
+            Realtime Channel: {wsStatus.statusLabel}
           </button>
           <span className="status-health-pill">Last update: {formatUtc(lastUpdatedUtc ?? rollout?.updatedAtUtc)}</span>
         </div>
@@ -728,7 +738,7 @@ export function FleetOverview() {
 
       <section className="panel span-all">
         <div className="panel-heading-row">
-          <h3>Needs attention</h3>
+          <h3>Action Required</h3>
           <span className="muted-line">Sorted by severity</span>
         </div>
         {needsAttention.length === 0 ? (
@@ -755,28 +765,28 @@ export function FleetOverview() {
 
       <section className="panel span-all">
         <div className="panel-heading-row">
-          <h3>Key metrics</h3>
+          <h3>Key Metrics</h3>
           <span className="muted-line">Fleet essentials only</span>
         </div>
         <div className="key-metrics-grid">
           <div className="kpi-tile">
-            <span className="kpi-label">Error rate</span>
+            <span className="kpi-label">Error Rate</span>
             <strong>{fleetKpis.errorRatePct.toFixed(3)}%</strong>
           </div>
           <div className="kpi-tile">
-            <span className="kpi-label">P95 latency</span>
+            <span className="kpi-label">P95 Latency</span>
             <strong>{Math.round(fleetKpis.latencyP95Ms)} ms</strong>
           </div>
           <div className="kpi-tile">
-            <span className="kpi-label">P99 latency</span>
+            <span className="kpi-label">P99 Latency</span>
             <strong>{Math.round(fleetKpis.latencyP99Ms)} ms</strong>
           </div>
           <div className="kpi-tile">
-            <span className="kpi-label">Regression %</span>
-            <strong>{fleetKpis.degradationPct.toFixed(3)}%</strong>
+            <span className="kpi-label">{deltaMetricLabel}</span>
+            <strong>{deltaMetricValue >= 0 ? '+' : ''}{deltaMetricValue.toFixed(3)}%</strong>
           </div>
           <div className="kpi-tile">
-            <span className="kpi-label">Nodes online</span>
+            <span className="kpi-label">Machines Online/Total</span>
             <strong>{fleetKpis.onlineNodes}/{fleetKpis.totalNodes}</strong>
           </div>
           {showInterventions ? (
@@ -790,7 +800,7 @@ export function FleetOverview() {
 
       <section className="panel span-all">
         <div className="panel-heading-row">
-          <h3>Cohort distribution</h3>
+          <h3>Cohort Exposure</h3>
           <span className="muted-line">Exposure overview</span>
         </div>
         {cohorts.length === 0 ? (
@@ -824,7 +834,7 @@ export function FleetOverview() {
       {compareEnabled ? (
         <section className="panel span-all">
           <div className="panel-heading-row">
-            <h3>Compare</h3>
+            <h3>Cohort Comparison</h3>
             <span className="muted-line">Baseline vs canary</span>
           </div>
           <div className="compare-control-row">
@@ -856,9 +866,9 @@ export function FleetOverview() {
             <label>
               Metric
               <select value={compareMetric} onChange={(event) => updateParam('cmpMetric', event.target.value, 'error')}>
-                <option value="error">Error</option>
+                <option value="error">Error Rate</option>
                 <option value="p99">P99</option>
-                <option value="degradation">Regression</option>
+                <option value="degradation">Delta vs Baseline</option>
               </select>
             </label>
           </div>
@@ -894,7 +904,7 @@ export function FleetOverview() {
 
       <section className="panel span-all">
         <div className="panel-heading-row">
-          <h3>Change feed</h3>
+          <h3>Recent Changes</h3>
           <span className="muted-line">What changed since yesterday</span>
         </div>
         {changeFeed.length === 0 ? (

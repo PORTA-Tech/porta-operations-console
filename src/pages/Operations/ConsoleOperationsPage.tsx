@@ -297,7 +297,7 @@ export function ConsoleOperationsPage() {
               <th>Decision</th>
               <th>Confidence</th>
               <th>Triggered by</th>
-              <th>Trust check</th>
+              <th>Config Trust</th>
               <th>Replay</th>
             </tr>
           </thead>

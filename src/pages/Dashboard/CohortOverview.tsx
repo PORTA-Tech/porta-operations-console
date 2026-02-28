@@ -68,8 +68,13 @@ export function CohortOverview() {
     setParams(next, { replace: true });
   };
 
+  const stableBaseline = rows.find((row) => row.cohortId === 'stable');
+  const selectedBaseline = rows.find((row) => row.cohortId === secondaryCohort);
+  const baseline = compareMode ? selectedBaseline : stableBaseline;
+  const deltaHeader = compareMode ? 'Delta vs Baseline' : 'Delta vs Stable';
+
   return (
-    <Panel title="Cohort comparison">
+    <Panel title="Cohort Comparison">
       <div className="cohort-controls">
         <label>
           Time window
@@ -144,13 +149,12 @@ export function CohortOverview() {
           <thead>
             <tr>
               <th>Cohort</th>
-              <th>Nodes</th>
-              <th>Error %</th>
-              <th>P50</th>
-              <th>P95</th>
-              <th>P99</th>
-              <th>Performance regression %</th>
-              <th>Config version distribution</th>
+              <th>Machines</th>
+              <th>Error Rate</th>
+              <th>P95 Latency</th>
+              <th>P99 Latency</th>
+              <th>{deltaHeader}</th>
+              <th>Config Versions</th>
             </tr>
           </thead>
           <tbody>
@@ -164,10 +168,13 @@ export function CohortOverview() {
                 <td>{row.cohortId}</td>
                 <td>{row.nodeCount}</td>
                 <td>{row.errorRatePct.toFixed(3)}</td>
-                <td>{row.latencyP50Ms} ms</td>
                 <td>{row.latencyP95Ms} ms</td>
                 <td>{row.latencyP99Ms} ms</td>
-                <td>{row.degradationRatePct.toFixed(3)}</td>
+                <td>
+                  {baseline
+                    ? `${row.degradationRatePct - baseline.degradationRatePct >= 0 ? '+' : ''}${(row.degradationRatePct - baseline.degradationRatePct).toFixed(3)}%`
+                    : 'n/a'}
+                </td>
                 <td>{Object.entries(row.configSeqDistribution).map(([k, v]) => `${k}:${v}`).join(', ')}</td>
               </tr>
             ))}
@@ -176,7 +183,7 @@ export function CohortOverview() {
       ) : null}
 
       <div className="trend-panel">
-        <h4>Error rate trend</h4>
+        <h4>Error Rate Trend</h4>
         <CohortTrendLines primary={primary} secondary={secondary} compareMode={compareMode} />
       </div>
 
@@ -184,7 +191,7 @@ export function CohortOverview() {
         <div className="compare-panel">
           <h4>Comparison summary</h4>
           <p>
-            {primary.cohortId} vs {secondary.cohortId}: error delta{' '}
+            {primary.cohortId} vs {secondary.cohortId}: Error Rate delta{' '}
             <strong>{(primary.errorRatePct - secondary.errorRatePct).toFixed(3)}%</strong>, p99 delta{' '}
             <strong>{primary.latencyP99Ms - secondary.latencyP99Ms} ms</strong>.
           </p>

@@ -38,7 +38,7 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
   return (
     <Panel title="Machine detail">
       <p>Machine: <strong>{node.nodeId}</strong></p>
-      <p>Trust check: <strong>{node.signatureStatus}</strong></p>
+      <p>Config Trust: <strong>{node.signatureStatus}</strong></p>
       <p>Performance state: <strong>{node.degradationState}</strong></p>
       <p>Last heartbeat: <strong>{new Date(node.lastHeartbeatUtc).toLocaleString()}</strong></p>
     </Panel>

@@ -16,24 +16,24 @@ export const glossaryTerms: GlossaryTerm[] = [
   },
   {
     term: 'Degradation',
-    plainLabel: 'Performance regression',
-    meaning: 'Percent of nodes currently operating below expected baseline.',
+    plainLabel: 'Delta vs baseline',
+    meaning: 'Percent of machines currently operating below expected baseline.',
     whyItMatters: 'Shows whether the product experience is slipping in the field.',
     goodLooksLike: 'Low and flat over time, especially during rollouts.'
   },
   {
-    term: 'Config seq',
-    plainLabel: 'Config version',
+    term: 'Config Version',
+    plainLabel: 'Config version identifier',
     meaning: 'The active signed configuration version running on a node.',
     whyItMatters: 'Version drift causes non-deterministic behavior.',
-    goodLooksLike: 'Most nodes on the intended version for their cohort.'
+    goodLooksLike: 'Most machines on the intended version for their cohort.'
   },
   {
-    term: 'Signature validity',
-    plainLabel: 'Trust check',
+    term: 'Config Trust',
+    plainLabel: 'Signature verification state',
     meaning: 'Whether policy/config signatures verify successfully.',
     whyItMatters: 'Invalid signatures break trust boundaries.',
-    goodLooksLike: 'Always valid across all active nodes.'
+    goodLooksLike: 'Always valid across all active machines.'
   },
   {
     term: 'Cooldown',
@@ -43,4 +43,3 @@ export const glossaryTerms: GlossaryTerm[] = [
     goodLooksLike: 'Cooldown respected, then promote only with stable metrics.'
   }
 ];
-

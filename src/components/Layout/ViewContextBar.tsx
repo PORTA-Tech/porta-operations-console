@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { useFleetSlice } from '../../store/fleetSlice';
 import { formatUtc } from '../../utils/date';
+import { useWsConnectionStatus } from '../../hooks/useWsConnectionStatus';
 
 type ViewMeta = {
   title: string;
@@ -43,7 +44,7 @@ const viewMap: Record<string, ViewMeta> = {
   },
   '/config': {
     title: 'Config Integrity',
-    subtitle: 'Trust checks, signatures, and drift visibility'
+    subtitle: 'Config trust, signatures, and drift visibility'
   },
   '/security-access': {
     title: 'Security And Access',
@@ -65,6 +66,7 @@ export function ViewContextBar({ onOpenGlossary }: ViewContextBarProps) {
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const lastUpdatedUtc = useFleetSlice((s) => s.lastUpdatedUtc);
   const liveConnected = useFleetSlice((s) => s.liveConnected);
+  const wsStatus = useWsConnectionStatus();
 
   const viewMeta = useMemo<ViewMeta>(() => {
     return viewMap[location.pathname] ?? {
@@ -120,7 +122,9 @@ export function ViewContextBar({ onOpenGlossary }: ViewContextBarProps) {
             Glossary
           </button>
           <p className="freshness-pill">
-            Live: <strong>{liveConnected ? 'Connected' : 'Delayed'}</strong>
+            Data Stream: <strong>{liveConnected ? 'Connected' : 'Delayed'}</strong>
+            {' | '}
+            Realtime Channel: <strong>{wsStatus.connected ? 'Connected' : 'Disconnected'}</strong>
             {' | '}
             Last update: <strong>{formatUtc(lastUpdatedUtc)}</strong>
           </p>
