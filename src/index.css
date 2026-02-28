@@ -643,12 +643,35 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   background: color-mix(in oklab, white 96%, var(--accent-2));
 }
 
+.machine-simulated-row td {
+  background: color-mix(in oklab, white 97%, #94a3b8);
+}
+
 .machine-detail-card {
   margin: 8px 0;
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: #fff;
+}
+
+.demo-watermark-surface {
+  position: relative;
+}
+
+.demo-watermark-surface::after {
+  content: 'DEMO DATA';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: clamp(1.6rem, 3.4vw, 3.2rem);
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: rgba(148, 163, 184, 0.2);
+  pointer-events: none;
+  z-index: 2;
+  text-transform: uppercase;
 }
 
 .machine-quick-peek-grid {

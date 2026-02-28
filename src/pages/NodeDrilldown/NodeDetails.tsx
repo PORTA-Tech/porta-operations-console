@@ -3,6 +3,7 @@ import Plot from 'react-plotly.js';
 import type { Data, Layout, Shape, PlotMouseEvent } from 'plotly.js';
 import { useSearchParams } from 'react-router-dom';
 import { Panel } from '../../components/Layout/Panel';
+import { useWsConnectionStatus } from '../../hooks/useWsConnectionStatus';
 import type { ApiError } from '../../api/client';
 import type { NodeDetail } from '../../types/ui';
 import { formatRelativeFromNow, formatUtc } from '../../utils/date';
@@ -244,6 +245,8 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
   const wsBase = import.meta.env.VITE_WS_BASE_URL?.trim();
   const isDev = import.meta.env.DEV;
   const debugModeEnabled = isDev || import.meta.env.VITE_RND_DEBUG_MODE === '1';
+  const wsStatus = useWsConnectionStatus();
+  const simulatedMachine = selectedNode?.demo ?? false;
 
   useEffect(() => {
     setRawEvents([]);
@@ -732,6 +735,10 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
       )}
       {actionMessage ? <p className="muted-line">{actionMessage}</p> : null}
 
+      <p className="muted-line">
+        Data source: {simulatedMachine ? 'Simulated fixtures' : `Live machine (${selectedNode.stateSummary.source})`} | Last heartbeat: {formatUtc(selectedNode.lastHeartbeatUtc)} ({formatRelativeFromNow(selectedNode.lastHeartbeatUtc)})
+      </p>
+
       {activeTab === 'summary' ? (
         <div className="machine-tab-grid">
           <ul className="kv-list">
@@ -740,9 +747,9 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
             <li><span>Cohort</span><strong>{selectedNode.cohortId}</strong></li>
             <li><span>Agent version</span><strong>{selectedNode.agentVersion}</strong></li>
             <li><span>Config version</span><strong>{selectedNode.configSeq}</strong></li>
-            <li><span>Config Trust</span><strong>{selectedNode.signatureStatus}</strong></li>
-            <li><span>Backend connected</span><strong>{selectedNode.backendConnected ? 'yes' : 'no'}</strong></li>
-            <li><span>Last intervention</span><strong>{selectedNode.lastIntervention}</strong></li>
+            <li><span>Config Trust</span><strong>{simulatedMachine ? 'simulated' : selectedNode.signatureStatus}</strong></li>
+            <li><span>Backend connected</span><strong>{simulatedMachine ? 'simulated' : (selectedNode.backendConnected ? 'yes' : 'no')}</strong></li>
+            <li><span>Last intervention</span><strong>{simulatedMachine ? 'simulated' : selectedNode.lastIntervention}</strong></li>
             <li><span>Last intervention age</span><strong>{formatRelativeFromNow(selectedNode.lastInterventionUtc ?? undefined)}</strong></li>
           </ul>
           <div>
@@ -778,6 +785,17 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
 
       {activeTab === 'timeline' ? (
         <div className="machine-timeline-tab">
+          {timelineStreamPoints.length === 0 ? (
+            <p className="focus-banner">
+              No timeline yet. Waiting for snapshots. Realtime channel is {wsStatus.statusLabel.toLowerCase()} and last heartbeat is {formatRelativeFromNow(selectedNode.lastHeartbeatUtc)}.
+            </p>
+          ) : null}
+          {timelineRows.length === 0 ? (
+            <p className="focus-banner-neutral">No decisions received yet for this window.</p>
+          ) : null}
+          {timelineInterventions.length === 0 ? (
+            <p className="focus-banner-neutral">No interventions triggered yet for this window.</p>
+          ) : null}
           <div className="table-controls">
             <div className="timeline-zoom-presets" role="group" aria-label="timeline zoom presets">
               {(['1h', '6h', '24h'] as TimelineWindow[]).map((windowOption) => (
@@ -806,7 +824,7 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
           <p className="muted-line">
             Raw stream samples: {filteredRawEvents.length} | Decision events: {timelineRows.length} | Intervention windows: {timelineInterventions.length}
           </p>
-          <div className="console-grid-two">
+          <div className={`console-grid-two ${simulatedMachine ? 'demo-watermark-surface' : ''}`}>
             <div className="plot-wrap">
               <Plot
                 data={timelinePlotModel.traces}
@@ -853,7 +871,11 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
                   )}
                 </>
               ) : (
-                <p className="muted-line">Click a point or use the scrubber to inspect exact values and system changes.</p>
+                <p className="muted-line">
+                  {timelineStreamPoints.length === 0
+                    ? 'Waiting for first snapshot sample. Click-to-explain will activate once timeline points arrive.'
+                    : 'Click a point or use the scrubber to inspect exact values and system changes.'}
+                </p>
               )}
             </div>
           </div>
@@ -863,12 +885,12 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
       {activeTab === 'risk' ? (
         <div className="machine-tab-grid">
           <ul className="kv-list">
-            <li><span>Stress</span><strong>{formatState(riskSnapshot.stress)}</strong></li>
-            <li><span>Overload</span><strong>{formatState(riskSnapshot.overload)}</strong></li>
-            <li><span>Focus</span><strong>{formatState(riskSnapshot.focus)}</strong></li>
-            <li><span>Fatigue</span><strong>{formatState(riskSnapshot.fatigue)}</strong></li>
-            <li><span>Stability</span><strong>{formatState(riskSnapshot.stability)}</strong></li>
-            <li><span>Confidence</span><strong>{formatState(riskSnapshot.confidence)}</strong></li>
+            <li><span>Stress</span><strong>{simulatedMachine ? 'simulated' : formatState(riskSnapshot.stress)}</strong></li>
+            <li><span>Overload</span><strong>{simulatedMachine ? 'simulated' : formatState(riskSnapshot.overload)}</strong></li>
+            <li><span>Focus</span><strong>{simulatedMachine ? 'simulated' : formatState(riskSnapshot.focus)}</strong></li>
+            <li><span>Fatigue</span><strong>{simulatedMachine ? 'simulated' : formatState(riskSnapshot.fatigue)}</strong></li>
+            <li><span>Stability</span><strong>{simulatedMachine ? 'simulated' : formatState(riskSnapshot.stability)}</strong></li>
+            <li><span>Confidence</span><strong>{simulatedMachine ? 'simulated' : formatState(riskSnapshot.confidence)}</strong></li>
           </ul>
           <div>
             <h4>Contributors</h4>
@@ -896,10 +918,10 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
             <li><span>Config version</span><strong>{selectedNode.configSeq}</strong></li>
             <li><span>Expected config version</span><strong>{selectedNode.expectedConfigSeq}</strong></li>
             <li><span>Config drift</span><strong>{selectedNode.configDrift ? 'yes' : 'no'}</strong></li>
-            <li><span>Signature validation</span><strong>{selectedNode.signatureStatus}</strong></li>
-            <li><span>Issuer</span><strong>{selectedNode.configIssuer ?? 'unavailable'}</strong></li>
-            <li><span>Expiry</span><strong>{formatUtc(selectedNode.configExpiryUtc ?? undefined)}</strong></li>
-            <li><span>Diff vs previous</span><strong>{selectedNode.configDiffSummary ?? 'unavailable'}</strong></li>
+            <li><span>Signature validation</span><strong>{simulatedMachine ? 'simulated' : selectedNode.signatureStatus}</strong></li>
+            <li><span>Issuer</span><strong>{simulatedMachine ? 'simulated' : (selectedNode.configIssuer ?? 'unavailable')}</strong></li>
+            <li><span>Expiry</span><strong>{simulatedMachine ? 'simulated' : formatUtc(selectedNode.configExpiryUtc ?? undefined)}</strong></li>
+            <li><span>Diff vs previous</span><strong>{simulatedMachine ? 'simulated' : (selectedNode.configDiffSummary ?? 'unavailable')}</strong></li>
           </ul>
           <div>
             <h4>Applied policy versions</h4>

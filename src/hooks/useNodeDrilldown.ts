@@ -195,6 +195,7 @@ export function useNodeDrilldown(): {
   snapshotConnected: boolean;
   tableFrozen: boolean;
   environmentLabel: 'Local' | 'Staging' | 'Prod';
+  allowDemoMode: boolean;
   demoModeOn: boolean;
   setDemoModeOn: (enabled: boolean) => void;
   simulatedSnapshotDetected: boolean;
@@ -215,6 +216,13 @@ export function useNodeDrilldown(): {
   const wsBase = import.meta.env.VITE_WS_BASE_URL?.trim();
   const demoEnabled = import.meta.env.VITE_ENABLE_DEMO_DATA === '1';
   const environmentLabel = detectEnvironmentLabel();
+  const allowDemoMode = environmentLabel !== 'Prod' && demoEnabled;
+
+  useEffect(() => {
+    if (!allowDemoMode && demoModeOn) {
+      setDemoModeOn(false);
+    }
+  }, [allowDemoMode, demoModeOn]);
 
   useEffect(() => {
     if (!wsBase) {
@@ -402,7 +410,7 @@ export function useNodeDrilldown(): {
           } satisfies NodeDetail;
         });
 
-        const nextNodes = demoModeOn
+        const nextNodes = demoModeOn && allowDemoMode
           ? nextNodesRaw
           : nextNodesRaw.filter((node) => !node.demo);
 
@@ -410,12 +418,12 @@ export function useNodeDrilldown(): {
         setLastUpdatedUtc(new Date().toISOString());
         setSnapshotConnected(true);
         setSimulatedSnapshotDetected(nextNodesRaw.some((node) => node.demo));
-        setDataMode(demoModeOn ? 'demo' : (streamStateRef.current && Object.keys(streamStateRef.current).length > 0 ? 'live_stream' : 'snapshot'));
+        setDataMode(demoModeOn && allowDemoMode ? 'demo' : (streamStateRef.current && Object.keys(streamStateRef.current).length > 0 ? 'live_stream' : 'snapshot'));
         setError(undefined);
       } catch (err) {
         if (!mounted) return;
         setSnapshotConnected(false);
-        if (demoModeOn && demoEnabled) {
+        if (demoModeOn && allowDemoMode) {
           const demoSnapshot = buildDemoNodes();
           const nowIso = new Date().toISOString();
           const expectedConfigByCohort = buildExpectedConfigByCohort(demoSnapshot);
@@ -485,7 +493,7 @@ export function useNodeDrilldown(): {
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [demoEnabled, demoModeOn]);
+  }, [allowDemoMode, demoModeOn]);
 
   return useMemo(
     () => ({
@@ -496,6 +504,7 @@ export function useNodeDrilldown(): {
       snapshotConnected,
       tableFrozen: !snapshotConnected && nodes.length > 0,
       environmentLabel,
+      allowDemoMode,
       demoModeOn,
       setDemoModeOn,
       simulatedSnapshotDetected,
@@ -510,6 +519,7 @@ export function useNodeDrilldown(): {
       lastUpdatedUtc,
       snapshotConnected,
       environmentLabel,
+      allowDemoMode,
       demoModeOn,
       simulatedSnapshotDetected,
       dataMode

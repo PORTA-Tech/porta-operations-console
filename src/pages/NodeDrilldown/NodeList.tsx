@@ -14,6 +14,7 @@ interface NodeListProps {
   snapshotConnected: boolean;
   tableFrozen: boolean;
   environmentLabel: 'Local' | 'Staging' | 'Prod';
+  allowDemoMode: boolean;
   demoModeOn: boolean;
   setDemoModeOn: (enabled: boolean) => void;
   simulatedSnapshotDetected: boolean;
@@ -37,7 +38,10 @@ function formatStateValue(value: number | null): string {
 }
 
 function formatErrorDegradation(node: NodeDetail): string {
-  const errorPart = node.errorRatePct === null ? 'error n/a' : `error ${(node.errorRatePct).toFixed(3)}%`;
+  if (node.errorRatePct === null) {
+    return 'No perf data yet';
+  }
+  const errorPart = `error ${(node.errorRatePct).toFixed(3)}%`;
   return `${errorPart} / ${node.degradationTag}`;
 }
 
@@ -65,6 +69,9 @@ function formatConfidenceBand(confidence: number | null): string {
 }
 
 function formatStateChip(node: NodeDetail): string {
+  if (node.stateSummary.focus === null && node.stateSummary.overload === null && node.stateSummary.fatigue === null) {
+    return 'No state yet';
+  }
   return `Focus ${formatStateValue(node.stateSummary.focus)} (${formatConfidenceBand(node.stateSummary.confidence)}) | Overload ${formatStateValue(node.stateSummary.overload)} | Fatigue ${formatStateValue(node.stateSummary.fatigue)}`;
 }
 
@@ -120,6 +127,7 @@ export function NodeList({
   snapshotConnected,
   tableFrozen,
   environmentLabel,
+  allowDemoMode,
   demoModeOn,
   setDemoModeOn,
   simulatedSnapshotDetected,
@@ -215,6 +223,7 @@ export function NodeList({
     return { total, online, offline, demo };
   }, [nodes]);
   const noCacheWhileDisconnected = !snapshotConnected && nodes.length === 0;
+  const environmentDisplayLabel = dataMode === 'demo' ? 'Local / Demo' : environmentLabel;
 
   return (
     <Panel title="Machines truth table">
@@ -223,7 +232,7 @@ export function NodeList({
 
       <div className="machines-data-banner">
         <div>
-          <strong>Environment:</strong> {environmentLabel}
+          <strong>Environment:</strong> {environmentDisplayLabel}
         </div>
         <div>
           <strong>Data mode:</strong> {dataModeLabel(dataMode)}
@@ -246,14 +255,20 @@ export function NodeList({
         <div>
           <strong>Counts:</strong> Total {counts.total} | Online {counts.online} | Offline {counts.offline} | Demo {counts.demo}
         </div>
-        <label className="machines-demo-toggle">
-          <strong>Demo Mode</strong>
-          <input
-            type="checkbox"
-            checked={demoModeOn}
-            onChange={(event) => setDemoModeOn(event.target.checked)}
-          />
-        </label>
+        {allowDemoMode ? (
+          <label className="machines-demo-toggle">
+            <strong>Demo Mode</strong>
+            <input
+              type="checkbox"
+              checked={demoModeOn}
+              onChange={(event) => setDemoModeOn(event.target.checked)}
+            />
+          </label>
+        ) : (
+          <div>
+            <strong>Demo Mode:</strong> Disabled in Prod
+          </div>
+        )}
       </div>
       {tableFrozen ? (
         <p className="focus-banner">
@@ -380,6 +395,7 @@ export function NodeList({
         </label>
       </div>
 
+      <div className={dataMode === 'demo' ? 'demo-watermark-surface' : undefined}>
       <table className="simple-table machine-table">
         <thead>
           <tr>
@@ -401,11 +417,12 @@ export function NodeList({
             const recentEvents = sortRecentEvents(node).slice(0, 10);
             const peekOpen = openPeekNodeId === node.nodeId;
             const whyOpen = openWhyNodeId === node.nodeId;
+            const simulated = node.demo || dataMode === 'demo';
 
             return (
               <Fragment key={node.nodeId}>
                 <tr
-                  className={`click-row ${selectedMachineId === node.nodeId ? 'machine-selected-row' : ''}`}
+                  className={`click-row ${selectedMachineId === node.nodeId ? 'machine-selected-row' : ''} ${simulated ? 'machine-simulated-row' : ''}`}
                   onClick={() => {
                     updateParam('machine', node.nodeId);
                   }}
@@ -419,31 +436,31 @@ export function NodeList({
                   </td>
                   <td>{node.agentVersion}</td>
                   <td>
-                    {node.configSeq} ({formatTrustLower(node.signatureStatus)})
+                    {simulated ? `${node.configSeq} (simulated)` : `${node.configSeq} (${formatTrustLower(node.signatureStatus)})`}
                     {node.configDrift ? <span className="delta-chip warn">drift</span> : null}
                   </td>
                   <td>
-                    <span className={`delta-chip ${node.signatureStatus === 'invalid' ? 'critical' : node.signatureStatus === 'verified' ? 'ok' : 'neutral'}`}>
-                      {formatTrustLabel(node.signatureStatus)}
+                    <span className={`delta-chip ${simulated ? 'neutral' : node.signatureStatus === 'invalid' ? 'critical' : node.signatureStatus === 'verified' ? 'ok' : 'neutral'}`}>
+                      {simulated ? 'Simulated' : formatTrustLabel(node.signatureStatus)}
                     </span>
                   </td>
                   <td>
-                    <span className={`delta-chip ${node.backendConnected ? 'ok' : 'warn'}`}>
-                      {formatControlPlaneLabel(node.backendConnected)}
+                    <span className={`delta-chip ${simulated ? 'neutral' : node.backendConnected ? 'ok' : 'warn'}`}>
+                      {simulated ? 'Simulated' : formatControlPlaneLabel(node.backendConnected)}
                     </span>
                   </td>
                   <td>
                     <span className="machine-state-chip" title={formatStateChipTooltip(node)}>
-                      {formatStateChip(node)}
+                      {simulated ? 'Simulated state data' : formatStateChip(node)}
                     </span>
                   </td>
                   <td>
-                    {node.lastIntervention}
+                    {simulated ? 'simulated' : node.lastIntervention}
                     <div className="muted-line">{formatRelativeFromNow(node.lastInterventionUtc ?? undefined)}</div>
                   </td>
                   <td>
-                    <span className={`delta-chip ${node.degradationTag === 'critical' ? 'critical' : node.degradationTag === 'warning' ? 'warn' : 'ok'}`}>
-                      {formatErrorDegradation(node)}
+                    <span className={`delta-chip ${simulated ? 'neutral' : node.degradationTag === 'critical' ? 'critical' : node.degradationTag === 'warning' ? 'warn' : 'ok'}`}>
+                      {simulated ? 'Simulated perf data' : formatErrorDegradation(node)}
                     </span>
                   </td>
                   <td>
@@ -528,6 +545,7 @@ export function NodeList({
           ) : null}
         </tbody>
       </table>
+      </div>
     </Panel>
   );
 }
