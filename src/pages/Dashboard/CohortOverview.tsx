@@ -36,6 +36,27 @@ export function CohortOverview() {
     }
   }, [params, rows, setPrimaryCohort]);
 
+  useEffect(() => {
+    const queryCompare = params.get('cohortCompare') === '1';
+    if (queryCompare !== compareMode) {
+      setCompareMode(queryCompare);
+    }
+
+    if (!queryCompare || rows.length === 0) {
+      return;
+    }
+
+    const querySecondary = params.get('cohortB');
+    if (!querySecondary) {
+      return;
+    }
+
+    const matchingSecondary = rows.find((row) => row.cohortId === querySecondary);
+    if (matchingSecondary) {
+      setSecondaryCohort(matchingSecondary.cohortId);
+    }
+  }, [compareMode, params, rows, setCompareMode, setSecondaryCohort]);
+
   const updateParam = (key: string, value: string, clearValue?: string) => {
     const next = new URLSearchParams(params);
     if (value === '' || (clearValue && value === clearValue)) {

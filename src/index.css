@@ -377,6 +377,24 @@ button {
 button.danger { border-color: #d39f9f; color: #7d1818; }
 .error-line { color: #7d1818; }
 .muted-line { color: var(--muted); }
+.focus-banner {
+  margin: 0 0 10px;
+  border: 1px solid color-mix(in oklab, var(--warn) 60%, var(--line));
+  background: color-mix(in oklab, white 88%, var(--warn));
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+
+.focus-banner-neutral {
+  border-color: var(--line);
+  background: #fff;
+}
+
+.focus-stat {
+  color: color-mix(in oklab, var(--critical) 82%, black);
+  font-weight: 600;
+}
 
 .status-badge {
   border-radius: 999px;
@@ -493,6 +511,118 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   gap: 10px;
 }
 
+.right-now-header {
+  margin-bottom: 10px;
+}
+
+.right-now-header h3 {
+  margin: 0 0 4px;
+}
+
+.right-now-header p {
+  margin: 0;
+}
+
+.right-now-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.right-now-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.right-now-card.ok {
+  border-color: color-mix(in oklab, var(--ok) 60%, var(--line));
+}
+
+.right-now-card.warn {
+  border-color: color-mix(in oklab, var(--warn) 60%, var(--line));
+}
+
+.right-now-card.critical {
+  border-color: color-mix(in oklab, var(--critical) 60%, var(--line));
+}
+
+.right-now-label {
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.right-now-value {
+  font-size: 1.35rem;
+}
+
+.right-now-meta {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+}
+
+.right-now-meta p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.needs-attention-list {
+  display: grid;
+  gap: 8px;
+}
+
+.needs-attention-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 5px;
+}
+
+.needs-attention-item.warn {
+  border-color: color-mix(in oklab, var(--warn) 60%, var(--line));
+}
+
+.needs-attention-item.critical {
+  border-color: color-mix(in oklab, var(--critical) 60%, var(--line));
+}
+
+.needs-attention-title {
+  font-weight: 600;
+}
+
+.needs-attention-detail {
+  color: var(--muted);
+}
+
+.change-feed-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.change-feed-item {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  text-align: left;
+  display: grid;
+  gap: 5px;
+}
+
 .risk-gauge {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -600,4 +730,6 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   .ops-grid { grid-template-columns: 1fr; }
   .view-context-head { flex-direction: column; }
   .freshness-pill { margin-left: 0; }
+  .right-now-grid { grid-template-columns: 1fr; }
+  .right-now-meta { flex-direction: column; }
 }

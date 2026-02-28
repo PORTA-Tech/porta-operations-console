@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Panel } from '../../components/Layout/Panel';
 import { useConsoleOperations } from '../../hooks/useConsoleOperations';
 import type { RbacAssignment, RoleName } from '../../types/consoleOperations';
+import { useSearchParams } from 'react-router-dom';
 
 const rolePermissions: Record<RoleName, Array<'read' | 'write' | 'override'>> = {
   admin: ['read', 'write', 'override'],
@@ -11,11 +12,13 @@ const rolePermissions: Record<RoleName, Array<'read' | 'write' | 'override'>> = 
 };
 
 export function SecurityAccessPage() {
+  const [params] = useSearchParams();
   const { assignments, loading, error, assign, metrics } = useConsoleOperations();
   const [userId, setUserId] = useState('');
   const [role, setRole] = useState<RoleName>('operator');
   const [scope, setScope] = useState<'fleet' | 'agent'>('fleet');
   const [scopeId, setScopeId] = useState('fleet');
+  const focusRbacViolations = params.get('focus') === 'rbac-violations';
 
   const submitAssignment = async () => {
     if (!userId.trim()) {
@@ -40,6 +43,9 @@ export function SecurityAccessPage() {
         <div className="ops-grid">
           <div>
             <h4>Permissions matrix</h4>
+            {focusRbacViolations ? (
+              <p className="focus-banner">Filter applied: RBAC violations increased</p>
+            ) : null}
             <table className="simple-table">
               <thead>
                 <tr>
@@ -61,7 +67,9 @@ export function SecurityAccessPage() {
               </tbody>
             </table>
             <p className="muted-line">Sensitive operations require explicit operator/admin role and re-auth policy.</p>
-            <p className="muted-line">RBAC violations (recent total): <strong>{metrics.rbac_violations_total}</strong></p>
+            <p className={focusRbacViolations ? 'focus-stat' : 'muted-line'}>
+              RBAC violations (recent total): <strong>{metrics.rbac_violations_total}</strong>
+            </p>
           </div>
 
           <div className="ops-editor">
@@ -112,4 +120,3 @@ export function SecurityAccessPage() {
     </div>
   );
 }
-

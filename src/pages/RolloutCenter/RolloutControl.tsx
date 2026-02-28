@@ -7,6 +7,7 @@ import { StatusBadge } from '../../components/StatusIndicators/StatusBadge';
 import { useRollout } from '../../hooks/useRollout';
 import { toApiError, type ApiError } from '../../api/client';
 import { useOperatorAuth } from '../../hooks/useOperatorAuth';
+import { useSearchParams } from 'react-router-dom';
 
 type RolloutActionId = 'initiate-promotion' | 'pause-rollout' | 'resume-rollout' | 'force-rollback';
 
@@ -24,6 +25,7 @@ type RolloutAction = {
 };
 
 export function RolloutControl() {
+  const [params] = useSearchParams();
   const rollout = useFleetSlice((s) => s.rollout);
   const haltIndicator = useFleetSlice((s) => s.haltIndicator);
   const setRollout = useFleetSlice((s) => s.setRollout);
@@ -38,6 +40,11 @@ export function RolloutControl() {
   const [selectedAction, setSelectedAction] = useState<RolloutAction | undefined>();
   const [submitting, setSubmitting] = useState(false);
   const [actionError, setActionError] = useState<ApiError | undefined>();
+  const filterCooldownActive = params.get('cooldown') === 'active';
+  const cooldownIsActive = Boolean(
+    rollout?.state === 'COOLDOWN'
+    || (rollout?.cooldownUntilUtc && Date.parse(rollout.cooldownUntilUtc) > Date.now())
+  );
 
   const actions = useMemo<RolloutAction[]>(
     () => [
@@ -95,6 +102,11 @@ export function RolloutControl() {
 
   return (
     <Panel title="Rollout control center">
+      {filterCooldownActive ? (
+        <p className={`focus-banner ${cooldownIsActive ? '' : 'focus-banner-neutral'}`}>
+          Filter applied: cooldown-active rollouts {cooldownIsActive ? 'are currently blocking promotion.' : 'are not active right now.'}
+        </p>
+      ) : null}
       <p>Rollout status: <strong>{rollout?.state ?? 'Unknown'}</strong></p>
       <p>Config version: <strong>{rollout?.activeConfigSeq ?? 'n/a'}</strong></p>
       <p>Rollout cooldown until: <strong>{rollout?.cooldownUntilUtc ? formatUtc(rollout.cooldownUntilUtc) : 'n/a'}</strong></p>

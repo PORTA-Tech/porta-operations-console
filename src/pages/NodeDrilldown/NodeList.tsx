@@ -11,18 +11,34 @@ interface NodeListProps {
   error: ApiError | undefined;
 }
 
+const OFFLINE_HEARTBEAT_THRESHOLD_MS = 2 * 60 * 1000;
+
+function isMachineOffline(lastHeartbeatUtc: string): boolean {
+  const heartbeatMs = Date.parse(lastHeartbeatUtc);
+  if (Number.isNaN(heartbeatMs)) {
+    return true;
+  }
+
+  return (Date.now() - heartbeatMs) > OFFLINE_HEARTBEAT_THRESHOLD_MS;
+}
+
 export function NodeList({ nodes, loading, error }: NodeListProps) {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState(params.get('search') ?? '');
   const [cohortFilter, setCohortFilter] = useState(params.get('cohort') ?? 'all');
-  const [signatureFilter, setSignatureFilter] = useState('all');
-  const [degradationFilter, setDegradationFilter] = useState('all');
-  const [sloFilter, setSloFilter] = useState('all');
+  const [signatureFilter, setSignatureFilter] = useState(params.get('signature') ?? 'all');
+  const [degradationFilter, setDegradationFilter] = useState(params.get('degradation') ?? 'all');
+  const [sloFilter, setSloFilter] = useState(params.get('slo') ?? 'all');
+  const [offlineFilter, setOfflineFilter] = useState(params.get('offline') === '1');
 
   useEffect(() => {
     setSearch(params.get('search') ?? '');
     setCohortFilter(params.get('cohort') ?? 'all');
+    setSignatureFilter(params.get('signature') ?? 'all');
+    setDegradationFilter(params.get('degradation') ?? 'all');
+    setSloFilter(params.get('slo') ?? 'all');
+    setOfflineFilter(params.get('offline') === '1');
   }, [params]);
 
   const updateParam = (key: string, value: string, clearValue?: string) => {
@@ -49,6 +65,7 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
             ? 'invalid'
             : 'unknown';
       const sloCompliance = node.sloCompliant ? 'compliant' : 'breach';
+      const offline = isMachineOffline(node.lastHeartbeatUtc);
 
       const matchesSearch =
         !query ||
@@ -67,10 +84,11 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
       if (signatureFilter !== 'all' && signatureValid !== signatureFilter) return false;
       if (degradationFilter !== 'all' && node.degradationState !== degradationFilter) return false;
       if (sloFilter !== 'all' && sloCompliance !== sloFilter) return false;
+      if (offlineFilter && !offline) return false;
 
       return true;
     });
-  }, [nodes, search, cohortFilter, signatureFilter, degradationFilter, sloFilter]);
+  }, [nodes, search, cohortFilter, signatureFilter, degradationFilter, sloFilter, offlineFilter]);
 
   return (
     <Panel title="Machine snapshot">
@@ -103,23 +121,56 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
             </option>
           ))}
         </select>
-        <select value={signatureFilter} onChange={(event) => setSignatureFilter(event.target.value)} aria-label="Filter by signature">
+        <select
+          value={signatureFilter}
+          onChange={(event) => {
+            setSignatureFilter(event.target.value);
+            updateParam('signature', event.target.value, 'all');
+          }}
+          aria-label="Filter by signature"
+        >
           <option value="all">All signature states</option>
           <option value="valid">Valid</option>
           <option value="invalid">Invalid</option>
           <option value="unknown">Unknown</option>
         </select>
-        <select value={degradationFilter} onChange={(event) => setDegradationFilter(event.target.value)} aria-label="Filter by degradation">
+        <select
+          value={degradationFilter}
+          onChange={(event) => {
+            setDegradationFilter(event.target.value);
+            updateParam('degradation', event.target.value, 'all');
+          }}
+          aria-label="Filter by degradation"
+        >
           <option value="all">All degradation states</option>
           <option value="normal">Normal</option>
           <option value="degraded">Degraded</option>
           <option value="safe">Safe</option>
         </select>
-        <select value={sloFilter} onChange={(event) => setSloFilter(event.target.value)} aria-label="Filter by SLO compliance">
+        <select
+          value={sloFilter}
+          onChange={(event) => {
+            setSloFilter(event.target.value);
+            updateParam('slo', event.target.value, 'all');
+          }}
+          aria-label="Filter by SLO compliance"
+        >
           <option value="all">All SLO states</option>
           <option value="compliant">Compliant</option>
           <option value="breach">Breach</option>
         </select>
+        <label>
+          Offline only
+          <input
+            type="checkbox"
+            checked={offlineFilter}
+            onChange={(event) => {
+              setOfflineFilter(event.target.checked);
+              updateParam('offline', event.target.checked ? '1' : '', '');
+            }}
+            aria-label="Filter offline machines only"
+          />
+        </label>
       </div>
 
       <table className="simple-table">
