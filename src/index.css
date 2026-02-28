@@ -484,6 +484,80 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   background: color-mix(in oklab, white 90%, var(--warn));
 }
 
+.cohort-regression-module {
+  border: 1px solid color-mix(in oklab, var(--warn) 55%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in oklab, white 92%, var(--warn));
+  padding: 12px;
+  margin-bottom: 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.cohort-regression-main h4 {
+  margin: 0;
+}
+
+.cohort-regression-name {
+  margin: 2px 0 4px;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.cohort-regression-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.cohort-regression-metrics > div {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.cohort-regression-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cohort-correlation-note {
+  margin: 0;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+  font-size: 0.92rem;
+}
+
+.cohort-highlight-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.cohort-highlight-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+}
+
+.cohort-highlight-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.cohort-highlight-card p {
+  margin: 4px 0;
+}
+
 .cohort-table td:last-child,
 .cohort-table th:last-child {
   width: 1%;
@@ -524,6 +598,7 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
 
 .cohort-row-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   opacity: 0;
   pointer-events: none;
@@ -541,6 +616,13 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   flex-wrap: wrap;
   gap: 8px 12px;
   margin-bottom: 10px;
+}
+
+.cohort-trend-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
 }
 
 .cohort-toggle {
@@ -574,6 +656,43 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   border-radius: 10px;
   background: #fff;
   padding: 8px;
+}
+
+.config-dist-cell {
+  display: grid;
+  gap: 6px;
+}
+
+.config-dist-bars {
+  display: grid;
+  gap: 4px;
+  min-width: 170px;
+}
+
+.config-dist-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.config-dist-label,
+.config-dist-value {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.config-dist-track {
+  height: 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #f7f3ea;
+  overflow: hidden;
+}
+
+.config-dist-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-2), color-mix(in oklab, var(--accent-2) 60%, var(--line)));
 }
 
 .trend-panel,

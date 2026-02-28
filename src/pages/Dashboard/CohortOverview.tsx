@@ -10,6 +10,7 @@ type DataLens = 'reliability' | 'behavioral';
 type SortMode = 'worst_error_desc' | 'worst_p99_desc' | 'worst_degradation_desc' | 'name_asc';
 type TrendMetric = 'error' | 'p99' | 'degradation';
 type DeltaTone = 'critical' | 'warn' | 'ok' | 'neutral';
+type ConfidenceLevel = 'low' | 'medium' | 'high';
 
 interface CohortComputedRow {
   row: CohortSummary;
@@ -22,8 +23,10 @@ interface CohortComputedRow {
   deltaFatigue: number;
   interventionsPerMin: number;
   policyDecisionsPerMin: number;
+  configParts: Array<{ version: string; count: number; sharePct: number }>;
   configLabel: string;
   mixedConfig: boolean;
+  confidence: ConfidenceLevel;
 }
 
 const cohortColorMap: Record<string, string> = {
@@ -46,6 +49,10 @@ function ms(value: number): string {
   return `${value >= 0 ? '+' : ''}${Math.round(value)}ms`;
 }
 
+function formatSigned(value: number, decimals = 3): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(decimals)}`;
+}
+
 function deltaTonePercent(delta: number): DeltaTone {
   if (delta > 0.1) return 'critical';
   if (delta < -0.1) return 'ok';
@@ -60,10 +67,13 @@ function deltaToneMs(delta: number): DeltaTone {
   return 'warn';
 }
 
-function formatConfigDistribution(dist: Record<string, number>, nodeCount: number): { label: string; mixed: boolean } {
+function formatConfigDistribution(
+  dist: Record<string, number>,
+  nodeCount: number
+): { label: string; mixed: boolean; parts: Array<{ version: string; count: number; sharePct: number }> } {
   const entries = Object.entries(dist).sort((left, right) => right[1] - left[1]);
   if (entries.length === 0) {
-    return { label: 'n/a', mixed: false };
+    return { label: 'n/a', mixed: false, parts: [] };
   }
 
   const effectiveTotal = nodeCount > 0
@@ -71,9 +81,13 @@ function formatConfigDistribution(dist: Record<string, number>, nodeCount: numbe
     : entries.reduce((sum, [, count]) => sum + count, 0);
   const parts = entries.map(([version, count]) => {
     const share = effectiveTotal > 0 ? Math.round((count / effectiveTotal) * 100) : 0;
-    return `v${version} (${share}%)`;
+    return { version, count, sharePct: share };
   });
-  return { label: parts.join(', '), mixed: entries.length > 1 };
+  return {
+    label: parts.map((part) => `v${part.version} (${part.sharePct}%)`).join(', '),
+    mixed: entries.length > 1,
+    parts
+  };
 }
 
 function buildTrendPolyline(values: number[], globalMin: number, globalMax: number, points: number): string {
@@ -125,6 +139,18 @@ function computeBehavioralMetrics(row: CohortSummary): {
   };
 }
 
+function computeConfidenceLevel(nodeCount: number): ConfidenceLevel {
+  if (nodeCount >= 150) return 'high';
+  if (nodeCount >= 40) return 'medium';
+  return 'low';
+}
+
+function confidenceLabel(level: ConfidenceLevel): string {
+  if (level === 'high') return 'High confidence';
+  if (level === 'medium') return 'Medium confidence';
+  return 'Low confidence';
+}
+
 export function CohortOverview() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -141,6 +167,7 @@ export function CohortOverview() {
   const [dataLens, setDataLens] = useState<DataLens>((params.get('lens') as DataLens) || 'reliability');
   const [sortMode, setSortMode] = useState<SortMode>((params.get('sort') as SortMode) || 'worst_error_desc');
   const [trendMetric, setTrendMetric] = useState<TrendMetric>((params.get('trend') as TrendMetric) || 'error');
+  const [normalizeTrend, setNormalizeTrend] = useState(params.get('normalize') === '1');
   const [hoverIndex, setHoverIndex] = useState<number | undefined>(undefined);
   const [hiddenCohorts, setHiddenCohorts] = useState<Record<string, boolean>>({});
   const [, setClockTick] = useState(0);
@@ -202,8 +229,10 @@ export function CohortOverview() {
         deltaFatigue: behavioral.fatigue - baselineBehavioral.fatigue,
         interventionsPerMin: behavioral.interventionsPerMin,
         policyDecisionsPerMin: behavioral.policyDecisionsPerMin,
+        configParts: config.parts,
         configLabel: config.label,
-        mixedConfig: config.mixed
+        mixedConfig: config.mixed,
+        confidence: computeConfidenceLevel(row.nodeCount)
       };
     });
   }, [baseline, rows]);
@@ -235,7 +264,9 @@ export function CohortOverview() {
     if (significant.length === 0) {
       return {
         tone: 'ok' as const,
-        message: 'No significant regression detected across cohorts.'
+        message: 'No significant regression detected across cohorts.',
+        primary: undefined as CohortComputedRow | undefined,
+        secondary: undefined as CohortComputedRow | undefined
       };
     }
 
@@ -248,18 +279,46 @@ export function CohortOverview() {
       tone: 'warn' as const,
       message:
         `${primary.row.cohortId} is regressing vs ${baselineName} `
-        + `(${pct(primary.deltaError)} errors, ${ms(primary.deltaP99)} P99).${secondaryText}`
+        + `(${pct(primary.deltaError)} errors, ${ms(primary.deltaP99)} P99).${secondaryText}`,
+      primary,
+      secondary
     };
   }, [baseline, sortedRows]);
 
+  const topRegressions = useMemo(
+    () => sortedRows.filter((item) => item.row.cohortId !== baseline?.cohortId).slice(0, 2),
+    [baseline?.cohortId, sortedRows]
+  );
+
+  const versionCorrelationHint = useMemo(() => {
+    const primary = insightBanner.primary;
+    if (!primary || !primary.mixedConfig || primary.configParts.length <= 1) {
+      return undefined;
+    }
+    const regressiveVersion = primary.configParts[1];
+    if (!regressiveVersion || regressiveVersion.sharePct < 10) {
+      return undefined;
+    }
+    return `Regression correlates with v${regressiveVersion.version} presence (${regressiveVersion.sharePct}% of nodes).`;
+  }, [insightBanner.primary]);
+
   const visibleTrendRows = sortedRows.filter((item) => !hiddenCohorts[item.row.cohortId]);
   const trendPointCount = visibleTrendRows.reduce((max, item) => Math.max(max, item.row.trend.length), 0);
+  const baselineTrendValues = baseline?.trend.map((point) => {
+    if (trendMetric === 'p99') return point.p99LatencyMs;
+    if (trendMetric === 'degradation') return point.degradationRatePct;
+    return point.errorRatePct;
+  }) ?? [];
+
   const trendSeries = visibleTrendRows.map((item) => {
-    const values = item.row.trend.map((point) => {
+    const rawValues = item.row.trend.map((point) => {
       if (trendMetric === 'p99') return point.p99LatencyMs;
       if (trendMetric === 'degradation') return point.degradationRatePct;
       return point.errorRatePct;
     });
+    const values = normalizeTrend
+      ? rawValues.map((value, index) => value - (baselineTrendValues[index] ?? 0))
+      : rawValues;
     return {
       cohortId: item.row.cohortId,
       values,
@@ -283,6 +342,67 @@ export function CohortOverview() {
       <div className={`cohort-insight-banner ${insightBanner.tone}`}>
         <strong>{insightBanner.tone === 'warn' ? 'Warning:' : 'OK:'}</strong> {insightBanner.message}
       </div>
+
+      {insightBanner.primary ? (
+        <section className="cohort-regression-module">
+          <div className="cohort-regression-main">
+            <h4>Regression Detected</h4>
+            <p className="cohort-regression-name">{insightBanner.primary.row.cohortId}</p>
+            <div className="cohort-regression-metrics">
+              <div>
+                <span className="muted-line">Delta Error</span>
+                <strong className={`delta-chip ${deltaTonePercent(insightBanner.primary.deltaError)}`}>
+                  {pct(insightBanner.primary.deltaError)}
+                </strong>
+              </div>
+              <div>
+                <span className="muted-line">Delta P99</span>
+                <strong className={`delta-chip ${deltaToneMs(insightBanner.primary.deltaP99)}`}>
+                  {ms(insightBanner.primary.deltaP99)}
+                </strong>
+              </div>
+              <div>
+                <span className="muted-line">Delta Degradation</span>
+                <strong className={`delta-chip ${deltaTonePercent(insightBanner.primary.deltaDegradation)}`}>
+                  {pct(insightBanner.primary.deltaDegradation)}
+                </strong>
+              </div>
+              <div>
+                <span className="muted-line">Confidence</span>
+                <strong className={`delta-chip ${insightBanner.primary.confidence === 'high' ? 'ok' : insightBanner.primary.confidence === 'medium' ? 'warn' : 'neutral'}`}>
+                  {confidenceLabel(insightBanner.primary.confidence)}
+                </strong>
+              </div>
+            </div>
+            <p className="muted-line">
+              Compared to: {baseline?.cohortId ?? 'stable'} ({window} window)
+            </p>
+          </div>
+          <div className="cohort-regression-actions">
+            <button
+              type="button"
+              onClick={() => navigate(`/machines?cohort=${encodeURIComponent(insightBanner.primary!.row.cohortId)}`)}
+            >
+              Open Machines
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/audit-traces?cohort=${encodeURIComponent(insightBanner.primary!.row.cohortId)}`)}
+            >
+              View Traces
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/experiments?cohort=${encodeURIComponent(insightBanner.primary!.row.cohortId)}`)}
+            >
+              View Experiment
+            </button>
+          </div>
+          {versionCorrelationHint ? (
+            <p className="cohort-correlation-note">{versionCorrelationHint}</p>
+          ) : null}
+        </section>
+      ) : null}
 
       <div className="cohort-controls">
         <label>
@@ -332,8 +452,8 @@ export function CohortOverview() {
             <option value="behavioral">Behavioral</option>
           </select>
         </label>
-        <label>
-          Sort
+          <label>
+            Sort
           <select
             value={sortMode}
             onChange={(event) => {
@@ -347,8 +467,35 @@ export function CohortOverview() {
             <option value="worst_degradation_desc">Worst Delta Degradation first</option>
             <option value="name_asc">Cohort name (A-Z)</option>
           </select>
-        </label>
+          </label>
       </div>
+
+      {topRegressions.length > 0 ? (
+        <div className="cohort-highlight-grid">
+          {topRegressions.map((item) => (
+            <article key={item.row.cohortId} className="cohort-highlight-card">
+              <header>
+                <strong>{item.row.cohortId}</strong>
+                <span className={`delta-chip ${item.confidence === 'high' ? 'ok' : item.confidence === 'medium' ? 'warn' : 'neutral'}`}>
+                  {confidenceLabel(item.confidence)}
+                </span>
+              </header>
+              <p>
+                Error: {item.row.errorRatePct.toFixed(3)}% ({pct(item.deltaError)})
+              </p>
+              <p>
+                P99: {item.row.latencyP99Ms}ms ({ms(item.deltaP99)})
+              </p>
+              <p>
+                Degradation: {item.row.degradationRatePct.toFixed(3)}% ({pct(item.deltaDegradation)})
+              </p>
+              <p className="muted-line">
+                {item.configLabel}
+              </p>
+            </article>
+          ))}
+        </div>
+      ) : null}
 
       {loading ? <p className="muted-line">Loading cohort summaries...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
@@ -408,9 +555,20 @@ export function CohortOverview() {
                       <span className={`delta-chip ${deltaTonePercent(item.deltaDegradation)}`}>{pct(item.deltaDegradation)}</span>
                     </td>
                     <td>
-                      {item.mixedConfig ? <span className="delta-chip warn">Mixed</span> : null}
-                      {' '}
-                      {item.configLabel}
+                      <div className="config-dist-cell">
+                        {item.mixedConfig ? <span className="delta-chip warn">Mixed</span> : null}
+                        <div className="config-dist-bars">
+                          {item.configParts.map((part) => (
+                            <div key={`${item.row.cohortId}-${part.version}`} className="config-dist-row">
+                              <span className="config-dist-label">v{part.version}</span>
+                              <div className="config-dist-track">
+                                <div className="config-dist-fill" style={{ width: `${part.sharePct}%` }} />
+                              </div>
+                              <span className="config-dist-value">{part.sharePct}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </td>
                   </>
                 ) : (
@@ -428,9 +586,20 @@ export function CohortOverview() {
                     <td>{item.interventionsPerMin.toFixed(2)}</td>
                     <td>{item.policyDecisionsPerMin.toFixed(1)}</td>
                     <td>
-                      {item.mixedConfig ? <span className="delta-chip warn">Mixed</span> : null}
-                      {' '}
-                      {item.configLabel}
+                      <div className="config-dist-cell">
+                        {item.mixedConfig ? <span className="delta-chip warn">Mixed</span> : null}
+                        <div className="config-dist-bars">
+                          {item.configParts.map((part) => (
+                            <div key={`${item.row.cohortId}-${part.version}`} className="config-dist-row">
+                              <span className="config-dist-label">v{part.version}</span>
+                              <div className="config-dist-track">
+                                <div className="config-dist-fill" style={{ width: `${part.sharePct}%` }} />
+                              </div>
+                              <span className="config-dist-value">{part.sharePct}%</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </td>
                   </>
                 )}
@@ -446,9 +615,12 @@ export function CohortOverview() {
                       View Config
                     </button>
                     {item.row.cohortId === 'experimental' ? (
-                      <button type="button" onClick={() => navigate(`/experiments?cohort=${encodeURIComponent(item.row.cohortId)}`)}>
-                        View Experiment
-                      </button>
+                      <>
+                        <span className="delta-chip ok">Experiment</span>
+                        <button type="button" onClick={() => navigate(`/experiments?cohort=${encodeURIComponent(item.row.cohortId)}`)}>
+                          View Experiment
+                        </button>
+                      </>
                     ) : null}
                   </div>
                 </td>
@@ -461,21 +633,34 @@ export function CohortOverview() {
       <div className="trend-panel">
         <div className="panel-heading-row">
           <h4>Cohort Trend</h4>
-          <label>
-            Trend metric
-            <select
-              value={trendMetric}
-              onChange={(event) => {
-                const next = event.target.value as TrendMetric;
-                setTrendMetric(next);
-                updateParam('trend', next, 'error');
-              }}
-            >
-              <option value="error">Error %</option>
-              <option value="p99">P99 Latency</option>
-              <option value="degradation">Degradation %</option>
-            </select>
-          </label>
+          <div className="cohort-trend-controls">
+            <label>
+              Trend metric
+              <select
+                value={trendMetric}
+                onChange={(event) => {
+                  const next = event.target.value as TrendMetric;
+                  setTrendMetric(next);
+                  updateParam('trend', next, 'error');
+                }}
+              >
+                <option value="error">Error %</option>
+                <option value="p99">P99 Latency</option>
+                <option value="degradation">Degradation %</option>
+              </select>
+            </label>
+            <label>
+              <input
+                type="checkbox"
+                checked={normalizeTrend}
+                onChange={(event) => {
+                  setNormalizeTrend(event.target.checked);
+                  updateParam('normalize', event.target.checked ? '1' : '', '');
+                }}
+              />
+              Normalize to baseline
+            </label>
+          </div>
         </div>
 
         <div className="cohort-trend-legend">
@@ -545,10 +730,13 @@ export function CohortOverview() {
               {trendSeries.map((series) => {
                 const value = series.values[clampedHoverIndex] ?? series.values[series.values.length - 1] ?? 0;
                 const suffix = trendMetric === 'p99' ? 'ms' : '%';
+                const renderedValue = trendMetric === 'p99'
+                  ? `${normalizeTrend ? (value >= 0 ? '+' : '') : ''}${Math.round(value)}`
+                  : `${normalizeTrend ? formatSigned(value, 3) : value.toFixed(3)}`;
                 return (
                   <li key={series.cohortId}>
                     <span>{series.cohortId}</span>
-                    <strong>{trendMetric === 'p99' ? Math.round(value) : value.toFixed(3)} {suffix}</strong>
+                    <strong>{renderedValue} {suffix}</strong>
                   </li>
                 );
               })}
