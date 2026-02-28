@@ -2,20 +2,55 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Panel } from '../../components/Layout/Panel';
 import { useConsoleOperations } from '../../hooks/useConsoleOperations';
+import { getNodeSnapshot } from '../../api/nodes';
 
 export function AuditTracesPage() {
   const [params, setParams] = useSearchParams();
   const { audits, policies, loading, error, replay, exportRows } = useConsoleOperations();
   const [policyFilter, setPolicyFilter] = useState('all');
   const [decisionFilter, setDecisionFilter] = useState('all');
+  const [cohortFilter, setCohortFilter] = useState(params.get('cohort') ?? 'all');
   const [agentFilter, setAgentFilter] = useState(params.get('agent') ?? 'all');
   const [traceFocus, setTraceFocus] = useState(params.get('trace') ?? '');
   const [confidenceMin, setConfidenceMin] = useState(0);
+  const [agentCohortMap, setAgentCohortMap] = useState<Record<string, string>>({});
+  const [cohortOptions, setCohortOptions] = useState<string[]>([]);
 
   useEffect(() => {
+    setCohortFilter(params.get('cohort') ?? 'all');
     setAgentFilter(params.get('agent') ?? 'all');
     setTraceFocus(params.get('trace') ?? '');
   }, [params]);
+
+  useEffect(() => {
+    let mounted = true;
+    const refreshNodeMap = async () => {
+      try {
+        const snapshot = await getNodeSnapshot();
+        if (!mounted) return;
+        const map: Record<string, string> = {};
+        const cohorts = new Set<string>();
+        for (const row of snapshot) {
+          map[row.node_id] = row.cohort;
+          cohorts.add(row.cohort);
+        }
+        setAgentCohortMap(map);
+        setCohortOptions([...cohorts].sort());
+      } catch {
+        if (!mounted) return;
+      }
+    };
+
+    void refreshNodeMap();
+    const timer = window.setInterval(() => {
+      void refreshNodeMap();
+    }, 5000);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   const updateParam = (key: string, value: string, clearValue?: string) => {
     const next = new URLSearchParams(params);
@@ -33,12 +68,13 @@ export function AuditTracesPage() {
       audits.filter((row) => {
         if (policyFilter !== 'all' && row.policy_id !== policyFilter) return false;
         if (decisionFilter !== 'all' && row.action_decision !== decisionFilter) return false;
+        if (cohortFilter !== 'all' && agentCohortMap[row.agent_id] !== cohortFilter) return false;
         if (agentFilter !== 'all' && row.agent_id !== agentFilter) return false;
         if (traceFocus && row.trace_id !== traceFocus) return false;
         if (row.confidence_score < confidenceMin) return false;
         return true;
       }),
-    [audits, policyFilter, decisionFilter, agentFilter, traceFocus, confidenceMin]
+    [agentCohortMap, agentFilter, audits, cohortFilter, confidenceMin, decisionFilter, policyFilter, traceFocus]
   );
 
   return (
@@ -62,6 +98,20 @@ export function AuditTracesPage() {
             <option value="skip">skip</option>
             <option value="cooldown">cooldown</option>
             <option value="blocked">blocked</option>
+          </select>
+          <select
+            value={cohortFilter}
+            onChange={(event) => {
+              setCohortFilter(event.target.value);
+              updateParam('cohort', event.target.value, 'all');
+            }}
+          >
+            <option value="all">All cohorts</option>
+            {cohortOptions.map((cohort) => (
+              <option key={cohort} value={cohort}>
+                {cohort}
+              </option>
+            ))}
           </select>
           <label>
             Confidence &gt;=

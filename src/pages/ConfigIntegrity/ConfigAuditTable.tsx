@@ -7,12 +7,14 @@ import { useSearchParams } from 'react-router-dom';
 export function ConfigAuditTable() {
   const { rows, loading, error } = useAuditLedgerView();
   const [params, setParams] = useSearchParams();
+  const [cohortFilter, setCohortFilter] = useState(params.get('cohort') ?? 'all');
   const [actorFilter, setActorFilter] = useState(params.get('actor') ?? 'all');
   const [actionFilter, setActionFilter] = useState(params.get('action') ?? 'all');
   const [fromDate, setFromDate] = useState(params.get('from') ?? '');
   const [toDate, setToDate] = useState(params.get('to') ?? '');
 
   useEffect(() => {
+    setCohortFilter(params.get('cohort') ?? 'all');
     setActorFilter(params.get('actor') ?? 'all');
     setActionFilter(params.get('action') ?? 'all');
     setFromDate(params.get('from') ?? '');
@@ -30,6 +32,7 @@ export function ConfigAuditTable() {
     setParams(next, { replace: true });
   };
 
+  const cohortOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.cohort))).sort(), [rows]);
   const actorOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.actor))).sort(), [rows]);
   const actionOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.action))).sort(), [rows]);
 
@@ -38,6 +41,7 @@ export function ConfigAuditTable() {
     const toTs = toDate ? Date.parse(`${toDate}T23:59:59`) : NaN;
 
     return rows.filter((row) => {
+      if (cohortFilter !== 'all' && row.cohort !== cohortFilter) return false;
       if (actorFilter !== 'all' && row.actor !== actorFilter) return false;
       if (actionFilter !== 'all' && row.action !== actionFilter) return false;
 
@@ -47,13 +51,28 @@ export function ConfigAuditTable() {
 
       return true;
     });
-  }, [rows, actorFilter, actionFilter, fromDate, toDate]);
+  }, [rows, cohortFilter, actorFilter, actionFilter, fromDate, toDate]);
 
   return (
     <Panel title="Config audit history">
       {loading ? <p>Loading...</p> : null}
       {error ? <p>{error.code}: {error.message}</p> : null}
       <div className="table-controls">
+        <select
+          value={cohortFilter}
+          onChange={(event) => {
+            setCohortFilter(event.target.value);
+            updateParam('cohort', event.target.value, 'all');
+          }}
+          aria-label="Filter by cohort"
+        >
+          <option value="all">All cohorts</option>
+          {cohortOptions.map((cohort) => (
+            <option key={cohort} value={cohort}>
+              {cohort}
+            </option>
+          ))}
+        </select>
         <select
           value={actorFilter}
           onChange={(event) => {

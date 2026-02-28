@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useLocation, useSearchParams } from 'react-router-dom';
 import { useFleetSlice } from '../../store/fleetSlice';
-import { formatUtc } from '../../utils/date';
+import { formatRelativeFromNow, formatUtc } from '../../utils/date';
 import { useWsConnectionStatus } from '../../hooks/useWsConnectionStatus';
 
 type ViewMeta = {
@@ -131,7 +131,9 @@ export function ViewContextBar({ onOpenGlossary }: ViewContextBarProps) {
               Realtime Channel: <strong>{wsStatus.statusLabel}</strong>
             </span>
             {' | '}
-            Last update: <strong>{formatUtc(lastUpdatedUtc)}</strong>
+            <span title={formatUtc(lastUpdatedUtc)}>
+              Last update: <strong>{formatRelativeFromNow(lastUpdatedUtc)}</strong>
+            </span>
           </p>
         </div>
       </div>
