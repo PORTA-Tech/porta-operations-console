@@ -6,7 +6,46 @@ export interface NodeDetail {
   lastHeartbeatUtc: string;
   degradationState: 'normal' | 'degraded' | 'safe';
   sloCompliant: boolean;
+  heartbeatAgeSec: number;
+  offline: boolean;
+  expectedConfigSeq: number;
+  configDrift: boolean;
+  agentVersion: string;
+  versionMismatch: boolean;
+  backendConnected: boolean;
+  stateSummary: {
+    focus: number | null;
+    overload: number | null;
+    fatigue: number | null;
+    stress: number | null;
+    stability: number | null;
+    confidence: number | null;
+    contributors: string[];
+    source: 'stream' | 'snapshot' | 'unavailable';
+    lastUpdatedUtc: string | null;
+  };
+  lastIntervention: string;
+  lastInterventionUtc: string | null;
+  interventionRate15m: number;
+  errorRatePct: number | null;
+  degradationTag: 'healthy' | 'warning' | 'critical';
+  configIssuer: string | null;
+  configExpiryUtc: string | null;
+  configDiffSummary: string | null;
+  appliedPolicyVersions: string[];
+  recentEvents: Array<{
+    traceId: string;
+    correlationId: string;
+    timestampUtc: string;
+    policyId: string;
+    decision: 'intervene' | 'skip' | 'cooldown' | 'blocked';
+    confidence: number;
+    trigger: string;
+  }>;
+  demo: boolean;
 }
+
+export type MachineDataMode = 'live_stream' | 'snapshot' | 'demo';
 
 export type CohortWindow = '15m' | '1h' | '6h' | '24h';
 
