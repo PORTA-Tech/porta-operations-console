@@ -19,6 +19,7 @@ type StreamState = {
 const OFFLINE_HEARTBEAT_THRESHOLD_SEC = 30;
 const HIGH_OVERLOAD_THRESHOLD = 0.75;
 const HIGH_INTERVENTION_RATE_15M = 3;
+const SYNTHETIC_NODE_ID_PATTERN = /^00000000-0000-4000-8000-0000000000\d+$/;
 
 function parseNumber(value: unknown): number | null {
   const parsed = Number(value);
@@ -144,11 +145,59 @@ function decisionTimestampMs(decision: AuditDecisionRecord): number {
   return Number.isFinite(ms) ? ms : 0;
 }
 
+function detectEnvironmentLabel(): 'Local' | 'Staging' | 'Prod' {
+  const explicit = String(import.meta.env.VITE_ENVIRONMENT ?? '').trim().toLowerCase();
+  if (explicit.includes('local') || explicit.includes('dev')) return 'Local';
+  if (explicit.includes('staging') || explicit.includes('stage') || explicit.includes('qa')) return 'Staging';
+  if (explicit.includes('prod') || explicit.includes('production')) return 'Prod';
+
+  const apiBase = String(import.meta.env.VITE_API_BASE_URL ?? '').trim().toLowerCase();
+  const wsBase = String(import.meta.env.VITE_WS_BASE_URL ?? '').trim().toLowerCase();
+  const combined = `${apiBase} ${wsBase}`;
+  if (
+    combined.includes('localhost')
+    || combined.includes('127.0.0.1')
+    || combined.includes('::1')
+    || combined.includes('.local')
+  ) {
+    return 'Local';
+  }
+  if (
+    combined.includes('staging')
+    || combined.includes('stage')
+    || combined.includes('stg')
+    || combined.includes('qa')
+    || combined.includes('dev')
+  ) {
+    return 'Staging';
+  }
+  return 'Prod';
+}
+
+function isSyntheticSnapshotRow(row: NodeSnapshotRow): boolean {
+  if (row.node_id.startsWith('demo-') || row.node_id.startsWith('demo_machine')) {
+    return true;
+  }
+  if (SYNTHETIC_NODE_ID_PATTERN.test(row.node_id)) {
+    return true;
+  }
+  if (row.config_seq <= 0) {
+    return true;
+  }
+  return false;
+}
+
 export function useNodeDrilldown(): {
   nodes: NodeDetail[];
   loading: boolean;
   error: ApiError | undefined;
   lastUpdatedUtc: string | undefined;
+  snapshotConnected: boolean;
+  tableFrozen: boolean;
+  environmentLabel: 'Local' | 'Staging' | 'Prod';
+  demoModeOn: boolean;
+  setDemoModeOn: (enabled: boolean) => void;
+  simulatedSnapshotDetected: boolean;
   dataMode: MachineDataMode;
   highOverloadThreshold: number;
   highInterventionRateThreshold: number;
@@ -158,10 +207,14 @@ export function useNodeDrilldown(): {
   const [error, setError] = useState<ApiError | undefined>();
   const [lastUpdatedUtc, setLastUpdatedUtc] = useState<string | undefined>(undefined);
   const [dataMode, setDataMode] = useState<MachineDataMode>('snapshot');
+  const [snapshotConnected, setSnapshotConnected] = useState(false);
+  const [demoModeOn, setDemoModeOn] = useState(false);
+  const [simulatedSnapshotDetected, setSimulatedSnapshotDetected] = useState(false);
   const streamStateRef = useRef<Record<string, StreamState>>({});
   const wsRef = useRef<WebSocket | null>(null);
   const wsBase = import.meta.env.VITE_WS_BASE_URL?.trim();
   const demoEnabled = import.meta.env.VITE_ENABLE_DEMO_DATA === '1';
+  const environmentLabel = detectEnvironmentLabel();
 
   useEffect(() => {
     if (!wsBase) {
@@ -259,7 +312,7 @@ export function useNodeDrilldown(): {
           entries.sort((left, right) => decisionTimestampMs(right) - decisionTimestampMs(left));
         }
 
-        const nextNodes = snapshot.map((row) => {
+        const nextNodesRaw = snapshot.map((row) => {
           const raw = row as unknown as Record<string, unknown>;
           const heartbeatAgeSec = parseHeartbeatAgeSec(row.last_heartbeat);
           const offline = heartbeatAgeSec > OFFLINE_HEARTBEAT_THRESHOLD_SEC;
@@ -315,7 +368,7 @@ export function useNodeDrilldown(): {
             return eventMs >= window15m;
           }).length;
           const policyVersions = [...new Set(machineDecisions.map((event) => event.policy_id).filter((id) => id !== ''))];
-          const demo = row.node_id.startsWith('demo-') || row.node_id.startsWith('demo_machine');
+          const demo = isSyntheticSnapshotRow(row);
 
           return {
             nodeId: row.node_id,
@@ -349,13 +402,20 @@ export function useNodeDrilldown(): {
           } satisfies NodeDetail;
         });
 
+        const nextNodes = demoModeOn
+          ? nextNodesRaw
+          : nextNodesRaw.filter((node) => !node.demo);
+
         setNodes(nextNodes);
         setLastUpdatedUtc(new Date().toISOString());
-        setDataMode(streamStateRef.current && Object.keys(streamStateRef.current).length > 0 ? 'live_stream' : 'snapshot');
+        setSnapshotConnected(true);
+        setSimulatedSnapshotDetected(nextNodesRaw.some((node) => node.demo));
+        setDataMode(demoModeOn ? 'demo' : (streamStateRef.current && Object.keys(streamStateRef.current).length > 0 ? 'live_stream' : 'snapshot'));
         setError(undefined);
       } catch (err) {
         if (!mounted) return;
-        if (demoEnabled) {
+        setSnapshotConnected(false);
+        if (demoModeOn && demoEnabled) {
           const demoSnapshot = buildDemoNodes();
           const nowIso = new Date().toISOString();
           const expectedConfigByCohort = buildExpectedConfigByCohort(demoSnapshot);
@@ -404,6 +464,7 @@ export function useNodeDrilldown(): {
           setNodes(demoNodes);
           setDataMode('demo');
           setLastUpdatedUtc(nowIso);
+          setSimulatedSnapshotDetected(true);
           setError(undefined);
         } else {
           setError(toApiError(err));
@@ -424,7 +485,7 @@ export function useNodeDrilldown(): {
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [demoEnabled]);
+  }, [demoEnabled, demoModeOn]);
 
   return useMemo(
     () => ({
@@ -432,10 +493,26 @@ export function useNodeDrilldown(): {
       loading,
       error,
       lastUpdatedUtc,
+      snapshotConnected,
+      tableFrozen: !snapshotConnected && nodes.length > 0,
+      environmentLabel,
+      demoModeOn,
+      setDemoModeOn,
+      simulatedSnapshotDetected,
       dataMode,
       highOverloadThreshold: HIGH_OVERLOAD_THRESHOLD,
       highInterventionRateThreshold: HIGH_INTERVENTION_RATE_15M
     }),
-    [nodes, loading, error, lastUpdatedUtc, dataMode]
+    [
+      nodes,
+      loading,
+      error,
+      lastUpdatedUtc,
+      snapshotConnected,
+      environmentLabel,
+      demoModeOn,
+      simulatedSnapshotDetected,
+      dataMode
+    ]
   );
 }

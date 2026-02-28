@@ -11,6 +11,12 @@ interface NodeListProps {
   loading: boolean;
   error: ApiError | undefined;
   lastUpdatedUtc: string | undefined;
+  snapshotConnected: boolean;
+  tableFrozen: boolean;
+  environmentLabel: 'Local' | 'Staging' | 'Prod';
+  demoModeOn: boolean;
+  setDemoModeOn: (enabled: boolean) => void;
+  simulatedSnapshotDetected: boolean;
   dataMode: MachineDataMode;
   highOverloadThreshold: number;
   highInterventionRateThreshold: number;
@@ -41,11 +47,21 @@ function dataSourceLabel(dataMode: MachineDataMode): string {
   return 'Snapshot poll';
 }
 
+function dataModeLabel(dataMode: MachineDataMode): 'Live' | 'Demo' {
+  return dataMode === 'demo' ? 'Demo' : 'Live';
+}
+
 export function NodeList({
   nodes,
   loading,
   error,
   lastUpdatedUtc,
+  snapshotConnected,
+  tableFrozen,
+  environmentLabel,
+  demoModeOn,
+  setDemoModeOn,
+  simulatedSnapshotDetected,
   dataMode,
   highOverloadThreshold,
   highInterventionRateThreshold
@@ -143,10 +159,22 @@ export function NodeList({
 
       <div className="machines-data-banner">
         <div>
+          <strong>Environment:</strong> {environmentLabel}
+        </div>
+        <div>
+          <strong>Data mode:</strong> {dataModeLabel(dataMode)}
+        </div>
+        <div>
           <strong>Data source:</strong> {dataSourceLabel(dataMode)}
         </div>
         <div>
-          <strong>Connection:</strong> {wsStatus.connected ? 'Connected' : 'Disconnected'}
+          <strong>Connection:</strong> {snapshotConnected ? 'Connected' : 'Disconnected'}
+        </div>
+        <div>
+          <strong>Source channel:</strong> {dataMode === 'live_stream' ? 'Websocket Stream' : 'Snapshot Poll'}
+        </div>
+        <div>
+          <strong>Realtime Channel:</strong> {wsStatus.statusLabel}
         </div>
         <div>
           <strong>Last updated:</strong> {formatRelativeFromNow(lastUpdatedUtc)} ({formatUtc(lastUpdatedUtc)})
@@ -154,10 +182,28 @@ export function NodeList({
         <div>
           <strong>Counts:</strong> Total {counts.total} | Online {counts.online} | Offline {counts.offline} | Demo {counts.demo}
         </div>
+        <label className="machines-demo-toggle">
+          <strong>Demo Mode</strong>
+          <input
+            type="checkbox"
+            checked={demoModeOn}
+            onChange={(event) => setDemoModeOn(event.target.checked)}
+          />
+        </label>
       </div>
-      {dataMode === 'demo' || counts.demo > 0 ? (
+      {tableFrozen ? (
         <p className="focus-banner">
-          Demo data mode is ON. Live machine truth may be masked until control-plane snapshot is available.
+          Connection is disconnected. Table is frozen at last successful snapshot ({formatUtc(lastUpdatedUtc)}).
+        </p>
+      ) : null}
+      {simulatedSnapshotDetected && !demoModeOn ? (
+        <p className="focus-banner">
+          Simulated snapshot rows detected and hidden by default. Enable Demo Mode to inspect synthetic fleet data.
+        </p>
+      ) : null}
+      {dataMode === 'demo' || (counts.demo > 0 && demoModeOn) ? (
+        <p className="focus-banner">
+          Demo data mode is ON. Machines list may include synthetic rows.
         </p>
       ) : null}
 

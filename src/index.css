@@ -617,6 +617,12 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   font-size: 0.9rem;
 }
 
+.machines-demo-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .cohort-baseline-row {
   background: color-mix(in oklab, white 94%, var(--accent-2));
 }
