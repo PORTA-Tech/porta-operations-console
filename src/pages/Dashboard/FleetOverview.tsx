@@ -669,7 +669,12 @@ export function FleetOverview() {
       : fleetKpis.totalNodes > 0 && (offlineNodeCount / fleetKpis.totalNodes) > 0.02
         ? 'critical'
         : 'warn';
+  const errorRateTargetPath = '/cohorts';
+  const p95LatencyTargetPath = '/system-health';
+  const p99LatencyTargetPath = '/cohorts';
+  const performanceChangeTargetPath = '/cohorts?cohort=experimental&cohortCompare=1&cohortB=stable';
   const machinesOnlineTargetPath = offlineNodeCount > 0 ? '/machines?offline=1' : '/machines';
+  const interventionsTargetPath = '/audit-traces';
 
   const showInterventions = fleetKpis.interventionsPerMinute > 0;
   return (
@@ -743,25 +748,45 @@ export function FleetOverview() {
           <h3>Key Metrics</h3>
         </div>
         <div className="key-metrics-grid">
-          <div className="kpi-tile">
+          <button
+            type="button"
+            className="kpi-tile kpi-tile-button"
+            onClick={() => navigate(errorRateTargetPath)}
+            title="Open cohort performance"
+          >
             <span className="kpi-label">Error Rate</span>
             <strong>{fleetKpis.errorRatePct.toFixed(3)}%</strong>
-          </div>
-          <div className="kpi-tile">
+          </button>
+          <button
+            type="button"
+            className="kpi-tile kpi-tile-button"
+            onClick={() => navigate(p95LatencyTargetPath)}
+            title="Open system health latency signals"
+          >
             <span className="kpi-label">P95 Latency</span>
             <strong>{Math.round(fleetKpis.latencyP95Ms)} ms</strong>
-          </div>
-          <div className="kpi-tile">
+          </button>
+          <button
+            type="button"
+            className="kpi-tile kpi-tile-button"
+            onClick={() => navigate(p99LatencyTargetPath)}
+            title="Open cohort latency comparison"
+          >
             <span className="kpi-label">P99 Latency</span>
             <strong>{Math.round(fleetKpis.latencyP99Ms)} ms</strong>
-          </div>
-          <div className="kpi-tile">
+          </button>
+          <button
+            type="button"
+            className="kpi-tile kpi-tile-button"
+            onClick={() => navigate(performanceChangeTargetPath)}
+            title="Open baseline vs experimental cohort comparison"
+          >
             <span className="kpi-label">{deltaMetricLabel}</span>
             <strong className={`kpi-delta ${deltaTrendTone}`}>
               {deltaMetricValue >= 0 ? '+' : ''}{deltaMetricValue.toFixed(3)}% {deltaTrendSymbol}
             </strong>
             <span className="muted-line kpi-delta-note">{deltaDirection}</span>
-          </div>
+          </button>
           <button
             type="button"
             className={`kpi-tile kpi-tile-button ${machineConnectivityTone}`}
@@ -773,10 +798,15 @@ export function FleetOverview() {
             <span className="muted-line kpi-delta-note">120s heartbeat window</span>
           </button>
           {showInterventions ? (
-            <div className="kpi-tile">
+            <button
+              type="button"
+              className="kpi-tile kpi-tile-button"
+              onClick={() => navigate(interventionsTargetPath)}
+              title="Open intervention traces"
+            >
               <span className="kpi-label">Interventions/min</span>
               <strong>{fleetKpis.interventionsPerMinute.toFixed(1)}</strong>
-            </div>
+            </button>
           ) : null}
         </div>
       </section>
