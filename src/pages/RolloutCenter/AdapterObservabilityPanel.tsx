@@ -27,16 +27,21 @@ export function AdapterObservabilityPanel() {
             {rows.map((row) => (
               <tr key={row.cohort}>
                 <td>{row.cohort}</td>
-                <td>{row.adapter_error_rate_pct.toFixed(3)}%</td>
-                <td>{Math.round(row.adapter_latency_ms)} ms</td>
+                <td>{row.adapter_error_rate_pct === null ? 'n/a' : `${row.adapter_error_rate_pct.toFixed(3)}%`}</td>
+                <td>{row.adapter_latency_ms === null ? 'n/a' : `${Math.round(row.adapter_latency_ms)} ms`}</td>
                 <td>
                   <strong>{row.circuit_breaker_state}</strong>
                 </td>
                 <td>{formatUtc(row.sampled_at_utc)}</td>
                 <td>
-                  <button type="button" onClick={() => setSelectedCohort(row.cohort)}>
+                  <button type="button" onClick={() => setSelectedCohort(row.cohort)} disabled={!row.metrics_available}>
                     Open replay log
                   </button>
+                  {!row.metrics_available ? (
+                    <p className="muted-line">
+                      {row.availability_reason_code ?? 'Metrics unavailable'} ({row.sample_size}/{row.sample_min_required})
+                    </p>
+                  ) : null}
                 </td>
               </tr>
             ))}

@@ -1,9 +1,9 @@
 import { Panel } from '../../components/Layout/Panel';
 import type { ApiError } from '../../api/client';
-import type { RolloutDryRunView } from '../../api/rollout';
+import type { RolloutEvaluation } from '../../api/rollout';
 
 interface DryRunSimulationProps {
-  data: RolloutDryRunView | undefined;
+  data: RolloutEvaluation | undefined;
   loading: boolean;
   error: ApiError | undefined;
 }
@@ -20,18 +20,23 @@ export function DryRunSimulation({ data, loading, error }: DryRunSimulationProps
             <tbody>
               <tr>
                 <td>error_rate_delta_pct</td>
-                <td>{data.predicted_slo_impact.error_rate_delta_pct}</td>
+                <td>{data.dry_run_prediction.error_rate_delta_pct ?? 'n/a'}</td>
               </tr>
               <tr>
                 <td>p99_latency_delta_ms</td>
-                <td>{data.predicted_slo_impact.p99_latency_delta_ms}</td>
+                <td>{data.dry_run_prediction.p99_latency_delta_ms ?? 'n/a'}</td>
               </tr>
               <tr>
                 <td>degradation_rate_delta_pct</td>
-                <td>{data.predicted_slo_impact.degradation_rate_delta_pct}</td>
+                <td>{data.dry_run_prediction.degradation_rate_delta_pct ?? 'n/a'}</td>
               </tr>
             </tbody>
           </table>
+          {data.dry_run_prediction.availability_reason_code ? (
+            <p className="muted-line">
+              Metrics unavailable: {data.dry_run_prediction.availability_reason_code}
+            </p>
+          ) : null}
 
           <p>Rollout stage progression preview:</p>
           <ol className="inline-stage-list">

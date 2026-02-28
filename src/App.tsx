@@ -8,6 +8,7 @@ import { DryRunSimulation } from './pages/RolloutCenter/DryRunSimulation';
 import { AdapterActivationControls } from './pages/RolloutCenter/AdapterActivationControls';
 import { AdapterObservabilityPanel } from './pages/RolloutCenter/AdapterObservabilityPanel';
 import { AdapterPromotionPathPanel } from './pages/RolloutCenter/AdapterPromotionPathPanel';
+import { RolloutVerdictPanel } from './pages/RolloutCenter/RolloutVerdictPanel';
 import { NodeList } from './pages/NodeDrilldown/NodeList';
 import { NodeDetails } from './pages/NodeDrilldown/NodeDetails';
 import { ConfigAuditTable } from './pages/ConfigIntegrity/ConfigAuditTable';
@@ -15,7 +16,7 @@ import { ConfigDiffViewer } from './pages/ConfigIntegrity/ConfigDiffViewer';
 import { ConsoleFoundationPage } from './pages/ConsoleFoundation/ConsoleFoundationPage';
 import { useFleetState } from './hooks/useFleetState';
 import { useNodeDrilldown } from './hooks/useNodeDrilldown';
-import { useRolloutDryRun } from './hooks/useRolloutDryRun';
+import { useRolloutEvaluation } from './hooks/useRolloutEvaluation';
 import { AlertsPage } from './pages/Alerts/AlertsPage';
 import { ExperimentsPage } from './pages/Experiments/ExperimentsPage';
 import { PoliciesPage } from './pages/Policies/PoliciesPage';
@@ -27,16 +28,17 @@ function DashboardPage() {
 }
 
 function RolloutPage() {
-  const dryRun = useRolloutDryRun();
+  const evaluation = useRolloutEvaluation();
 
   return (
     <div className="stack">
+      <RolloutVerdictPanel {...evaluation} />
       <RolloutControl />
       <AdapterActivationControls />
       <AdapterPromotionPathPanel />
       <AdapterObservabilityPanel />
-      <BlastRadiusPreview {...dryRun} />
-      <DryRunSimulation {...dryRun} />
+      <BlastRadiusPreview {...evaluation} />
+      <DryRunSimulation {...evaluation} />
     </div>
   );
 }
