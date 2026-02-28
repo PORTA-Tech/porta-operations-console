@@ -36,22 +36,28 @@ export function useCohortMetrics(): {
     let mounted = true;
     setLoading(true);
 
-    getCohortSummary(window)
-      .then((data) => {
+    const refresh = async (): Promise<void> => {
+      try {
+        const data = await getCohortSummary(window);
         if (!mounted) return;
         setRows(data);
         setError(undefined);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (!mounted) return;
         setError(toApiError(err));
-      })
-      .finally(() => {
+      } finally {
         if (mounted) setLoading(false);
-      });
+      }
+    };
+
+    void refresh();
+    const timer = globalThis.window.setInterval(() => {
+      void refresh();
+    }, 5000);
 
     return () => {
       mounted = false;
+      globalThis.window.clearInterval(timer);
     };
   }, [window]);
 
