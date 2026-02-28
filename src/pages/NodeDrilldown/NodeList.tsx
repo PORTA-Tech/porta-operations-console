@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Panel } from '../../components/Layout/Panel';
 import { formatUtc } from '../../utils/date';
 import type { ApiError } from '../../api/client';
 import type { NodeDetail } from '../../types/ui';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 interface NodeListProps {
   nodes: NodeDetail[];
@@ -11,11 +12,29 @@ interface NodeListProps {
 }
 
 export function NodeList({ nodes, loading, error }: NodeListProps) {
-  const [search, setSearch] = useState('');
-  const [cohortFilter, setCohortFilter] = useState('all');
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const [search, setSearch] = useState(params.get('search') ?? '');
+  const [cohortFilter, setCohortFilter] = useState(params.get('cohort') ?? 'all');
   const [signatureFilter, setSignatureFilter] = useState('all');
   const [degradationFilter, setDegradationFilter] = useState('all');
   const [sloFilter, setSloFilter] = useState('all');
+
+  useEffect(() => {
+    setSearch(params.get('search') ?? '');
+    setCohortFilter(params.get('cohort') ?? 'all');
+  }, [params]);
+
+  const updateParam = (key: string, value: string, clearValue?: string) => {
+    const next = new URLSearchParams(params);
+    if (value === '' || (clearValue && value === clearValue)) {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+
+    setParams(next, { replace: true });
+  };
 
   const cohorts = useMemo(() => Array.from(new Set(nodes.map((node) => node.cohortId))), [nodes]);
 
@@ -54,7 +73,7 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
   }, [nodes, search, cohortFilter, signatureFilter, degradationFilter, sloFilter]);
 
   return (
-    <Panel title="Node Snapshot Table (Read-Only)">
+    <Panel title="Machine snapshot">
       {loading ? <p className="muted-line">Loading node snapshot...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <div className="table-controls">
@@ -62,11 +81,21 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
           className="table-search-input"
           type="search"
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search node snapshot..."
-          aria-label="Search node snapshot"
+          onChange={(event) => {
+            setSearch(event.target.value);
+            updateParam('search', event.target.value);
+          }}
+          placeholder="Search machine snapshot..."
+          aria-label="Search machine snapshot"
         />
-        <select value={cohortFilter} onChange={(event) => setCohortFilter(event.target.value)} aria-label="Filter by cohort">
+        <select
+          value={cohortFilter}
+          onChange={(event) => {
+            setCohortFilter(event.target.value);
+            updateParam('cohort', event.target.value, 'all');
+          }}
+          aria-label="Filter by cohort"
+        >
           <option value="all">All cohorts</option>
           {cohorts.map((cohort) => (
             <option key={cohort} value={cohort}>
@@ -96,18 +125,23 @@ export function NodeList({ nodes, loading, error }: NodeListProps) {
       <table className="simple-table">
         <thead>
           <tr>
-            <th>node_id</th>
+            <th>Machine ID</th>
             <th>cohort</th>
-            <th>config_seq</th>
-            <th>signature_valid</th>
-            <th>last_heartbeat</th>
-            <th>degradation_state</th>
-            <th>SLO_compliance</th>
+            <th>Config version</th>
+            <th>Trust check</th>
+            <th>Last heartbeat</th>
+            <th>Performance state</th>
+            <th>SLO state</th>
           </tr>
         </thead>
         <tbody>
           {filteredNodes.map((node) => (
-            <tr key={node.nodeId}>
+            <tr
+              key={node.nodeId}
+              className="click-row"
+              onClick={() => navigate(`/operations?agent=${encodeURIComponent(node.nodeId)}`)}
+              title="Open policy decisions for this machine"
+            >
               <td>{node.nodeId}</td>
               <td>{node.cohortId}</td>
               <td>{node.configSeq}</td>

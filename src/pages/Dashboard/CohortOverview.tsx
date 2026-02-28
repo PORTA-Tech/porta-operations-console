@@ -2,8 +2,12 @@ import { Panel } from '../../components/Layout/Panel';
 import { useCohortMetrics } from '../../hooks/useCohortMetrics';
 import { CohortTrendLines } from '../../components/Graphs/CohortTrendLines';
 import type { CohortId } from '../../types/apiContracts';
+import { useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export function CohortOverview() {
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const {
     rows,
     loading,
@@ -20,12 +24,42 @@ export function CohortOverview() {
     setSecondaryCohort
   } = useCohortMetrics();
 
+  useEffect(() => {
+    const queryCohort = params.get('cohort');
+    if (!queryCohort || rows.length === 0) {
+      return;
+    }
+
+    const matching = rows.find((row) => row.cohortId === queryCohort);
+    if (matching) {
+      setPrimaryCohort(matching.cohortId);
+    }
+  }, [params, rows, setPrimaryCohort]);
+
+  const updateParam = (key: string, value: string, clearValue?: string) => {
+    const next = new URLSearchParams(params);
+    if (value === '' || (clearValue && value === clearValue)) {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+
+    setParams(next, { replace: true });
+  };
+
   return (
-    <Panel title="Cohort Intelligence">
+    <Panel title="Cohort comparison">
       <div className="cohort-controls">
         <label>
-          Window
-          <select value={window} onChange={(event) => setWindow(event.target.value as '15m' | '1h' | '6h' | '24h')}>
+          Time window
+          <select
+            value={window}
+            onChange={(event) => {
+              const selected = event.target.value as '15m' | '1h' | '6h' | '24h';
+              setWindow(selected);
+              updateParam('window', selected, '1h');
+            }}
+          >
             <option value="15m">15m</option>
             <option value="1h">1h</option>
             <option value="6h">6h</option>
@@ -33,8 +67,15 @@ export function CohortOverview() {
           </select>
         </label>
         <label>
-          Primary
-          <select value={primaryCohort} onChange={(event) => setPrimaryCohort(event.target.value as CohortId)}>
+          Primary cohort
+          <select
+            value={primaryCohort}
+            onChange={(event) => {
+              const cohort = event.target.value as CohortId;
+              setPrimaryCohort(cohort);
+              updateParam('cohort', cohort);
+            }}
+          >
             {rows.map((row) => (
               <option key={row.cohortId} value={row.cohortId}>
                 {row.cohortId}
@@ -43,13 +84,27 @@ export function CohortOverview() {
           </select>
         </label>
         <label>
-          Side-by-side
-          <input type="checkbox" checked={compareMode} onChange={(event) => setCompareMode(event.target.checked)} />
+          Side-by-side compare
+          <input
+            type="checkbox"
+            checked={compareMode}
+            onChange={(event) => {
+              setCompareMode(event.target.checked);
+              updateParam('cohortCompare', event.target.checked ? '1' : '', '');
+            }}
+          />
         </label>
         {compareMode ? (
           <label>
-            Secondary
-            <select value={secondaryCohort} onChange={(event) => setSecondaryCohort(event.target.value as CohortId)}>
+            Secondary cohort
+            <select
+              value={secondaryCohort}
+              onChange={(event) => {
+                const cohort = event.target.value as CohortId;
+                setSecondaryCohort(cohort);
+                updateParam('cohortB', cohort);
+              }}
+            >
               {rows.map((row) => (
                 <option key={row.cohortId} value={row.cohortId}>
                   {row.cohortId}
@@ -73,13 +128,18 @@ export function CohortOverview() {
               <th>P50</th>
               <th>P95</th>
               <th>P99</th>
-              <th>Degradation %</th>
-              <th>config_seq distribution</th>
+              <th>Performance regression %</th>
+              <th>Config version distribution</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={row.cohortId}>
+              <tr
+                key={row.cohortId}
+                className="click-row"
+                onClick={() => navigate(`/nodes?cohort=${encodeURIComponent(row.cohortId)}`)}
+                title="Open machines in this cohort"
+              >
                 <td>{row.cohortId}</td>
                 <td>{row.nodeCount}</td>
                 <td>{row.errorRatePct.toFixed(3)}</td>
@@ -95,13 +155,13 @@ export function CohortOverview() {
       ) : null}
 
       <div className="trend-panel">
-        <h4>Trend Lines (Error Rate)</h4>
+        <h4>Error rate trend</h4>
         <CohortTrendLines primary={primary} secondary={secondary} compareMode={compareMode} />
       </div>
 
       {compareMode && primary && secondary ? (
         <div className="compare-panel">
-          <h4>Side-by-Side Comparison</h4>
+          <h4>Comparison summary</h4>
           <p>
             {primary.cohortId} vs {secondary.cohortId}: error delta{' '}
             <strong>{(primary.errorRatePct - secondary.errorRatePct).toFixed(3)}%</strong>, p99 delta{' '}

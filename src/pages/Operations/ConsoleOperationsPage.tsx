@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Panel } from '../../components/Layout/Panel';
 import { useConsoleOperations } from '../../hooks/useConsoleOperations';
 import type { PolicyRecord, RbacAssignment, RoleName } from '../../types/consoleOperations';
+import { useSearchParams } from 'react-router-dom';
 
 const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
@@ -38,6 +39,7 @@ const rolePermissions: Record<RoleName, Array<'read' | 'write' | 'override'>> = 
 };
 
 export function ConsoleOperationsPage() {
+  const [params, setParams] = useSearchParams();
   const {
     policies,
     audits,
@@ -59,10 +61,28 @@ export function ConsoleOperationsPage() {
   const [auditFilterPolicy, setAuditFilterPolicy] = useState('all');
   const [auditFilterDecision, setAuditFilterDecision] = useState('all');
   const [auditConfidenceMin, setAuditConfidenceMin] = useState(0);
+  const [agentFilter, setAgentFilter] = useState(params.get('agent') ?? 'all');
+  const [traceFocus, setTraceFocus] = useState(params.get('trace') ?? '');
   const [rbacUser, setRbacUser] = useState('');
   const [rbacRole, setRbacRole] = useState<RoleName>('operator');
   const [rbacScope, setRbacScope] = useState<'fleet' | 'agent'>('fleet');
   const [rbacScopeId, setRbacScopeId] = useState('fleet');
+
+  useEffect(() => {
+    setAgentFilter(params.get('agent') ?? 'all');
+    setTraceFocus(params.get('trace') ?? '');
+  }, [params]);
+
+  const updateParam = (key: string, value: string, clearValue?: string) => {
+    const next = new URLSearchParams(params);
+    if (value === '' || (clearValue && value === clearValue)) {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+
+    setParams(next, { replace: true });
+  };
 
   const conflicts = useMemo(() => detectPolicyConflicts(policies), [policies]);
 
@@ -71,10 +91,12 @@ export function ConsoleOperationsPage() {
       audits.filter((row) => {
         if (auditFilterPolicy !== 'all' && row.policy_id !== auditFilterPolicy) return false;
         if (auditFilterDecision !== 'all' && row.action_decision !== auditFilterDecision) return false;
+        if (agentFilter !== 'all' && row.agent_id !== agentFilter) return false;
+        if (traceFocus && row.trace_id !== traceFocus) return false;
         if (row.confidence_score < auditConfidenceMin) return false;
         return true;
       }),
-    [audits, auditFilterPolicy, auditFilterDecision, auditConfidenceMin]
+    [audits, auditFilterPolicy, auditFilterDecision, agentFilter, traceFocus, auditConfidenceMin]
   );
 
   const validationError = editor && !semverPattern.test(editor.version) ? 'Version must follow MAJOR.MINOR.PATCH' : undefined;
@@ -101,7 +123,7 @@ export function ConsoleOperationsPage() {
 
   return (
     <div className="stack">
-      <Panel title="Policy Management UI">
+      <Panel title="Policy library and deployment">
         {loading ? <p className="muted-line">Loading operations data...</p> : null}
         {error ? (
           <p className="error-line">
@@ -113,12 +135,12 @@ export function ConsoleOperationsPage() {
             <table className="simple-table">
               <thead>
                 <tr>
-                  <th>policy_id</th>
-                  <th>name</th>
-                  <th>version</th>
-                  <th>state</th>
-                  <th>last_modified</th>
-                  <th>created_by</th>
+                  <th>Policy ID</th>
+                  <th>Name</th>
+                  <th>Version</th>
+                  <th>Status</th>
+                  <th>Last updated</th>
+                  <th>Author</th>
                 </tr>
               </thead>
               <tbody>
@@ -218,7 +240,7 @@ export function ConsoleOperationsPage() {
         </div>
       </Panel>
 
-      <Panel title="Audit UI">
+      <Panel title="Decision traces">
         <div className="table-controls">
           <select value={auditFilterPolicy} onChange={(e) => setAuditFilterPolicy(e.target.value)}>
             <option value="all">All policies</option>
@@ -239,6 +261,27 @@ export function ConsoleOperationsPage() {
             Confidence &gt;=
             <input type="number" step="0.05" min={0} max={1} value={auditConfidenceMin} onChange={(e) => setAuditConfidenceMin(Number(e.target.value))} />
           </label>
+          <input
+            className="table-search-input"
+            placeholder="Filter by machine id..."
+            value={agentFilter === 'all' ? '' : agentFilter}
+            onChange={(e) => {
+              const next = e.target.value.trim();
+              setAgentFilter(next === '' ? 'all' : next);
+              updateParam('agent', next, '');
+            }}
+            aria-label="Filter by machine id"
+          />
+          <input
+            className="table-search-input"
+            placeholder="Focus trace id..."
+            value={traceFocus}
+            onChange={(e) => {
+              setTraceFocus(e.target.value);
+              updateParam('trace', e.target.value);
+            }}
+            aria-label="Focus trace id"
+          />
           <button onClick={() => void exportRows('csv', filteredAudits)}>Export CSV</button>
           <button onClick={() => void exportRows('json', filteredAudits)}>Export JSON</button>
           <button onClick={() => void exportRows('pdf_signed', filteredAudits)}>Export Signed PDF</button>
@@ -246,21 +289,29 @@ export function ConsoleOperationsPage() {
         <table className="simple-table">
           <thead>
             <tr>
-              <th>trace_id</th>
-              <th>correlation_id</th>
-              <th>timestamp</th>
-              <th>agent_id</th>
-              <th>policy_id</th>
-              <th>decision</th>
-              <th>confidence</th>
-              <th>triggered_by</th>
-              <th>signature</th>
-              <th>replay</th>
+              <th>Trace ID</th>
+              <th>Correlation ID</th>
+              <th>Timestamp</th>
+              <th>Machine ID</th>
+              <th>Policy ID</th>
+              <th>Decision</th>
+              <th>Confidence</th>
+              <th>Triggered by</th>
+              <th>Trust check</th>
+              <th>Replay</th>
             </tr>
           </thead>
           <tbody>
             {filteredAudits.map((row) => (
-              <tr key={row.trace_id} className={!row.signature_valid ? 'row-alert' : undefined}>
+              <tr
+                key={row.trace_id}
+                className={!row.signature_valid ? 'row-alert click-row' : 'click-row'}
+                onClick={() => {
+                  setTraceFocus(row.trace_id);
+                  updateParam('trace', row.trace_id);
+                }}
+                title="Focus this trace"
+              >
                 <td>{row.trace_id}</td>
                 <td>{row.correlation_id || 'n/a'}</td>
                 <td>{new Date(row.timestamp).toLocaleString()}</td>
@@ -287,18 +338,18 @@ export function ConsoleOperationsPage() {
         </table>
       </Panel>
 
-      <Panel title="Active Alerts">
+      <Panel title="Alerts">
         <table className="simple-table">
           <thead>
             <tr>
-              <th>alert_id</th>
-              <th>type</th>
-              <th>severity</th>
-              <th>service</th>
-              <th>threshold</th>
-              <th>correlation_id</th>
-              <th>last_seen</th>
-              <th>action</th>
+              <th>Alert ID</th>
+              <th>Type</th>
+              <th>Severity</th>
+              <th>Service</th>
+              <th>Threshold</th>
+              <th>Correlation ID</th>
+              <th>Last seen</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -327,7 +378,7 @@ export function ConsoleOperationsPage() {
         </table>
       </Panel>
 
-      <Panel title="RBAC UI">
+      <Panel title="Security and access">
         <div className="ops-grid">
           <div>
             <h4>Permissions Matrix</h4>
@@ -411,7 +462,7 @@ export function ConsoleOperationsPage() {
         </div>
       </Panel>
 
-      <Panel title="Operations Observability">
+      <Panel title="Operations metrics">
         <div className="console-metric-grid">
           <p>
             policy_changes_total: <strong>{metrics.policy_changes_total}</strong>

@@ -1,14 +1,34 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useAuditLedgerView } from '../../hooks/useAuditLedgerView';
 import { Panel } from '../../components/Layout/Panel';
 import { formatUtc } from '../../utils/date';
+import { useSearchParams } from 'react-router-dom';
 
 export function ConfigAuditTable() {
   const { rows, loading, error } = useAuditLedgerView();
-  const [actorFilter, setActorFilter] = useState('all');
-  const [actionFilter, setActionFilter] = useState('all');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
+  const [params, setParams] = useSearchParams();
+  const [actorFilter, setActorFilter] = useState(params.get('actor') ?? 'all');
+  const [actionFilter, setActionFilter] = useState(params.get('action') ?? 'all');
+  const [fromDate, setFromDate] = useState(params.get('from') ?? '');
+  const [toDate, setToDate] = useState(params.get('to') ?? '');
+
+  useEffect(() => {
+    setActorFilter(params.get('actor') ?? 'all');
+    setActionFilter(params.get('action') ?? 'all');
+    setFromDate(params.get('from') ?? '');
+    setToDate(params.get('to') ?? '');
+  }, [params]);
+
+  const updateParam = (key: string, value: string, clearValue?: string) => {
+    const next = new URLSearchParams(params);
+    if (value === '' || (clearValue && value === clearValue)) {
+      next.delete(key);
+    } else {
+      next.set(key, value);
+    }
+
+    setParams(next, { replace: true });
+  };
 
   const actorOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.actor))).sort(), [rows]);
   const actionOptions = useMemo(() => Array.from(new Set(rows.map((row) => row.action))).sort(), [rows]);
@@ -30,11 +50,18 @@ export function ConfigAuditTable() {
   }, [rows, actorFilter, actionFilter, fromDate, toDate]);
 
   return (
-    <Panel title="Audit Ledger View (Immutable)">
+    <Panel title="Config audit history">
       {loading ? <p>Loading...</p> : null}
       {error ? <p>{error.code}: {error.message}</p> : null}
       <div className="table-controls">
-        <select value={actorFilter} onChange={(event) => setActorFilter(event.target.value)} aria-label="Filter by actor">
+        <select
+          value={actorFilter}
+          onChange={(event) => {
+            setActorFilter(event.target.value);
+            updateParam('actor', event.target.value, 'all');
+          }}
+          aria-label="Filter by actor"
+        >
           <option value="all">All actors</option>
           {actorOptions.map((actor) => (
             <option key={actor} value={actor}>
@@ -43,7 +70,14 @@ export function ConfigAuditTable() {
           ))}
         </select>
 
-        <select value={actionFilter} onChange={(event) => setActionFilter(event.target.value)} aria-label="Filter by action">
+        <select
+          value={actionFilter}
+          onChange={(event) => {
+            setActionFilter(event.target.value);
+            updateParam('action', event.target.value, 'all');
+          }}
+          aria-label="Filter by action"
+        >
           <option value="all">All actions</option>
           {actionOptions.map((action) => (
             <option key={action} value={action}>
@@ -54,24 +88,38 @@ export function ConfigAuditTable() {
 
         <label>
           From
-          <input type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(event) => {
+              setFromDate(event.target.value);
+              updateParam('from', event.target.value);
+            }}
+          />
         </label>
         <label>
           To
-          <input type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          <input
+            type="date"
+            value={toDate}
+            onChange={(event) => {
+              setToDate(event.target.value);
+              updateParam('to', event.target.value);
+            }}
+          />
         </label>
       </div>
       {!loading && !error ? (
         <table className="simple-table">
           <thead>
             <tr>
-              <th>action</th>
-              <th>actor</th>
-              <th>timestamp</th>
-              <th>cohort</th>
-              <th>previous_state</th>
-              <th>resulting_state</th>
-              <th>correlation_id</th>
+              <th>Action</th>
+              <th>Actor</th>
+              <th>Timestamp</th>
+              <th>Cohort</th>
+              <th>Previous state</th>
+              <th>Resulting state</th>
+              <th>Correlation ID</th>
             </tr>
           </thead>
           <tbody>

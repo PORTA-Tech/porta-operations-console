@@ -6,6 +6,8 @@ interface FleetState {
   rollout: RolloutStatusView | undefined;
   fleetHealth: number;
   cohortDistribution: CohortSnapshot[];
+  lastUpdatedUtc: string | undefined;
+  liveConnected: boolean;
   sloCompliance: {
     label: 'Compliant' | 'Degraded' | 'Breached';
     scorePct: number;
@@ -13,17 +15,22 @@ interface FleetState {
   haltIndicator: boolean;
   setRollout: (rollout: RolloutStatusView) => void;
   setCohorts: (cohorts: CohortSnapshot[]) => void;
+  setConnectivity: (liveConnected: boolean) => void;
 }
 
 export const useFleetSlice = create<FleetState>((set) => ({
   rollout: undefined,
   fleetHealth: 100,
   cohortDistribution: [],
+  lastUpdatedUtc: undefined,
+  liveConnected: false,
   sloCompliance: { label: 'Compliant', scorePct: 99.5 },
   haltIndicator: false,
   setRollout: (rollout) =>
     set({
       rollout,
+      lastUpdatedUtc: rollout.updatedAtUtc ?? new Date().toISOString(),
+      liveConnected: true,
       fleetHealth:
         rollout.state === 'HALTED' || rollout.state === 'ROLLED_BACK'
           ? 58
@@ -38,5 +45,6 @@ export const useFleetSlice = create<FleetState>((set) => ({
             : { label: 'Compliant', scorePct: 99.5 },
       haltIndicator: rollout.state === 'HALTED' || rollout.state === 'ROLLED_BACK' || rollout.state === 'COOLDOWN'
     }),
-  setCohorts: (cohortDistribution) => set({ cohortDistribution })
+  setCohorts: (cohortDistribution) => set({ cohortDistribution }),
+  setConnectivity: (liveConnected) => set({ liveConnected })
 }));

@@ -94,12 +94,12 @@ export function RolloutControl() {
   };
 
   return (
-    <Panel title="Rollout Control Center">
-      <p>rollout_state: <strong>{rollout?.state ?? 'Unknown'}</strong></p>
-      <p>config_seq: <strong>{rollout?.activeConfigSeq ?? 'n/a'}</strong></p>
-      <p>cooldown_until_utc: <strong>{rollout?.cooldownUntilUtc ? formatUtc(rollout.cooldownUntilUtc) : 'n/a'}</strong></p>
+    <Panel title="Rollout control center">
+      <p>Rollout status: <strong>{rollout?.state ?? 'Unknown'}</strong></p>
+      <p>Config version: <strong>{rollout?.activeConfigSeq ?? 'n/a'}</strong></p>
+      <p>Rollout cooldown until: <strong>{rollout?.cooldownUntilUtc ? formatUtc(rollout.cooldownUntilUtc) : 'n/a'}</strong></p>
       <p>
-        halt_status:{' '}
+        Safety halt:{' '}
         <StatusBadge label={haltIndicator ? 'Active' : 'Clear'} tone={haltIndicator ? 'critical' : 'ok'} />
       </p>
       <p className="muted-line">Cooldown clearing is backend-only.</p>
@@ -127,8 +127,8 @@ export function RolloutControl() {
         <div className="confirm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="rollout-confirm-title">
           <div className="confirm-modal">
             <h4 id="rollout-confirm-title">Confirm: {selectedAction.label}</h4>
-            <p>Current rollout state: <strong>{rollout?.state ?? 'Unknown'}</strong></p>
-            <p>Current config_seq: <strong>{rollout?.activeConfigSeq ?? 'n/a'}</strong></p>
+            <p>Current rollout status: <strong>{rollout?.state ?? 'Unknown'}</strong></p>
+            <p>Current config version: <strong>{rollout?.activeConfigSeq ?? 'n/a'}</strong></p>
             <p>Expected transition: <strong>{selectedAction.expectedTransition(rollout?.state)}</strong></p>
             {actionError ? <p className="error-line">{actionError.code}: {actionError.message}</p> : null}
             <div className="button-row">

@@ -1,26 +1,31 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, NavLink } from 'react-router-dom';
+import { glossaryTerms } from '../../data/glossary';
+import { GlossaryDrawer } from './GlossaryDrawer';
+import { ViewContextBar } from './ViewContextBar';
 
 interface AppShellProps {
   children: ReactNode;
 }
 
 const navItems = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/console', label: 'Console Foundations' },
-  { to: '/operations', label: 'Console Operations' },
-  { to: '/rollout', label: 'Rollout Center' },
+  { to: '/', label: 'Fleet Overview' },
+  { to: '/console', label: 'System Health' },
+  { to: '/operations', label: 'Audit & Traces' },
+  { to: '/rollout', label: 'Rollouts' },
   { to: '/cohorts', label: 'Cohorts' },
-  { to: '/nodes', label: 'Nodes' },
+  { to: '/nodes', label: 'Machines' },
   { to: '/config', label: 'Config Integrity' }
 ];
 
 export function AppShell({ children }: AppShellProps) {
+  const [glossaryOpen, setGlossaryOpen] = useState(false);
+
   return (
     <div className="app-shell">
       <header className="topbar">
-        <Link to="/" className="brand">PORTA Fleet Console</Link>
-        <span className="topbar-pill">8B Operations Surface</span>
+        <Link to="/" className="brand">PORTA Operations Console</Link>
+        <span className="topbar-pill">Internal R&D Edition</span>
       </header>
       <div className="shell-main">
         <nav className="sidebar">
@@ -30,8 +35,12 @@ export function AppShell({ children }: AppShellProps) {
             </NavLink>
           ))}
         </nav>
-        <main className="content">{children}</main>
+        <main className="content">
+          <ViewContextBar onOpenGlossary={() => setGlossaryOpen(true)} />
+          {children}
+        </main>
       </div>
+      <GlossaryDrawer open={glossaryOpen} terms={glossaryTerms} onClose={() => setGlossaryOpen(false)} />
     </div>
   );
 }

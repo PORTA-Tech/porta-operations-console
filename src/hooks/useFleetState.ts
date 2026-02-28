@@ -9,6 +9,7 @@ export function useFleetState(): { loading: boolean; error: ApiError | undefined
   const [error, setError] = useState<ApiError | undefined>();
   const setRollout = useFleetSlice((s) => s.setRollout);
   const setCohorts = useFleetSlice((s) => s.setCohorts);
+  const setConnectivity = useFleetSlice((s) => s.setConnectivity);
 
   useEffect(() => {
     let mounted = true;
@@ -19,9 +20,11 @@ export function useFleetState(): { loading: boolean; error: ApiError | undefined
         if (!mounted) return;
         setRollout(state);
         setCohorts(cohorts);
+        setConnectivity(true);
         setError(undefined);
       } catch (err) {
         if (!mounted) return;
+        setConnectivity(false);
         setError(toApiError(err));
       } finally {
         if (mounted) setLoading(false);
@@ -36,7 +39,7 @@ export function useFleetState(): { loading: boolean; error: ApiError | undefined
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [setRollout, setCohorts]);
+  }, [setRollout, setCohorts, setConnectivity]);
 
   return { loading, error };
 }

@@ -13,15 +13,15 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
 
   if (loading) {
     return (
-      <Panel title="Node Detail">
-        <p className="muted-line">Loading node detail...</p>
+      <Panel title="Machine detail">
+        <p className="muted-line">Loading machine detail...</p>
       </Panel>
     );
   }
 
   if (error) {
     return (
-      <Panel title="Node Detail">
+      <Panel title="Machine detail">
         <p className="error-line">{error.code}: {error.message}</p>
       </Panel>
     );
@@ -29,17 +29,17 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
 
   if (!node) {
     return (
-      <Panel title="Node Detail">
-        <p className="muted-line">No node snapshot available.</p>
+      <Panel title="Machine detail">
+        <p className="muted-line">No machine snapshot is available.</p>
       </Panel>
     );
   }
 
   return (
-    <Panel title="Node Detail">
-      <p>Node: <strong>{node.nodeId}</strong></p>
-      <p>Signature: <strong>{node.signatureStatus}</strong></p>
-      <p>Degradation: <strong>{node.degradationState}</strong></p>
+    <Panel title="Machine detail">
+      <p>Machine: <strong>{node.nodeId}</strong></p>
+      <p>Trust check: <strong>{node.signatureStatus}</strong></p>
+      <p>Performance state: <strong>{node.degradationState}</strong></p>
       <p>Last heartbeat: <strong>{new Date(node.lastHeartbeatUtc).toLocaleString()}</strong></p>
     </Panel>
   );
