@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Panel } from '../../components/Layout/Panel';
 import { useWsConnectionStatus } from '../../hooks/useWsConnectionStatus';
@@ -41,6 +41,67 @@ function formatErrorDegradation(node: NodeDetail): string {
   return `${errorPart} / ${node.degradationTag}`;
 }
 
+function formatTrustLabel(status: NodeDetail['signatureStatus']): 'Signed' | 'Invalid' | 'Unknown' {
+  if (status === 'verified') return 'Signed';
+  if (status === 'invalid') return 'Invalid';
+  return 'Unknown';
+}
+
+function formatTrustLower(status: NodeDetail['signatureStatus']): 'signed' | 'invalid' | 'unknown' {
+  if (status === 'verified') return 'signed';
+  if (status === 'invalid') return 'invalid';
+  return 'unknown';
+}
+
+function formatControlPlaneLabel(connected: boolean): 'Online' | 'Offline' {
+  return connected ? 'Online' : 'Offline';
+}
+
+function formatConfidenceBand(confidence: number | null): string {
+  if (confidence === null || !Number.isFinite(confidence)) return 'n/a';
+  const bounded = Math.min(1, Math.max(0, confidence));
+  const sigma = Math.max(0.01, (1 - bounded) * 0.2);
+  return `±${sigma.toFixed(2)}`;
+}
+
+function formatStateChip(node: NodeDetail): string {
+  return `Focus ${formatStateValue(node.stateSummary.focus)} (${formatConfidenceBand(node.stateSummary.confidence)}) | Overload ${formatStateValue(node.stateSummary.overload)} | Fatigue ${formatStateValue(node.stateSummary.fatigue)}`;
+}
+
+function formatStateChipTooltip(node: NodeDetail): string {
+  const confidence = node.stateSummary.confidence === null || !Number.isFinite(node.stateSummary.confidence)
+    ? 'n/a'
+    : node.stateSummary.confidence.toFixed(2);
+  const contributors = node.stateSummary.contributors.length > 0
+    ? node.stateSummary.contributors.join(', ')
+    : 'none captured';
+  return `Confidence: ${confidence}\nContributors: ${contributors}\nSource: ${node.stateSummary.source}\nUpdated: ${formatUtc(node.stateSummary.lastUpdatedUtc ?? undefined)}`;
+}
+
+function sortRecentEvents(node: NodeDetail): NodeDetail['recentEvents'] {
+  return [...node.recentEvents].sort((a, b) => Date.parse(b.timestampUtc) - Date.parse(a.timestampUtc));
+}
+
+function formatLastPolicyDecision(node: NodeDetail): string {
+  const latest = sortRecentEvents(node)[0];
+  if (!latest) return 'n/a';
+  return `${latest.decision} (${latest.policyId})`;
+}
+
+function formatLastErrorSignal(node: NodeDetail): string {
+  if (node.signatureStatus === 'invalid') return 'signature invalid';
+  if (node.degradationTag === 'critical') return 'critical degradation';
+  if (node.errorRatePct !== null && node.errorRatePct > 0) return `error rate ${node.errorRatePct.toFixed(3)}%`;
+  return 'no error captured';
+}
+
+function formatWhyHere(node: NodeDetail): string {
+  if (node.demo) {
+    return 'Demo seed row. This machine is synthetic and only exists for simulator coverage/testing.';
+  }
+  return `Registered via heartbeat at ${formatUtc(node.lastHeartbeatUtc)}.`;
+}
+
 function dataSourceLabel(dataMode: MachineDataMode): string {
   if (dataMode === 'live_stream') return 'Live stream + snapshot';
   if (dataMode === 'demo') return 'Demo fixtures';
@@ -79,6 +140,8 @@ export function NodeList({
   const [versionMismatchOnly, setVersionMismatchOnly] = useState(params.get('versionMismatch') === '1');
   const [highOverloadOnly, setHighOverloadOnly] = useState(params.get('highOverload') === '1');
   const [highInterventionOnly, setHighInterventionOnly] = useState(params.get('highIntervention') === '1');
+  const [openPeekNodeId, setOpenPeekNodeId] = useState('');
+  const [openWhyNodeId, setOpenWhyNodeId] = useState('');
   const selectedMachineId = params.get('machine') ?? '';
 
   useEffect(() => {
@@ -151,6 +214,7 @@ export function NodeList({
     const demo = nodes.filter((node) => node.demo).length;
     return { total, online, offline, demo };
   }, [nodes]);
+  const noCacheWhileDisconnected = !snapshotConnected && nodes.length === 0;
 
   return (
     <Panel title="Machines truth table">
@@ -194,6 +258,11 @@ export function NodeList({
       {tableFrozen ? (
         <p className="focus-banner">
           Connection is disconnected. Table is frozen at last successful snapshot ({formatUtc(lastUpdatedUtc)}).
+        </p>
+      ) : null}
+      {noCacheWhileDisconnected ? (
+        <p className="focus-banner">
+          Connection is disconnected and no cached snapshot is available. Machines table is intentionally empty until live data returns.
         </p>
       ) : null}
       {simulatedSnapshotDetected && !demoModeOn ? (
@@ -318,72 +387,143 @@ export function NodeList({
             <th>Cohort</th>
             <th>Last heartbeat (age)</th>
             <th>Agent version</th>
-            <th>Config version</th>
-            <th>Signature valid</th>
-            <th>Backend connected</th>
-            <th>Current state summary</th>
+            <th title="Config sequence currently active on this machine.">Config</th>
+            <th title="Signed means this agent's config + identity is cryptographically verifiable.">Trust</th>
+            <th title="Live status of machine connectivity to the control-plane.">Control-plane</th>
+            <th title="Compact state snapshot with confidence. Hover for contributors and source details.">State</th>
             <th>Last intervention</th>
             <th>Error rate / degradation tag</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          {filteredNodes.map((node) => (
-            <tr
-              key={node.nodeId}
-              className={`click-row ${selectedMachineId === node.nodeId ? 'machine-selected-row' : ''}`}
-              onClick={() => {
-                updateParam('machine', node.nodeId);
-              }}
-              title="Select machine for drilldown"
-            >
-              <td>{node.nodeId}</td>
-              <td>{node.cohortId}</td>
-              <td>
-                {formatUtc(node.lastHeartbeatUtc)}
-                <div className="muted-line">{formatAge(node.heartbeatAgeSec)} ago</div>
-              </td>
-              <td>{node.agentVersion}</td>
-              <td>
-                {node.configSeq}
-                {node.configDrift ? <span className="delta-chip warn">drift</span> : null}
-              </td>
-              <td>{node.signatureStatus === 'verified' ? 'yes' : node.signatureStatus === 'invalid' ? 'no' : 'unknown'}</td>
-              <td>{node.backendConnected ? 'yes' : 'no'}</td>
-              <td>
-                <div className="machine-state-summary">
-                  <span>F {formatStateValue(node.stateSummary.focus)}</span>
-                  <span>O {formatStateValue(node.stateSummary.overload)}</span>
-                  <span>Fa {formatStateValue(node.stateSummary.fatigue)}</span>
-                </div>
-              </td>
-              <td>
-                {node.lastIntervention}
-                <div className="muted-line">{formatRelativeFromNow(node.lastInterventionUtc ?? undefined)}</div>
-              </td>
-              <td>
-                <span className={`delta-chip ${node.degradationTag === 'critical' ? 'critical' : node.degradationTag === 'warning' ? 'warn' : 'ok'}`}>
-                  {formatErrorDegradation(node)}
-                </span>
-              </td>
-              <td>
-                <div className="cohort-row-actions machine-row-actions">
-                  <button
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      navigate(`/audit-traces?agent=${encodeURIComponent(node.nodeId)}`);
-                    }}
-                  >
-                    Open Traces
-                  </button>
-                </div>
-              </td>
-            </tr>
-          ))}
+          {filteredNodes.map((node) => {
+            const recentEvents = sortRecentEvents(node).slice(0, 10);
+            const peekOpen = openPeekNodeId === node.nodeId;
+            const whyOpen = openWhyNodeId === node.nodeId;
+
+            return (
+              <Fragment key={node.nodeId}>
+                <tr
+                  className={`click-row ${selectedMachineId === node.nodeId ? 'machine-selected-row' : ''}`}
+                  onClick={() => {
+                    updateParam('machine', node.nodeId);
+                  }}
+                  title="Select machine for drilldown"
+                >
+                  <td>{node.nodeId}</td>
+                  <td>{node.cohortId}</td>
+                  <td>
+                    {formatUtc(node.lastHeartbeatUtc)}
+                    <div className="muted-line">{formatAge(node.heartbeatAgeSec)} ago</div>
+                  </td>
+                  <td>{node.agentVersion}</td>
+                  <td>
+                    {node.configSeq} ({formatTrustLower(node.signatureStatus)})
+                    {node.configDrift ? <span className="delta-chip warn">drift</span> : null}
+                  </td>
+                  <td>
+                    <span className={`delta-chip ${node.signatureStatus === 'invalid' ? 'critical' : node.signatureStatus === 'verified' ? 'ok' : 'neutral'}`}>
+                      {formatTrustLabel(node.signatureStatus)}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`delta-chip ${node.backendConnected ? 'ok' : 'warn'}`}>
+                      {formatControlPlaneLabel(node.backendConnected)}
+                    </span>
+                  </td>
+                  <td>
+                    <span className="machine-state-chip" title={formatStateChipTooltip(node)}>
+                      {formatStateChip(node)}
+                    </span>
+                  </td>
+                  <td>
+                    {node.lastIntervention}
+                    <div className="muted-line">{formatRelativeFromNow(node.lastInterventionUtc ?? undefined)}</div>
+                  </td>
+                  <td>
+                    <span className={`delta-chip ${node.degradationTag === 'critical' ? 'critical' : node.degradationTag === 'warning' ? 'warn' : 'ok'}`}>
+                      {formatErrorDegradation(node)}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="cohort-row-actions machine-row-actions">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenPeekNodeId((current) => (current === node.nodeId ? '' : node.nodeId));
+                        }}
+                      >
+                        Peek
+                      </button>
+                      <button
+                        type="button"
+                        className="machine-inline-link"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenWhyNodeId((current) => (current === node.nodeId ? '' : node.nodeId));
+                        }}
+                      >
+                        Why is this machine here?
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          navigate(`/audit-traces?agent=${encodeURIComponent(node.nodeId)}`);
+                        }}
+                      >
+                        Open Traces
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                {(peekOpen || whyOpen) ? (
+                  <tr className="machine-detail-row">
+                    <td colSpan={11}>
+                      {peekOpen ? (
+                        <div className="machine-detail-card">
+                          <strong>Quick Peek</strong>
+                          <div className="machine-quick-peek-grid">
+                            <div><span>Last heartbeat</span><strong>{formatUtc(node.lastHeartbeatUtc)} ({formatAge(node.heartbeatAgeSec)} ago)</strong></div>
+                            <div><span>Last policy decision</span><strong>{formatLastPolicyDecision(node)}</strong></div>
+                            <div><span>Last intervention</span><strong>{node.lastIntervention} ({formatRelativeFromNow(node.lastInterventionUtc ?? undefined)})</strong></div>
+                            <div><span>Last error</span><strong>{formatLastErrorSignal(node)}</strong></div>
+                          </div>
+                          <div className="machine-quick-events">
+                            <strong>Last 10 events</strong>
+                            {recentEvents.length === 0 ? (
+                              <span className="muted-line">No recent events captured.</span>
+                            ) : (
+                              recentEvents.map((event) => (
+                                <span key={event.traceId}>
+                                  {formatUtc(event.timestampUtc)} | {event.decision} | {event.policyId} | conf {event.confidence.toFixed(2)}
+                                </span>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      ) : null}
+                      {whyOpen ? (
+                        <div className="machine-detail-card">
+                          <strong>Why this machine appears in list</strong>
+                          <p className="machine-why-text">{formatWhyHere(node)}</p>
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
           {filteredNodes.length === 0 ? (
             <tr>
-              <td colSpan={11} className="muted-line">No machines match the current filters.</td>
+              <td colSpan={11} className="muted-line">
+                {noCacheWhileDisconnected
+                  ? '0 machines shown: disconnected and no cached snapshot.'
+                  : 'No machines match the current filters.'}
+              </td>
             </tr>
           ) : null}
         </tbody>

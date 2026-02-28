@@ -236,10 +236,57 @@ const cohortGlossaryTerms: GlossaryTerm[] = [
   }
 ];
 
+const machinesGlossaryTerms: GlossaryTerm[] = [
+  {
+    term: 'Machine',
+    plainLabel: 'Machine',
+    meaning: 'One endpoint device running PORTA Agent with one persistent identity and heartbeat stream.',
+    whyItMatters: 'Machine identity is the source of truth for registration, health, trust, and drilldown.',
+    goodLooksLike: 'One real installed agent appears as one machine row with fresh heartbeat and valid trust.'
+  },
+  {
+    term: 'Node',
+    plainLabel: 'Node (runtime term)',
+    meaning: 'Backend/runtime naming for a registered machine record. In this UI, Node and Machine refer to the same tracked identity.',
+    whyItMatters: 'Using both words without clarification causes false assumptions about fleet size.',
+    goodLooksLike: 'Operators can treat Node IDs as Machine IDs unless a separate runtime node model is explicitly introduced.'
+  },
+  {
+    term: 'Cohort',
+    plainLabel: 'Cohort',
+    meaning: 'Grouping of machines used for rollout exposure and comparison (stable, canary, internal, experimental).',
+    whyItMatters: 'Cohorts control blast radius and make regression comparison actionable.',
+    goodLooksLike: 'Each machine has a clear cohort assignment and cohort deltas are interpretable against baseline.'
+  },
+  {
+    term: 'Data Mode',
+    plainLabel: 'Data Mode',
+    meaning: 'Origin of machine rows shown in table: Live (snapshot/stream from control-plane) or Demo (synthetic fixtures).',
+    whyItMatters: 'Mode determines whether operators are looking at production truth or test data.',
+    goodLooksLike: 'Live mode is default in real environments; Demo mode is explicit and visually obvious.'
+  },
+  {
+    term: 'Connection State',
+    plainLabel: 'Connection State',
+    meaning: 'Whether the machines snapshot source is currently reachable.',
+    whyItMatters: 'Disconnected state can make values stale and should block assumptions about current fleet reality.',
+    goodLooksLike: 'Connected with recent updates; if disconnected and no cache, table shows zero rows with a clear reason.'
+  },
+  {
+    term: 'Demo Seed Row',
+    plainLabel: 'Demo Seed Row',
+    meaning: 'Synthetic machine row generated for simulation/testing only.',
+    whyItMatters: 'Seed rows can inflate counts and create fake fleet narratives if mixed with live data silently.',
+    goodLooksLike: 'Hidden by default unless Demo Mode is explicitly enabled.'
+  }
+];
+
 export function getGlossaryTerms(pathname: string): GlossaryTerm[] {
   if (pathname === '/cohorts') {
     return cohortGlossaryTerms;
   }
+  if (pathname === '/machines') {
+    return machinesGlossaryTerms;
+  }
   return fleetGlossaryTerms;
 }
-
