@@ -11,6 +11,28 @@ type SortMode = 'worst_error_desc' | 'worst_p99_desc' | 'worst_degradation_desc'
 type TrendMetric = 'error' | 'p99' | 'degradation';
 type DeltaTone = 'critical' | 'warn' | 'ok' | 'neutral';
 type ConfidenceLevel = 'low' | 'medium' | 'high';
+type RegressionSeverity = 'critical' | 'warn' | 'neutral';
+type RegressionMetric = 'error_rate' | 'p99_latency' | 'degradation';
+
+interface RegressionTrigger {
+  metric: RegressionMetric;
+  label: string;
+  unit: '%' | 'ms';
+  delta: number;
+  threshold: number;
+  tone: DeltaTone;
+  score: number;
+}
+
+interface RegressionAssessment {
+  isRegressing: boolean;
+  triggers: RegressionTrigger[];
+  primary?: RegressionTrigger;
+  score: number;
+  severity: RegressionSeverity;
+  classification: string;
+  reason: string;
+}
 
 interface CohortComputedRow {
   row: CohortSummary;
@@ -27,7 +49,14 @@ interface CohortComputedRow {
   configLabel: string;
   mixedConfig: boolean;
   confidence: ConfidenceLevel;
+  regression: RegressionAssessment;
 }
+
+const REGRESSION_THRESHOLDS = {
+  deltaErrorPct: 0.1,
+  deltaP99Ms: 20,
+  deltaDegradationPct: 0.1
+} as const;
 
 const cohortColorMap: Record<string, string> = {
   stable: '#18706a',
@@ -151,6 +180,86 @@ function confidenceLabel(level: ConfidenceLevel): string {
   return 'Low confidence';
 }
 
+function formatThresholdValue(value: number, unit: '%' | 'ms'): string {
+  if (unit === 'ms') {
+    return `+${Math.round(value)}ms`;
+  }
+  return `+${value.toFixed(3)}%`;
+}
+
+function classifyRegression(metric: RegressionMetric, triggerCount: number): string {
+  if (triggerCount > 1) return 'Multi-signal regression';
+  if (metric === 'p99_latency') return 'Latency regression';
+  if (metric === 'error_rate') return 'Error-rate regression';
+  return 'Degradation regression';
+}
+
+function assessRegression(deltaError: number, deltaP99: number, deltaDegradation: number): RegressionAssessment {
+  const triggers: RegressionTrigger[] = [];
+  if (deltaError > REGRESSION_THRESHOLDS.deltaErrorPct) {
+    triggers.push({
+      metric: 'error_rate',
+      label: 'Delta Error Rate',
+      unit: '%',
+      delta: deltaError,
+      threshold: REGRESSION_THRESHOLDS.deltaErrorPct,
+      tone: deltaTonePercent(deltaError),
+      score: deltaError / REGRESSION_THRESHOLDS.deltaErrorPct
+    });
+  }
+  if (deltaP99 > REGRESSION_THRESHOLDS.deltaP99Ms) {
+    triggers.push({
+      metric: 'p99_latency',
+      label: 'Delta P99 Latency',
+      unit: 'ms',
+      delta: deltaP99,
+      threshold: REGRESSION_THRESHOLDS.deltaP99Ms,
+      tone: deltaToneMs(deltaP99),
+      score: deltaP99 / REGRESSION_THRESHOLDS.deltaP99Ms
+    });
+  }
+  if (deltaDegradation > REGRESSION_THRESHOLDS.deltaDegradationPct) {
+    triggers.push({
+      metric: 'degradation',
+      label: 'Delta Degradation',
+      unit: '%',
+      delta: deltaDegradation,
+      threshold: REGRESSION_THRESHOLDS.deltaDegradationPct,
+      tone: deltaTonePercent(deltaDegradation),
+      score: deltaDegradation / REGRESSION_THRESHOLDS.deltaDegradationPct
+    });
+  }
+
+  if (triggers.length === 0) {
+    return {
+      isRegressing: false,
+      triggers: [],
+      score: 0,
+      severity: 'neutral',
+      classification: 'No regression',
+      reason: 'No regression threshold exceeded.'
+    };
+  }
+
+  const ordered = [...triggers].sort((left, right) => right.score - left.score);
+  const primary = ordered[0]!;
+  const severity: RegressionSeverity = primary.score >= 2 ? 'critical' : 'warn';
+  const classification = classifyRegression(primary.metric, ordered.length);
+  const reason =
+    `Triggered by ${primary.label} ${primary.unit === 'ms' ? ms(primary.delta) : pct(primary.delta)} `
+    + `(threshold ${formatThresholdValue(primary.threshold, primary.unit)}).`;
+
+  return {
+    isRegressing: true,
+    triggers: ordered,
+    primary,
+    score: primary.score,
+    severity,
+    classification,
+    reason
+  };
+}
+
 export function CohortOverview() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -218,6 +327,11 @@ export function CohortOverview() {
       const behavioral = computeBehavioralMetrics(row);
       const baselineBehavioral = computeBehavioralMetrics(baseline);
       const config = formatConfigDistribution(row.configSeqDistribution, row.nodeCount);
+      const regression = assessRegression(
+        row.errorRatePct - baseline.errorRatePct,
+        row.latencyP99Ms - baseline.latencyP99Ms,
+        row.degradationRatePct - baseline.degradationRatePct
+      );
       return {
         row,
         deltaError: row.errorRatePct - baseline.errorRatePct,
@@ -232,7 +346,8 @@ export function CohortOverview() {
         configParts: config.parts,
         configLabel: config.label,
         mixedConfig: config.mixed,
-        confidence: computeConfidenceLevel(row.nodeCount)
+        confidence: computeConfidenceLevel(row.nodeCount),
+        regression
       };
     });
   }, [baseline, rows]);
@@ -258,7 +373,7 @@ export function CohortOverview() {
     const baselineName = baseline?.cohortId ?? 'stable';
     const significant = sortedRows.filter((item) =>
       item.row.cohortId !== baselineName
-      && (item.deltaError > 0.1 || item.deltaP99 > 20 || item.deltaDegradation > 0.1)
+      && item.regression.isRegressing
     );
 
     if (significant.length === 0) {
@@ -273,22 +388,26 @@ export function CohortOverview() {
     const primary = significant[0]!;
     const secondary = significant[1];
     const secondaryText = secondary
-      ? ` ${secondary.row.cohortId} also shows elevated error/latency.`
+      ? ` ${secondary.row.cohortId} also exceeded ${secondary.regression.primary?.label ?? 'regression'} threshold.`
       : '';
     return {
-      tone: 'warn' as const,
+      tone: primary.regression.severity === 'critical' ? ('critical' as const) : ('warn' as const),
       message:
-        `${primary.row.cohortId} is regressing vs ${baselineName} `
-        + `(${pct(primary.deltaError)} errors, ${ms(primary.deltaP99)} P99).${secondaryText}`,
+        `${primary.row.cohortId} is regressing vs ${baselineName}. `
+        + `${primary.regression.reason}${secondaryText}`,
       primary,
       secondary
     };
   }, [baseline, sortedRows]);
 
-  const topRegressions = useMemo(
-    () => sortedRows.filter((item) => item.row.cohortId !== baseline?.cohortId).slice(0, 2),
-    [baseline?.cohortId, sortedRows]
-  );
+  const topRegressions = useMemo(() => {
+    const cohortRows = sortedRows.filter((item) => item.row.cohortId !== baseline?.cohortId);
+    const regressingRows = cohortRows.filter((item) => item.regression.isRegressing);
+    const source = regressingRows.length > 0 ? regressingRows : cohortRows;
+    return source
+      .sort((left, right) => right.regression.score - left.regression.score)
+      .slice(0, 2);
+  }, [baseline?.cohortId, sortedRows]);
 
   const versionCorrelationHint = useMemo(() => {
     const primary = insightBanner.primary;
@@ -340,13 +459,15 @@ export function CohortOverview() {
   return (
     <Panel title="Cohort Comparison">
       <div className={`cohort-insight-banner ${insightBanner.tone}`}>
-        <strong>{insightBanner.tone === 'warn' ? 'Warning:' : 'OK:'}</strong> {insightBanner.message}
+        <strong>
+          {insightBanner.tone === 'critical' ? 'Critical:' : insightBanner.tone === 'warn' ? 'Warning:' : 'OK:'}
+        </strong> {insightBanner.message}
       </div>
 
       {insightBanner.primary ? (
-        <section className="cohort-regression-module">
+        <section className={`cohort-regression-module ${insightBanner.primary.regression.severity}`}>
           <div className="cohort-regression-main">
-            <h4>Regression Detected</h4>
+            <h4>{insightBanner.primary.regression.classification}</h4>
             <p className="cohort-regression-name">{insightBanner.primary.row.cohortId}</p>
             <div className="cohort-regression-metrics">
               <div>
@@ -370,10 +491,22 @@ export function CohortOverview() {
               <div>
                 <span className="muted-line">Confidence</span>
                 <strong className={`delta-chip ${insightBanner.primary.confidence === 'high' ? 'ok' : insightBanner.primary.confidence === 'medium' ? 'warn' : 'neutral'}`}>
-                  {confidenceLabel(insightBanner.primary.confidence)}
+                  {confidenceLabel(insightBanner.primary.confidence)} ({insightBanner.primary.row.nodeCount} machines)
                 </strong>
               </div>
+              {insightBanner.primary.regression.primary ? (
+                <div>
+                  <span className="muted-line">Trigger threshold</span>
+                  <strong className={`delta-chip ${insightBanner.primary.regression.primary.tone}`}>
+                    {formatThresholdValue(
+                      insightBanner.primary.regression.primary.threshold,
+                      insightBanner.primary.regression.primary.unit
+                    )}
+                  </strong>
+                </div>
+              ) : null}
             </div>
+            <p className="cohort-trigger-reason">{insightBanner.primary.regression.reason}</p>
             <p className="muted-line">
               Compared to: {baseline?.cohortId ?? 'stable'} ({window} window)
             </p>
@@ -391,12 +524,14 @@ export function CohortOverview() {
             >
               View Traces
             </button>
-            <button
-              type="button"
-              onClick={() => navigate(`/experiments?cohort=${encodeURIComponent(insightBanner.primary!.row.cohortId)}`)}
-            >
-              View Experiment
-            </button>
+            {insightBanner.primary.row.cohortId === 'experimental' ? (
+              <button
+                type="button"
+                onClick={() => navigate(`/experiments?cohort=${encodeURIComponent(insightBanner.primary!.row.cohortId)}`)}
+              >
+                View Experiment
+              </button>
+            ) : null}
           </div>
           {versionCorrelationHint ? (
             <p className="cohort-correlation-note">{versionCorrelationHint}</p>
@@ -477,9 +612,12 @@ export function CohortOverview() {
               <header>
                 <strong>{item.row.cohortId}</strong>
                 <span className={`delta-chip ${item.confidence === 'high' ? 'ok' : item.confidence === 'medium' ? 'warn' : 'neutral'}`}>
-                  {confidenceLabel(item.confidence)}
+                  {confidenceLabel(item.confidence)} ({item.row.nodeCount})
                 </span>
               </header>
+              <p>
+                {item.regression.classification}
+              </p>
               <p>
                 Error: {item.row.errorRatePct.toFixed(3)}% ({pct(item.deltaError)})
               </p>

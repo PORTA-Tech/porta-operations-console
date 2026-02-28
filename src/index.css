@@ -484,6 +484,11 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   background: color-mix(in oklab, white 90%, var(--warn));
 }
 
+.cohort-insight-banner.critical {
+  border-color: color-mix(in oklab, var(--critical) 60%, var(--line));
+  background: color-mix(in oklab, white 90%, var(--critical));
+}
+
 .cohort-regression-module {
   border: 1px solid color-mix(in oklab, var(--warn) 55%, var(--line));
   border-radius: 12px;
@@ -492,6 +497,16 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   margin-bottom: 12px;
   display: grid;
   gap: 10px;
+}
+
+.cohort-regression-module.critical {
+  border-color: color-mix(in oklab, var(--critical) 65%, var(--line));
+  background: color-mix(in oklab, white 90%, var(--critical));
+}
+
+.cohort-regression-module.neutral {
+  border-color: var(--line);
+  background: #fff;
 }
 
 .cohort-regression-main h4 {
@@ -523,6 +538,11 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+
+.cohort-trigger-reason {
+  margin: 0;
+  font-size: 0.92rem;
 }
 
 .cohort-correlation-note {
