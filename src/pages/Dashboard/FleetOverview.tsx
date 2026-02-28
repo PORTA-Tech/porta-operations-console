@@ -494,7 +494,7 @@ export function FleetOverview() {
       items.push({
         key: 'signature-invalid',
         severity: 'critical',
-        title: `Signature invalid on ${signatureInvalidMachinesCount} machines`,
+        title: `Config Trust invalid on ${signatureInvalidMachinesCount} machines`,
         detail: nodes.length > 0
           ? `${signatureInvalidMachinesCount}/${nodes.length} machines currently failing signature validation.`
           : `${signatureInvalidMachinesCount} machines currently failing signature validation.`,
