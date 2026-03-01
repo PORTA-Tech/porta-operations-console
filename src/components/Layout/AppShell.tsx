@@ -6,6 +6,14 @@ import { ViewContextBar } from './ViewContextBar';
 
 interface AppShellProps {
   children: ReactNode;
+  authUser?: {
+    user_id: string;
+    role: string;
+    display_name: string;
+    reauth_expires_at_utc?: string | null;
+  } | null;
+  onReauth?: () => void | Promise<void>;
+  onLogout?: () => void | Promise<void>;
 }
 
 const navItems = [
@@ -22,7 +30,7 @@ const navItems = [
   { to: '/system-health', label: 'System Health' }
 ];
 
-export function AppShell({ children }: AppShellProps) {
+export function AppShell({ children, authUser, onReauth, onLogout }: AppShellProps) {
   const location = useLocation();
   const [glossaryOpen, setGlossaryOpen] = useState(false);
   const glossaryTerms = getGlossaryTerms(location.pathname);
@@ -32,6 +40,13 @@ export function AppShell({ children }: AppShellProps) {
       <header className="topbar">
         <Link to="/" className="brand">PORTA Operations Console</Link>
         <span className="topbar-pill">Internal R&D Edition</span>
+        {authUser ? (
+          <div className="topbar-auth">
+            <span className="topbar-pill">{authUser.display_name} ({authUser.role})</span>
+            <button type="button" onClick={onReauth} disabled={!onReauth}>Re-auth</button>
+            <button type="button" onClick={onLogout} disabled={!onLogout}>Logout</button>
+          </div>
+        ) : null}
       </header>
       <div className="shell-main">
         <nav className="sidebar">

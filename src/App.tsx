@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/Layout/AppShell';
 import { FleetOverview } from './pages/Dashboard/FleetOverview';
@@ -21,6 +22,8 @@ import { ExperimentsPage } from './pages/Experiments/ExperimentsPage';
 import { PoliciesPage } from './pages/Policies/PoliciesPage';
 import { AuditTracesPage } from './pages/Audit/AuditTracesPage';
 import { SecurityAccessPage } from './pages/Security/SecurityAccessPage';
+import { useAuthSession } from './hooks/useAuthSession';
+import { LoginPage } from './pages/Auth/LoginPage';
 
 function DashboardPage() {
   return <FleetOverview />;
@@ -66,11 +69,31 @@ function ConfigPage() {
   return <ConfigIntegrityPage />;
 }
 
-export default function App() {
+function ProtectedConsoleApp(props: {
+  authUser: {
+    user_id: string;
+    role: string;
+    display_name: string;
+    reauth_expires_at_utc?: string | null;
+  };
+  onLogout: () => Promise<void>;
+  onReauth: (password: string) => Promise<boolean>;
+}) {
   const { loading, error } = useFleetState();
 
+  const handleReauth = async (): Promise<void> => {
+    const password = window.prompt('Enter your password to re-authenticate for sensitive actions.');
+    if (!password) return;
+    const ok = await props.onReauth(password);
+    if (!ok) {
+      window.alert('Re-authentication failed. Verify password and retry.');
+      return;
+    }
+    window.alert('Re-authentication refreshed.');
+  };
+
   return (
-    <AppShell>
+    <AppShell authUser={props.authUser} onReauth={handleReauth} onLogout={props.onLogout}>
       {loading ? <p>Connecting to control plane...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <Routes>
@@ -89,9 +112,61 @@ export default function App() {
         <Route path="/operations" element={<Navigate to="/audit-traces" replace />} />
         <Route path="/nodes" element={<Navigate to="/machines" replace />} />
         <Route path="/rollout" element={<Navigate to="/rollouts" replace />} />
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>
   );
 }
 
+export default function App() {
+  const auth = useAuthSession();
+  const [loginInFlight, setLoginInFlight] = useState(false);
 
+  if (!auth.ready) {
+    return (
+      <div className="login-page">
+        <section className="login-card">
+          <p className="login-brand">PORTA Operations Console</p>
+          <p className="login-subtitle">Restoring session...</p>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <Routes>
+      <Route
+        path="/login"
+        element={
+          auth.authenticated ? (
+            <Navigate to="/" replace />
+          ) : (
+            <LoginPage
+              loading={loginInFlight}
+              error={auth.error}
+              onSubmit={async (userId, password) => {
+                setLoginInFlight(true);
+                try {
+                  await auth.login(userId, password);
+                } finally {
+                  setLoginInFlight(false);
+                }
+              }}
+            />
+          )
+        }
+      />
+      <Route
+        path="*"
+        element={
+          auth.authenticated && auth.user ? (
+            <ProtectedConsoleApp authUser={auth.user} onLogout={auth.logout} onReauth={auth.reauth} />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+    </Routes>
+  );
+}

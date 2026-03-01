@@ -1,12 +1,92 @@
 export const authClient = {
   getOperatorAuth(): { operatorId: string; operatorRole: 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer' } {
-    const operatorId = localStorage.getItem('porta.operatorId') ?? 'console-operator';
-    const operatorRole = (localStorage.getItem('porta.operatorRole') as 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer' | null) ?? 'admin';
-    return { operatorId, operatorRole };
+    const sessionRaw = localStorage.getItem('porta.auth.session');
+    if (sessionRaw) {
+      try {
+        const parsed = JSON.parse(sessionRaw) as {
+          user_id?: string;
+          role?: 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer';
+        };
+        if (parsed.user_id && parsed.role) {
+          return { operatorId: parsed.user_id, operatorRole: parsed.role };
+        }
+      } catch {
+        // ignore malformed session cache
+      }
+    }
+    return { operatorId: 'anonymous', operatorRole: 'viewer' };
   },
 
   setOperatorAuth(operatorId: string, operatorRole: 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer'): void {
-    localStorage.setItem('porta.operatorId', operatorId);
-    localStorage.setItem('porta.operatorRole', operatorRole);
+    localStorage.setItem(
+      'porta.auth.session',
+      JSON.stringify({
+        user_id: operatorId,
+        role: operatorRole,
+        display_name: operatorId,
+        session_expires_at_utc: null,
+        reauth_expires_at_utc: null
+      })
+    );
+  },
+
+  getAccessToken(): string | null {
+    return localStorage.getItem('porta.auth.token');
+  },
+
+  setSession(input: {
+    accessToken: string;
+    user_id: string;
+    role: 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer';
+    display_name: string;
+    session_expires_at_utc: string;
+    reauth_expires_at_utc: string;
+  }): void {
+    localStorage.setItem('porta.auth.token', input.accessToken);
+    localStorage.setItem(
+      'porta.auth.session',
+      JSON.stringify({
+        user_id: input.user_id,
+        role: input.role,
+        display_name: input.display_name,
+        session_expires_at_utc: input.session_expires_at_utc,
+        reauth_expires_at_utc: input.reauth_expires_at_utc
+      })
+    );
+  },
+
+  getSession(): {
+    user_id: string;
+    role: 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer';
+    display_name: string;
+    session_expires_at_utc: string | null;
+    reauth_expires_at_utc: string | null;
+  } | null {
+    const raw = localStorage.getItem('porta.auth.session');
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw) as {
+        user_id?: string;
+        role?: 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer';
+        display_name?: string;
+        session_expires_at_utc?: string | null;
+        reauth_expires_at_utc?: string | null;
+      };
+      if (!parsed.user_id || !parsed.role) return null;
+      return {
+        user_id: parsed.user_id,
+        role: parsed.role,
+        display_name: parsed.display_name ?? parsed.user_id,
+        session_expires_at_utc: parsed.session_expires_at_utc ?? null,
+        reauth_expires_at_utc: parsed.reauth_expires_at_utc ?? null
+      };
+    } catch {
+      return null;
+    }
+  },
+
+  clearSession(): void {
+    localStorage.removeItem('porta.auth.token');
+    localStorage.removeItem('porta.auth.session');
   }
 };

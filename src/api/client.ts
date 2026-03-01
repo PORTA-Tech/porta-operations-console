@@ -137,10 +137,14 @@ export type RawApiRequest = {
 
 export async function apiRequestRaw<T>(input: RawApiRequest): Promise<T> {
   const auth = authClient.getOperatorAuth();
+  const token = authClient.getAccessToken();
   const headers = new Headers();
   headers.set('Content-Type', 'application/json');
   headers.set('x-operator-id', auth.operatorId);
   headers.set('x-operator-role', auth.operatorRole);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
 
   const response = await fetch(`${resolveApiBaseUrl()}${input.path}`, {
     method: input.method.toUpperCase(),
@@ -154,6 +158,9 @@ export async function apiRequestRaw<T>(input: RawApiRequest): Promise<T> {
   const payload: unknown = text.length > 0 ? JSON.parse(text) : undefined;
 
   if (!response.ok) {
+    if (response.status === 401 && input.path !== '/auth/login') {
+      authClient.clearSession();
+    }
     throw normalizeApiError(response.status, payload, correlationId);
   }
 
@@ -164,10 +171,14 @@ export async function apiRequest<P extends PathKey, M extends ExistingMethod<P>>
   input: ApiRequestInput<P, M>
 ): Promise<ApiResponse<P, M>> {
   const auth = authClient.getOperatorAuth();
+  const token = authClient.getAccessToken();
   const headers = new Headers();
   headers.set('Content-Type', 'application/json');
   headers.set('x-operator-id', auth.operatorId);
   headers.set('x-operator-role', auth.operatorRole);
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
 
   const response = await fetch(`${resolveApiBaseUrl()}${String(input.path)}`, {
     method: input.method.toUpperCase(),
@@ -181,6 +192,9 @@ export async function apiRequest<P extends PathKey, M extends ExistingMethod<P>>
   const payload: unknown = text.length > 0 ? JSON.parse(text) : undefined;
 
   if (!response.ok) {
+    if (response.status === 401 && String(input.path) !== '/auth/login') {
+      authClient.clearSession();
+    }
     throw normalizeApiError(response.status, payload, correlationId);
   }
 
