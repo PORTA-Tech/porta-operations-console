@@ -231,6 +231,24 @@ function selectionFromStreamPoint(
   };
 }
 
+function telemetryStatusMessage(input: {
+  simulatedMachine: boolean;
+  sourceKind: NodeDetail['sourceKind'];
+  rawSamples: number;
+  wsStatus: string;
+}): string | null {
+  if (input.simulatedMachine) {
+    return 'This machine is synthetic (demo fixture). No real telemetry or policy decisions are available.';
+  }
+  if (input.sourceKind === 'recent_issue') {
+    return 'This machine row comes from recent issue history and may not have current snapshot telemetry.';
+  }
+  if (input.rawSamples === 0 && input.wsStatus !== 'Connected') {
+    return `Realtime channel is ${input.wsStatus.toLowerCase()}. Timeline controls will activate when samples arrive.`;
+  }
+  return null;
+}
+
 export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
   const [params] = useSearchParams();
   const [activeTab, setActiveTab] = useState<MachineTab>('summary');
@@ -593,6 +611,14 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
   }, [timelineInterventions, timelineStreamPoints, timelineWindow]);
 
   const explainSelection = selectedTimelinePoint;
+  const scrubDisabled = filteredRawEvents.length === 0;
+  const scrubReason = scrubDisabled ? 'No timeline samples available yet.' : null;
+  const telemetryBanner = telemetryStatusMessage({
+    simulatedMachine,
+    sourceKind: selectedNode?.sourceKind ?? 'recent_issue',
+    rawSamples: filteredRawEvents.length,
+    wsStatus: wsStatus.statusLabel
+  });
 
   const handleTimelinePointClick = (event: PlotMouseEvent) => {
     const hit = event.points?.[0];
@@ -725,7 +751,12 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
         <div className="machine-debug-actions">
           <button type="button" onClick={() => void handleCopyDiagnostic()}>Copy diagnostic snapshot</button>
           <button type="button" onClick={handleExportTracePack}>Export trace pack</button>
-          <button type="button" onClick={() => setShowRawStream((current) => !current)}>
+          <button
+            type="button"
+            onClick={() => setShowRawStream((current) => !current)}
+            disabled={filteredRawEvents.length === 0 && !showRawStream}
+            title={filteredRawEvents.length === 0 ? 'No raw stream samples available.' : 'Open raw stream samples'}
+          >
             {showRawStream ? 'Hide raw event stream' : 'Open raw event stream'}
           </button>
           <button type="button" onClick={handleSimulateIntervention}>Simulate intervention (test mode)</button>
@@ -738,10 +769,12 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
       <p className="muted-line">
         Data source: {simulatedMachine ? 'Simulated fixtures' : `Live machine (${selectedNode.stateSummary.source})`} | Last heartbeat: {formatUtc(selectedNode.lastHeartbeatUtc)} ({formatRelativeFromNow(selectedNode.lastHeartbeatUtc)})
       </p>
+      {telemetryBanner ? <p className="focus-banner">{telemetryBanner}</p> : null}
 
       {activeTab === 'summary' ? (
         <div className="machine-tab-grid">
           <ul className="kv-list">
+            <li><span>Record source</span><strong>{selectedNode.sourceKind === 'snapshot' ? 'active snapshot' : 'recent issue history'}</strong></li>
             <li><span>Machine health</span><strong>{selectedNode.offline ? 'Offline' : 'Online'}</strong></li>
             <li><span>Heartbeat age</span><strong>{selectedNode.heartbeatAgeSec}s</strong></li>
             <li><span>Cohort</span><strong>{selectedNode.cohortId}</strong></li>
@@ -817,10 +850,12 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
                 max={Math.max(0, filteredRawEvents.length - 1)}
                 value={Math.min(scrubIndex, Math.max(0, filteredRawEvents.length - 1))}
                 onChange={(event) => setScrubIndex(Number(event.target.value))}
-                disabled={filteredRawEvents.length === 0}
+                disabled={scrubDisabled}
+                title={scrubReason ?? 'Scrub timeline sample'}
               />
             </label>
           </div>
+          {scrubReason ? <p className="muted-line">{scrubReason}</p> : null}
           <p className="muted-line">
             Raw stream samples: {filteredRawEvents.length} | Decision events: {timelineRows.length} | Intervention windows: {timelineInterventions.length}
           </p>
@@ -835,7 +870,7 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
               />
             </div>
             <div className="timeline-side">
-              <h4>Click → explain</h4>
+              <h4>Click to explain</h4>
               {explainSelection ? (
                 <>
                   <ul className="kv-list">
@@ -952,3 +987,4 @@ export function NodeDetails({ nodes, loading, error }: NodeDetailsProps) {
     </Panel>
   );
 }
+
