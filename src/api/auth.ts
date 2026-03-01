@@ -9,6 +9,21 @@ export interface AuthSessionUser {
   reauth_expires_at_utc: string;
 }
 
+export interface AuthAccessHelp {
+  signup_enabled: boolean;
+  admin_signup_enabled: boolean;
+  users: Array<{
+    user_id: string;
+    role: AuthSessionUser['role'];
+    display_name: string;
+  }>;
+  default_credentials: Array<{
+    user_id: string;
+    role: AuthSessionUser['role'];
+    password: string;
+  }>;
+}
+
 interface LoginResponse {
   access_token: string;
   token_type: 'Bearer';
@@ -109,4 +124,28 @@ export async function reauthAuth(password: string): Promise<{ reauth_expires_at_
   return {
     reauth_expires_at_utc: response.reauth_expires_at_utc
   };
+}
+
+export async function getAuthAccessHelp(): Promise<AuthAccessHelp | null> {
+  try {
+    return await apiRequestRaw<AuthAccessHelp>({
+      path: '/auth/access-help',
+      method: 'get'
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function registerAuthUser(input: {
+  user_id: string;
+  display_name: string;
+  role: AuthSessionUser['role'];
+  password: string;
+}): Promise<{ ok: boolean; user: { user_id: string; role: AuthSessionUser['role']; display_name: string } }> {
+  return apiRequestRaw<{ ok: boolean; user: { user_id: string; role: AuthSessionUser['role']; display_name: string } }>({
+    path: '/auth/register',
+    method: 'post',
+    body: input
+  });
 }

@@ -102,6 +102,43 @@ a { color: inherit; text-decoration: none; }
   color: var(--ink);
 }
 
+.login-access-panel {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.login-access-panel h4 {
+  margin: 0;
+}
+
+.login-credential-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.login-register-form {
+  display: grid;
+  gap: 8px;
+}
+
+.login-register-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.login-register-form input,
+.login-register-form select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
+  color: var(--ink);
+}
+
 .shell-main {
   display: grid;
   grid-template-columns: 220px 1fr;
