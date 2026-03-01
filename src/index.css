@@ -1648,6 +1648,18 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   margin: 4px 0;
 }
 
+.policy-row-details-cell {
+  background: color-mix(in oklab, white 96%, var(--accent-2));
+  padding: 0;
+}
+
+.policy-row-details {
+  padding: 10px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+}
+
 .policy-replay-panel {
   margin-top: 12px;
   border-top: 1px solid var(--line);

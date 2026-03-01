@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Panel } from '../../components/Layout/Panel';
 import { useConsoleOperations } from '../../hooks/useConsoleOperations';
@@ -104,8 +104,12 @@ function reasonLabel(code: string): string {
   if (code === 'NO_TELEMETRY') return 'No telemetry';
   if (code === 'INSUFFICIENT_SAMPLE') return 'Insufficient sample';
   if (code === 'INSUFFICIENT_COVERAGE') return 'Coverage too low';
-  if (code === 'STALE') return 'Stale';
+  if (code === 'STALE_DATA') return 'Stale data';
   if (code === 'SIGNATURE_UNKNOWN') return 'Signature unknown';
+  if (code === 'SIGNATURE_INVALID') return 'Signature invalid';
+  if (code === 'NOT_DEPLOYED') return 'Not deployed';
+  if (code === 'NO_DEPLOYMENT_INFO') return 'No deployment info';
+  if (code === 'FILTER_CONFLICT') return 'Filter conflict';
   return code;
 }
 
@@ -153,6 +157,10 @@ function resolveCohort(row: AuditDecisionRecord, agentToCohort: Map<string, stri
   return row.cohort_id ?? agentToCohort.get(row.agent_id) ?? null;
 }
 
+function hasCoverageBelowMin(telemetry: PolicyTelemetry): boolean {
+  return telemetry.coveragePct !== null && telemetry.coveragePct < POLICY_MIN_COVERAGE_PCT;
+}
+
 function computeTelemetry(
   policies: PolicyRecord[],
   audits: AuditDecisionRecord[],
@@ -189,13 +197,12 @@ function computeTelemetry(
 
     const eligibleMachinesCount = nodes.length > 0 ? nodes.length : null;
     const reportingAgentSet = new Set<string>(recentRows.map((row) => row.agent_id));
-    const reportingMachinesCount = eligibleMachinesCount === null || recentRows.length === 0
+    const reportingMachinesCount = eligibleMachinesCount === null
       ? null
       : reportingAgentSet.size;
-    const coveragePct = eligibleMachinesCount && reportingMachinesCount !== null && reportingMachinesCount > 0
+    const coveragePct = eligibleMachinesCount !== null && eligibleMachinesCount > 0 && reportingMachinesCount !== null
       ? round((reportingMachinesCount / eligibleMachinesCount) * 100, 2)
       : null;
-    const decisionRatePerMin = recentRows.length > 0 ? round(recentRows.length / POLICY_ACTIVITY_WINDOW_MINUTES, 2) : null;
 
     const cohorts = new Set<string>();
     for (const row of rows) {
@@ -214,7 +221,11 @@ function computeTelemetry(
       const outcome = outcomeFromAction(row.action_decision);
       counts[outcome] += 1;
     }
-    const avgConfidence = recentRows.length > 0
+    const sampleValid = reportingMachinesCount !== null && reportingMachinesCount >= POLICY_MIN_SAMPLE_MACHINES;
+    const decisionRatePerMin = sampleValid && recentRows.length > 0
+      ? round(recentRows.length / POLICY_ACTIVITY_WINDOW_MINUTES, 2)
+      : null;
+    const avgConfidence = sampleValid && recentRows.length > 0
       ? round(recentRows.reduce((sum, row) => sum + row.confidence_score, 0) / recentRows.length, 3)
       : null;
 
@@ -233,7 +244,7 @@ function computeTelemetry(
     if (eligibleMachinesCount === null) {
       dataQualityReasons.push('NO_TELEMETRY');
     } else {
-      if (eligibleMachinesCount < POLICY_MIN_SAMPLE_MACHINES) {
+      if (reportingMachinesCount !== null && reportingMachinesCount < POLICY_MIN_SAMPLE_MACHINES) {
         dataQualityReasons.push('INSUFFICIENT_SAMPLE');
       }
       if (recentRows.length === 0) {
@@ -244,15 +255,25 @@ function computeTelemetry(
       }
     }
     if (freshnessSeconds !== null && freshnessSeconds > 120) {
-      dataQualityReasons.push('STALE');
+      dataQualityReasons.push('STALE_DATA');
     }
-    if (signatureStatusFromRows(rows) === 'UNKNOWN') {
+    const signatureStatus = signatureStatusFromRows(rows);
+    if (signatureStatus === 'UNKNOWN') {
       dataQualityReasons.push('SIGNATURE_UNKNOWN');
+    }
+    if (signatureStatus === 'INVALID') {
+      dataQualityReasons.push('SIGNATURE_INVALID');
+    }
+    if (!policy.active_flag) {
+      dataQualityReasons.push('NOT_DEPLOYED');
+    }
+    if (deployedCohorts === null) {
+      dataQualityReasons.push('NO_DEPLOYMENT_INFO');
     }
 
     map.set(policy.policy_id, {
       policyId: policy.policy_id,
-      signatureStatus: signatureStatusFromRows(rows),
+      signatureStatus,
       deployedCohorts,
       decisionRatePerMin,
       lastDecisionTs: latestTs,
@@ -307,8 +328,8 @@ function cohortCompareTelemetry(
 
   const eligibleMachinesCount = nodes.filter((node) => node.cohort === cohort).length;
   const reportingSet = new Set<string>(recentRows.map((row) => row.agent_id));
-  const reportingMachinesCount = recentRows.length > 0 ? reportingSet.size : null;
-  const coveragePct = reportingMachinesCount !== null && eligibleMachinesCount > 0 && reportingMachinesCount > 0
+  const reportingMachinesCount = reportingSet.size;
+  const coveragePct = eligibleMachinesCount > 0
     ? round((reportingMachinesCount / eligibleMachinesCount) * 100, 2)
     : null;
   const latestTs = rows
@@ -329,16 +350,19 @@ function cohortCompareTelemetry(
   }
 
   const reasons: string[] = [];
-  if (eligibleMachinesCount < POLICY_MIN_SAMPLE_MACHINES) reasons.push('INSUFFICIENT_SAMPLE');
+  if (reportingMachinesCount < POLICY_MIN_SAMPLE_MACHINES) reasons.push('INSUFFICIENT_SAMPLE');
   if (recentRows.length === 0) reasons.push('NO_TELEMETRY');
   if (coveragePct !== null && coveragePct < POLICY_MIN_COVERAGE_PCT) reasons.push('INSUFFICIENT_COVERAGE');
-  if (freshnessSeconds !== null && freshnessSeconds > 120) reasons.push('STALE');
+  if (freshnessSeconds !== null && freshnessSeconds > 120) reasons.push('STALE_DATA');
+  if (signatureStatusFromRows(rows) === 'INVALID') reasons.push('SIGNATURE_INVALID');
+  if (signatureStatusFromRows(rows) === 'UNKNOWN') reasons.push('SIGNATURE_UNKNOWN');
 
+  const sampleValid = reportingMachinesCount >= POLICY_MIN_SAMPLE_MACHINES;
   return {
     policyId: cohort,
     signatureStatus: signatureStatusFromRows(rows),
     deployedCohorts: [cohort],
-    decisionRatePerMin: recentRows.length > 0 ? round(recentRows.length / POLICY_ACTIVITY_WINDOW_MINUTES, 2) : null,
+    decisionRatePerMin: sampleValid && recentRows.length > 0 ? round(recentRows.length / POLICY_ACTIVITY_WINDOW_MINUTES, 2) : null,
     lastDecisionTs: latestTs,
     eligibleMachinesCount,
     reportingMachinesCount,
@@ -346,7 +370,7 @@ function cohortCompareTelemetry(
     freshnessSeconds,
     dataQualityVerdict: reasons.length === 0 ? 'OK' : 'INCONCLUSIVE',
     dataQualityReasons: reasons,
-    avgConfidence: recentRows.length > 0 ? round(recentRows.reduce((sum, row) => sum + row.confidence_score, 0) / recentRows.length, 3) : null,
+    avgConfidence: sampleValid && recentRows.length > 0 ? round(recentRows.reduce((sum, row) => sum + row.confidence_score, 0) / recentRows.length, 3) : null,
     decisionCounts: counts,
     topCohorts: [{ cohort, count: recentRows.length }]
   };
@@ -467,52 +491,86 @@ export function PoliciesPage() {
   const activePolicies = policies.filter((policy) => policy.active_flag);
   const lowCoverageActivePolicies = activePolicies.filter((policy) => {
     const telemetry = telemetryByPolicy.get(policy.policy_id);
-    return telemetry?.dataQualityReasons.includes('INSUFFICIENT_COVERAGE');
+    return telemetry ? hasCoverageBelowMin(telemetry) : false;
   }).length;
   const signatureFailures = activePolicies.filter((policy) => telemetryByPolicy.get(policy.policy_id)?.signatureStatus === 'INVALID').length;
 
   const selectedPolicy = policies.find((policy) => policy.policy_id === selectedPolicyId) ?? null;
-  const selectedPolicyTelemetry = selectedPolicy ? telemetryByPolicy.get(selectedPolicy.policy_id) : undefined;
 
-  const policyDecisionRows = useMemo((): DecisionTelemetryRow[] => {
-    const mapped = audits.map((row) => ({
-      row,
-      outcome: outcomeFromAction(row.action_decision),
-      cohort: resolveCohort(row, agentToCohort),
-      machine: row.machine_id ?? row.agent_id,
-      reasonCode: toDecisionReason(row)
-    }));
-    return mapped.filter((entry) => {
-      if (policyFilter !== 'all' && entry.row.policy_id !== policyFilter) return false;
-      if (decisionFilter !== 'all' && entry.outcome !== decisionFilter) return false;
-      if (entry.row.confidence_score < confidenceMin) return false;
-      const decisionMs = parseIsoMs(entry.row.timestamp);
-      if (decisionMs === null || Date.now() - decisionMs > TIME_RANGE_MS[timeRange]) return false;
-      if (cohortFilter !== 'all' && entry.cohort !== cohortFilter) return false;
-      if (machineFilter.trim() && !entry.machine.toLowerCase().includes(machineFilter.trim().toLowerCase())) return false;
-      if (reasonCodeFilter.trim() && !entry.reasonCode.toLowerCase().includes(reasonCodeFilter.trim().toLowerCase())) return false;
-      if (onlyWithReplayEvidence && !(entry.row.trace_id && entry.row.trace_id.length > 0)) return false;
-      return true;
-    });
-  }, [audits, agentToCohort, policyFilter, decisionFilter, confidenceMin, timeRange, cohortFilter, machineFilter, reasonCodeFilter, onlyWithReplayEvidence]);
-
-  const decisionSampleSize = useMemo(
-    () => new Set(policyDecisionRows.map((entry) => entry.machine)).size,
-    [policyDecisionRows]
+  const mappedDecisionRows = useMemo(
+    (): DecisionTelemetryRow[] =>
+      audits.map((row) => ({
+        row,
+        outcome: outcomeFromAction(row.action_decision),
+        cohort: resolveCohort(row, agentToCohort),
+        machine: row.machine_id ?? row.agent_id,
+        reasonCode: toDecisionReason(row)
+      })),
+    [audits, agentToCohort]
   );
-  const decisionLatestTimestamp = policyDecisionRows
+
+  const decisionRowsInWindow = useMemo(
+    () =>
+      mappedDecisionRows.filter((entry) => {
+        const decisionMs = parseIsoMs(entry.row.timestamp);
+        return decisionMs !== null && Date.now() - decisionMs <= TIME_RANGE_MS[timeRange];
+      }),
+    [mappedDecisionRows, timeRange]
+  );
+
+  const decisionRowsBase = useMemo(
+    () =>
+      decisionRowsInWindow.filter((entry) => {
+        if (policyFilter !== 'all' && entry.row.policy_id !== policyFilter) return false;
+        if (decisionFilter !== 'all' && entry.outcome !== decisionFilter) return false;
+        if (cohortFilter !== 'all' && entry.cohort !== cohortFilter) return false;
+        if (machineFilter.trim() && !entry.machine.toLowerCase().includes(machineFilter.trim().toLowerCase())) return false;
+        if (reasonCodeFilter.trim() && !entry.reasonCode.toLowerCase().includes(reasonCodeFilter.trim().toLowerCase())) return false;
+        return true;
+      }),
+    [decisionRowsInWindow, policyFilter, decisionFilter, cohortFilter, machineFilter, reasonCodeFilter]
+  );
+
+  const policyDecisionRows = useMemo(
+    () =>
+      decisionRowsBase.filter((entry) => {
+        if (entry.row.confidence_score < confidenceMin) return false;
+        if (onlyWithReplayEvidence && !(entry.row.trace_id && entry.row.trace_id.length > 0)) return false;
+        return true;
+      }),
+    [decisionRowsBase, confidenceMin, onlyWithReplayEvidence]
+  );
+
+  const telemetryUnavailable = audits.length === 0;
+  const noRowsInTimeRange = !telemetryUnavailable && decisionRowsInWindow.length === 0;
+  const decisionBaseSampleSize = useMemo(
+    () => new Set(decisionRowsBase.map((entry) => entry.machine)).size,
+    [decisionRowsBase]
+  );
+  const filtersLimited = !telemetryUnavailable && decisionBaseSampleSize === 0;
+  const disableFiltersExceptTime = telemetryUnavailable;
+  const disableConfidence = telemetryUnavailable || decisionBaseSampleSize === 0;
+  const disableReplayOnly = telemetryUnavailable || decisionBaseSampleSize === 0;
+
+  useEffect(() => {
+    if (disableReplayOnly && onlyWithReplayEvidence) {
+      setOnlyWithReplayEvidence(false);
+    }
+  }, [disableReplayOnly, onlyWithReplayEvidence]);
+
+  const decisionLatestTimestamp = decisionRowsBase
     .map((entry) => entry.row.timestamp)
     .sort((left, right) => (parseIsoMs(right) ?? 0) - (parseIsoMs(left) ?? 0))[0];
   const decisionFreshnessSeconds = decisionLatestTimestamp
     ? Math.max(0, Math.floor((Date.now() - (parseIsoMs(decisionLatestTimestamp) ?? Date.now())) / 1000))
     : null;
   const decisionCoveragePct = (() => {
-    if (nodes.length === 0 || decisionSampleSize === 0) return null;
+    if (nodes.length === 0) return null;
     const eligible = policyFilter === 'all'
       ? nodes.length
       : (telemetryByPolicy.get(policyFilter)?.eligibleMachinesCount ?? nodes.length);
     if (!eligible || eligible <= 0) return null;
-    return round((decisionSampleSize / eligible) * 100, 2);
+    return round((decisionBaseSampleSize / eligible) * 100, 2);
   })();
 
   const policyOptions = policies.map((policy) => ({ id: policy.policy_id, label: `${policy.name} (${policy.version})` }));
@@ -657,150 +715,158 @@ export function PoliciesPage() {
             </p>
           </div>
 
-          <div className="ops-grid">
-            <div>
-              <table className="simple-table">
-                <thead>
-                  <tr>
-                    <th>Policy ID</th>
-                    <th>Name</th>
-                    <th>Version</th>
-                    <th>Status</th>
-                    <th>Signature</th>
-                    <th>Deployed to</th>
-                    <th>Decision rate</th>
-                    <th>Last decision</th>
-                    <th>Coverage</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {policies.map((policy) => {
-                    const telemetry = telemetryByPolicy.get(policy.policy_id);
-                    const reasons = telemetry?.dataQualityReasons ?? [];
-                    const deployed = telemetry?.deployedCohorts?.join(', ') ?? 'n/a';
-                    const coverage = telemetry?.coveragePct ?? null;
-                    const decisionRate = telemetry?.decisionRatePerMin ?? null;
-                    const lastDecision = telemetry?.lastDecisionTs ?? null;
-                    return (
-                      <tr
-                        key={policy.policy_id}
-                        className={policy.policy_id === selectedPolicyId ? 'machine-selected-row click-row' : 'click-row'}
-                        onClick={() => setSelectedPolicyId(policy.policy_id)}
-                      >
-                        <td>{policy.policy_id}</td>
-                        <td>{policy.name}</td>
-                        <td>{policy.version}</td>
-                        <td><span className={policyStatusTone(policy)}>{policy.active_flag ? 'Active' : 'Inactive'}</span></td>
-                        <td>
-                          <span className={signatureTone(telemetry?.signatureStatus ?? 'UNKNOWN')}>
-                            {telemetry?.signatureStatus ?? 'UNKNOWN'}
-                          </span>
-                        </td>
-                        <td title={deployed === 'n/a' ? primaryReason(reasons) : undefined}>{deployed}</td>
-                        <td title={decisionRate === null ? primaryReason(reasons) : undefined}>{formatRate(decisionRate)}</td>
-                        <td title={lastDecision === null ? primaryReason(reasons) : undefined}>{formatUtc(lastDecision ?? undefined)}</td>
-                        <td title={coverage === null ? primaryReason(reasons) : undefined}>{formatCoverage(coverage)}</td>
-                        <td>
-                          <div className="button-row">
-                            <button type="button" onClick={() => setSelectedPolicyId(policy.policy_id)}>View</button>
-                            <button type="button" onClick={() => handleDiffVersions(policy)}>Diff versions</button>
-                            <button
-                              type="button"
-                              onClick={() => void handleDeploy(policy)}
-                              disabled={!canDeploy || actionLoading}
-                              title={!canDeploy ? 'Requires operator/admin' : undefined}
-                            >
-                              Deploy
-                            </button>
-                            <button
-                              type="button"
-                              className="danger"
-                              onClick={() => void handleDisable(policy)}
-                              disabled={!canDisable || actionLoading || !policy.active_flag}
-                              title={!canDisable ? 'Requires admin' : undefined}
-                            >
-                              Disable
-                            </button>
+          <table className="simple-table">
+            <thead>
+              <tr>
+                <th>Policy ID</th>
+                <th>Name</th>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Signature</th>
+                <th>Deployed to</th>
+                <th>Decision rate</th>
+                <th>Last decision</th>
+                <th>Coverage</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {policies.map((policy) => {
+                const telemetry = telemetryByPolicy.get(policy.policy_id);
+                const reasons = telemetry?.dataQualityReasons ?? ['NO_TELEMETRY'];
+                const deployed = telemetry?.deployedCohorts?.join(', ') ?? 'n/a';
+                const coverage = telemetry?.coveragePct ?? null;
+                const decisionRate = telemetry?.decisionRatePerMin ?? null;
+                const lastDecision = telemetry?.lastDecisionTs ?? null;
+                const expanded = selectedPolicyId === policy.policy_id;
+                const reportingMachines = telemetry?.reportingMachinesCount ?? null;
+                const sampleValid = reportingMachines !== null
+                  && reportingMachines >= POLICY_MIN_SAMPLE_MACHINES;
+
+                return (
+                  <Fragment key={policy.policy_id}>
+                    <tr
+                      className={expanded ? 'machine-selected-row click-row' : 'click-row'}
+                      onClick={() => setSelectedPolicyId((current) => (current === policy.policy_id ? undefined : policy.policy_id))}
+                    >
+                      <td>{policy.policy_id}</td>
+                      <td>{policy.name}</td>
+                      <td>{policy.version}</td>
+                      <td><span className={policyStatusTone(policy)}>{policy.active_flag ? 'Active' : 'Inactive'}</span></td>
+                      <td>
+                        <span className={signatureTone(telemetry?.signatureStatus ?? 'UNKNOWN')}>
+                          {telemetry?.signatureStatus ?? 'UNKNOWN'}
+                        </span>
+                      </td>
+                      <td title={deployed === 'n/a' ? primaryReason(reasons) : undefined}>{deployed}</td>
+                      <td title={decisionRate === null ? primaryReason(reasons) : undefined}>{formatRate(decisionRate)}</td>
+                      <td title={lastDecision === null ? primaryReason(reasons) : undefined}>{formatUtc(lastDecision ?? undefined)}</td>
+                      <td title={coverage === null ? primaryReason(reasons) : undefined}>{formatCoverage(coverage)}</td>
+                      <td>
+                        <div className="button-row">
+                          <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedPolicyId(policy.policy_id); }}>View</button>
+                          <button type="button" onClick={(event) => { event.stopPropagation(); handleDiffVersions(policy); }}>Diff versions</button>
+                          <button
+                            type="button"
+                            onClick={(event) => { event.stopPropagation(); void handleDeploy(policy); }}
+                            disabled={!canDeploy || actionLoading}
+                            title={!canDeploy ? 'Requires operator/admin' : undefined}
+                          >
+                            Deploy
+                          </button>
+                          <button
+                            type="button"
+                            className="danger"
+                            onClick={(event) => { event.stopPropagation(); void handleDisable(policy); }}
+                            disabled={!canDisable || actionLoading || !policy.active_flag}
+                            title={!canDisable ? 'Requires admin' : undefined}
+                          >
+                            Disable
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded ? (
+                      <tr>
+                        <td colSpan={10} className="policy-row-details-cell">
+                          <div className="policy-row-details">
+                            <section className="policy-detail-section">
+                              <h4>Identity</h4>
+                              <p>Name: <strong>{policy.name}</strong></p>
+                              <p>ID: <strong>{policy.policy_id}</strong></p>
+                              <p>Version: <strong>{policy.version}</strong></p>
+                              <p>Status: <strong>{policy.active_flag ? 'Active' : 'Inactive'}</strong></p>
+                              <p>Signed: <strong>{telemetry?.signatureStatus ?? 'UNKNOWN'}</strong></p>
+                              <p>Last updated: <strong>{formatUtc(policy.last_modified)}</strong> by <strong>{policy.created_by}</strong></p>
+                            </section>
+
+                            <section className="policy-detail-section">
+                              <h4>Deployment Scope</h4>
+                              <p>Cohorts enabled: <strong>{deployed}</strong></p>
+                              <p>Service scope: <strong>{policy.service_scope}</strong></p>
+                              <p>Environment scope: <strong>{policy.environment_scope}</strong></p>
+                              <p>Effective policy seq: <strong>{policy.version}</strong></p>
+                              <p>Feature gate dependencies: <strong>n/a</strong></p>
+                              {!telemetry?.deployedCohorts ? (
+                                <p className="muted-line">Deployment data not available. Reason code: NO_DEPLOYMENT_INFO.</p>
+                              ) : null}
+                            </section>
+
+                            <section className="policy-detail-section">
+                              <h4>Runtime Coverage</h4>
+                              <p>Machines eligible: <strong>{telemetry?.eligibleMachinesCount ?? 'n/a'}</strong></p>
+                              <p>Machines reporting: <strong>{telemetry?.reportingMachinesCount ?? 'n/a'}</strong></p>
+                              <p>Coverage: <strong>{formatCoverage(telemetry?.coveragePct ?? null)}</strong> (min {POLICY_MIN_COVERAGE_PCT.toFixed(1)}%)</p>
+                              <p>Freshness: <strong>{telemetry?.freshnessSeconds === null || telemetry?.freshnessSeconds === undefined ? 'n/a' : `${telemetry.freshnessSeconds}s`}</strong></p>
+                              <p>Verdict: <strong>{telemetry?.dataQualityVerdict ?? 'INCONCLUSIVE'}</strong></p>
+                              {telemetry?.dataQualityVerdict !== 'OK' ? (
+                                <p className="focus-banner">
+                                  Policy coverage too low to trust decision metrics. Reasons: {(telemetry?.dataQualityReasons ?? ['NO_TELEMETRY']).map((reason) => reasonLabel(reason)).join(', ')}.
+                                </p>
+                              ) : null}
+                            </section>
+
+                            <section className="policy-detail-section">
+                              <h4>Decision Activity</h4>
+                              {sampleValid ? (
+                                <>
+                                  <p>Decisions/min (10m): <strong>{formatRate(telemetry?.decisionRatePerMin ?? null)}</strong></p>
+                                  <p>Allow / Block / No-op / Unknown: <strong>
+                                    {telemetry?.decisionCounts.allow ?? 0}
+                                    {' / '}
+                                    {telemetry?.decisionCounts.block ?? 0}
+                                    {' / '}
+                                    {telemetry?.decisionCounts.no_op ?? 0}
+                                    {' / '}
+                                    {telemetry?.decisionCounts.unknown ?? 0}
+                                  </strong></p>
+                                  <p>Average confidence: <strong>{formatNumber(telemetry?.avgConfidence ?? null)}</strong></p>
+                                  <p>Last decision: <strong>{formatUtc(telemetry?.lastDecisionTs ?? undefined)}</strong></p>
+                                  <p>Top cohorts: <strong>{(telemetry?.topCohorts?.length ?? 0) > 0
+                                    ? telemetry?.topCohorts.map((row) => `${row.cohort} (${row.count})`).join(', ')
+                                    : 'n/a'}</strong></p>
+                                </>
+                              ) : (
+                                <p className="muted-line">Decision activity unavailable. Reason code: INSUFFICIENT_SAMPLE.</p>
+                              )}
+                            </section>
                           </div>
                         </td>
                       </tr>
-                    );
-                  })}
-                  {policies.length === 0 ? (
-                    <tr>
-                      <td colSpan={10} className="muted-line">No policy records available.</td>
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="ops-editor">
-              <h4>Policy Details</h4>
-              {selectedPolicy && selectedPolicyTelemetry ? (
-                <div className="stack">
-                  <section className="policy-detail-section">
-                    <h4>Identity</h4>
-                    <p>Name: <strong>{selectedPolicy.name}</strong></p>
-                    <p>ID: <strong>{selectedPolicy.policy_id}</strong></p>
-                    <p>Version: <strong>{selectedPolicy.version}</strong></p>
-                    <p>Status: <strong>{selectedPolicy.active_flag ? 'Active' : 'Inactive'}</strong></p>
-                    <p>Signed: <strong>{selectedPolicyTelemetry.signatureStatus}</strong></p>
-                    <p>Last updated: <strong>{formatUtc(selectedPolicy.last_modified)}</strong> by <strong>{selectedPolicy.created_by}</strong></p>
-                  </section>
-
-                  <section className="policy-detail-section">
-                    <h4>Deployment Scope</h4>
-                    <p>Cohorts enabled: <strong>{selectedPolicyTelemetry.deployedCohorts?.join(', ') ?? 'n/a'}</strong></p>
-                    <p>Service scope: <strong>{selectedPolicy.service_scope}</strong></p>
-                    <p>Environment scope: <strong>{selectedPolicy.environment_scope}</strong></p>
-                    <p>Effective policy seq: <strong>{selectedPolicy.version}</strong></p>
-                    <p>Feature gate dependencies: <strong>n/a</strong></p>
-                  </section>
-
-                  <section className="policy-detail-section">
-                    <h4>Runtime Coverage</h4>
-                    <p>Machines eligible: <strong>{selectedPolicyTelemetry.eligibleMachinesCount ?? 'n/a'}</strong></p>
-                    <p>Machines reporting: <strong>{selectedPolicyTelemetry.reportingMachinesCount ?? 'n/a'}</strong></p>
-                    <p>Coverage: <strong>{formatCoverage(selectedPolicyTelemetry.coveragePct)}</strong> (min {POLICY_MIN_COVERAGE_PCT.toFixed(1)}%)</p>
-                    <p>Freshness: <strong>{selectedPolicyTelemetry.freshnessSeconds === null ? 'n/a' : `${selectedPolicyTelemetry.freshnessSeconds}s`}</strong></p>
-                    <p>Verdict: <strong>{selectedPolicyTelemetry.dataQualityVerdict}</strong></p>
-                    {selectedPolicyTelemetry.dataQualityVerdict !== 'OK' ? (
-                      <p className="focus-banner">
-                        Policy coverage too low to trust decision metrics.
-                        {' '}Reasons: {selectedPolicyTelemetry.dataQualityReasons.map((reason) => reasonLabel(reason)).join(', ')}.
-                      </p>
                     ) : null}
-                  </section>
-
-                  <section className="policy-detail-section">
-                    <h4>Decision Activity</h4>
-                    <p>Decisions/min (10m): <strong>{formatRate(selectedPolicyTelemetry.decisionRatePerMin)}</strong></p>
-                    <p>Allow / Block / No-op / Unknown: <strong>
-                      {selectedPolicyTelemetry.decisionCounts.allow}
-                      {' / '}
-                      {selectedPolicyTelemetry.decisionCounts.block}
-                      {' / '}
-                      {selectedPolicyTelemetry.decisionCounts.no_op}
-                      {' / '}
-                      {selectedPolicyTelemetry.decisionCounts.unknown}
-                    </strong></p>
-                    <p>Average confidence: <strong>{formatNumber(selectedPolicyTelemetry.avgConfidence)}</strong></p>
-                    <p>Last decision: <strong>{formatUtc(selectedPolicyTelemetry.lastDecisionTs ?? undefined)}</strong></p>
-                    <p>Top cohorts: <strong>{selectedPolicyTelemetry.topCohorts.length > 0
-                      ? selectedPolicyTelemetry.topCohorts.map((row) => `${row.cohort} (${row.count})`).join(', ')
-                      : 'n/a'}</strong></p>
-                  </section>
-                </div>
-              ) : (
-                <div>
-                  <p className="muted-line">Select a policy to view details.</p>
-                  <p className="muted-line">Policies define what PORTA is allowed to do and when.</p>
-                </div>
-              )}
-            </div>
-          </div>
+                  </Fragment>
+                );
+              })}
+              {policies.length === 0 ? (
+                <tr>
+                  <td colSpan={10} className="muted-line">No policy records available.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+          {!selectedPolicy ? (
+            <p className="muted-line">Select a policy row to expand details. Policies define what PORTA is allowed to do and when.</p>
+          ) : null}
 
           {compareEnabled ? (
             <section className="compare-panel">
@@ -919,7 +985,7 @@ export function PoliciesPage() {
           <div className="table-controls">
             <label>
               Policy
-              <select value={policyFilter} onChange={(event) => setPolicyFilter(event.target.value)}>
+              <select value={policyFilter} onChange={(event) => setPolicyFilter(event.target.value)} disabled={disableFiltersExceptTime}>
                 <option value="all">All policies</option>
                 {policyOptions.map((option) => (
                   <option key={option.id} value={option.id}>{option.label}</option>
@@ -928,7 +994,7 @@ export function PoliciesPage() {
             </label>
             <label>
               Outcome
-              <select value={decisionFilter} onChange={(event) => setDecisionFilter(event.target.value as DecisionOutcomeFilter)}>
+              <select value={decisionFilter} onChange={(event) => setDecisionFilter(event.target.value as DecisionOutcomeFilter)} disabled={disableFiltersExceptTime}>
                 <option value="all">All</option>
                 <option value="allow">Allow</option>
                 <option value="block">Block</option>
@@ -938,7 +1004,7 @@ export function PoliciesPage() {
             </label>
             <label>
               Confidence &gt;=
-              <input type="range" min={0} max={1} step={0.05} value={confidenceMin} onChange={(event) => setConfidenceMin(Number(event.target.value))} />
+              <input type="range" min={0} max={1} step={0.05} value={confidenceMin} onChange={(event) => setConfidenceMin(Number(event.target.value))} disabled={disableConfidence} />
               <span>{confidenceMin.toFixed(2)}</span>
             </label>
             <label>
@@ -952,7 +1018,7 @@ export function PoliciesPage() {
             </label>
             <label>
               Cohort
-              <select value={cohortFilter} onChange={(event) => setCohortFilter(event.target.value)}>
+              <select value={cohortFilter} onChange={(event) => setCohortFilter(event.target.value)} disabled={disableFiltersExceptTime}>
                 <option value="all">All cohorts</option>
                 {cohortOptions.map((cohort) => (
                   <option key={cohort} value={cohort}>{cohort}</option>
@@ -963,6 +1029,7 @@ export function PoliciesPage() {
               className="table-search-input"
               placeholder="Machine ID"
               value={machineFilter}
+              disabled={disableFiltersExceptTime}
               onChange={(event) => {
                 setMachineFilter(event.target.value);
                 updateParam('agent', event.target.value);
@@ -972,26 +1039,38 @@ export function PoliciesPage() {
               className="table-search-input"
               placeholder="Reason code"
               value={reasonCodeFilter}
+              disabled={disableFiltersExceptTime}
               onChange={(event) => setReasonCodeFilter(event.target.value)}
             />
             <label>
               <input
                 type="checkbox"
                 checked={onlyWithReplayEvidence}
+                disabled={disableReplayOnly}
                 onChange={(event) => setOnlyWithReplayEvidence(event.target.checked)}
               />
               Only decisions with replay evidence
             </label>
           </div>
+          {telemetryUnavailable ? (
+            <p className="muted-line">Connect telemetry to enable filtering. Reason code: NO_TELEMETRY.</p>
+          ) : null}
+          {filtersLimited ? (
+            <p className="muted-line">Filters are limited because no decision rows are available.</p>
+          ) : null}
 
           <div className="policy-summary-strip">
             <p>
-              Results: {policyDecisionRows.length} | Sample size: {decisionSampleSize} | Freshness:{' '}
+              Results: {policyDecisionRows.length} | Sample size: {decisionBaseSampleSize} | Freshness:{' '}
               {decisionFreshnessSeconds === null ? 'n/a' : `${decisionFreshnessSeconds}s`} | Coverage:{' '}
               {formatCoverage(decisionCoveragePct)}
             </p>
-            {policyDecisionRows.length === 0 ? (
-              <p className="muted-line">{audits.length === 0 ? 'Telemetry unavailable.' : 'No decisions in this window.'}</p>
+            {telemetryUnavailable ? (
+              <p className="muted-line">Decision telemetry not available. Reason code: NO_TELEMETRY.</p>
+            ) : noRowsInTimeRange ? (
+              <p className="muted-line">No decisions recorded in this time range.</p>
+            ) : policyDecisionRows.length === 0 ? (
+              <p className="muted-line">No decisions match current filters. Reason code: FILTER_CONFLICT.</p>
             ) : null}
           </div>
 
@@ -1024,7 +1103,15 @@ export function PoliciesPage() {
                     </td>
                     <td>{entry.row.confidence_score.toFixed(2)}</td>
                     <td>{entry.reasonCode}</td>
-                    <td>{entry.row.correlation_id || 'n/a'}</td>
+                    <td>
+                      {entry.row.correlation_id ? (
+                        <a className="inline-button-link" href={`/audit-traces?correlation=${encodeURIComponent(entry.row.correlation_id)}`}>
+                          {entry.row.correlation_id}
+                        </a>
+                      ) : (
+                        'n/a'
+                      )}
+                    </td>
                     <td>{entry.row.trace_id || 'n/a'}</td>
                     <td>
                       <button
