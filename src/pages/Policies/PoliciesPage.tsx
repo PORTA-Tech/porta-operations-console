@@ -12,6 +12,7 @@ type PoliciesTab = 'library' | 'decisions';
 type DecisionOutcome = 'allow' | 'block' | 'no_op' | 'unknown';
 type DecisionOutcomeFilter = 'all' | DecisionOutcome;
 type TimeRange = '15m' | '1h' | '6h' | '24h';
+type DecisionTelemetryStatus = 'OFF' | 'ON_EMPTY' | 'ON_WITH_DATA';
 type PolicySignatureStatus = 'VALID' | 'INVALID' | 'UNKNOWN';
 type DataQualityVerdict = 'OK' | 'INCONCLUSIVE';
 type CompareType = 'version' | 'cohort';
@@ -56,10 +57,20 @@ const TIME_RANGE_MS: Record<TimeRange, number> = {
 const POLICY_ACTIVITY_WINDOW_MINUTES = 10;
 const POLICY_MIN_SAMPLE_MACHINES = 20;
 const POLICY_MIN_COVERAGE_PCT = 70;
+const DECISION_FILTERS: DecisionOutcomeFilter[] = ['all', 'allow', 'block', 'no_op', 'unknown'];
+const TIME_RANGES: TimeRange[] = ['15m', '1h', '6h', '24h'];
 
 function parseIsoMs(iso: string): number | null {
   const ms = Date.parse(iso);
   return Number.isFinite(ms) ? ms : null;
+}
+
+function parseDecisionFilter(raw: string | null): DecisionOutcomeFilter {
+  return DECISION_FILTERS.includes((raw ?? '') as DecisionOutcomeFilter) ? (raw as DecisionOutcomeFilter) : 'all';
+}
+
+function parseTimeRange(raw: string | null): TimeRange {
+  return TIME_RANGES.includes((raw ?? '') as TimeRange) ? (raw as TimeRange) : '1h';
 }
 
 function round(value: number, decimals = 2): number {
@@ -116,6 +127,16 @@ function reasonLabel(code: string): string {
 function primaryReason(reasons: string[]): string {
   if (reasons.length === 0) return '';
   return reasonLabel(reasons[0] ?? 'n/a');
+}
+
+function summarizeReasons(reasons: string[]): string {
+  if (reasons.includes('NO_TELEMETRY')) return 'Telemetry is off.';
+  if (reasons.includes('INSUFFICIENT_SAMPLE')) return 'Not enough reporting machines.';
+  if (reasons.includes('INSUFFICIENT_COVERAGE')) return 'Coverage is below minimum.';
+  if (reasons.includes('STALE_DATA')) return 'Data is stale.';
+  if (reasons.includes('SIGNATURE_INVALID')) return 'Policy signature is invalid.';
+  if (reasons.includes('SIGNATURE_UNKNOWN')) return 'Policy signature is unknown.';
+  return 'Metrics are unavailable.';
 }
 
 function formatRate(rate: number | null): string {
@@ -386,13 +407,14 @@ export function PoliciesPage() {
   const [nodeError, setNodeError] = useState<ApiError | undefined>();
 
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | undefined>();
-  const [message, setMessage] = useState<string>('');
+  const [pageMessage, setPageMessage] = useState<string>('');
+  const [diffNotice, setDiffNotice] = useState<{ policyId: string; text: string } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
-  const [policyFilter, setPolicyFilter] = useState('all');
-  const [decisionFilter, setDecisionFilter] = useState<DecisionOutcomeFilter>('all');
+  const [policyFilter, setPolicyFilter] = useState(params.get('policy') ?? 'all');
+  const [decisionFilter, setDecisionFilter] = useState<DecisionOutcomeFilter>(parseDecisionFilter(params.get('outcome')));
   const [confidenceMin, setConfidenceMin] = useState(0);
-  const [timeRange, setTimeRange] = useState<TimeRange>('1h');
+  const [timeRange, setTimeRange] = useState<TimeRange>(parseTimeRange(params.get('window')));
   const [cohortFilter, setCohortFilter] = useState('all');
   const [machineFilter, setMachineFilter] = useState(params.get('agent') ?? '');
   const [reasonCodeFilter, setReasonCodeFilter] = useState('');
@@ -449,6 +471,9 @@ export function PoliciesPage() {
 
   useEffect(() => {
     setMachineFilter(params.get('agent') ?? '');
+    setPolicyFilter(params.get('policy') ?? 'all');
+    setDecisionFilter(parseDecisionFilter(params.get('outcome')));
+    setTimeRange(parseTimeRange(params.get('window')));
   }, [params]);
 
   const updateParam = (key: string, value: string, clearValue?: string) => {
@@ -541,16 +566,17 @@ export function PoliciesPage() {
     [decisionRowsBase, confidenceMin, onlyWithReplayEvidence]
   );
 
-  const telemetryUnavailable = audits.length === 0;
-  const noRowsInTimeRange = !telemetryUnavailable && decisionRowsInWindow.length === 0;
+  const telemetryStatus: DecisionTelemetryStatus = audits.length === 0
+    ? 'OFF'
+    : decisionRowsInWindow.length === 0
+      ? 'ON_EMPTY'
+      : 'ON_WITH_DATA';
   const decisionBaseSampleSize = useMemo(
     () => new Set(decisionRowsBase.map((entry) => entry.machine)).size,
     [decisionRowsBase]
   );
-  const filtersLimited = !telemetryUnavailable && decisionBaseSampleSize === 0;
-  const disableFiltersExceptTime = telemetryUnavailable;
-  const disableConfidence = telemetryUnavailable || decisionBaseSampleSize === 0;
-  const disableReplayOnly = telemetryUnavailable || decisionBaseSampleSize === 0;
+  const disableConfidence = telemetryStatus !== 'ON_WITH_DATA' || decisionBaseSampleSize === 0;
+  const disableReplayOnly = telemetryStatus !== 'ON_WITH_DATA' || decisionBaseSampleSize === 0;
 
   useEffect(() => {
     if (disableReplayOnly && onlyWithReplayEvidence) {
@@ -558,7 +584,7 @@ export function PoliciesPage() {
     }
   }, [disableReplayOnly, onlyWithReplayEvidence]);
 
-  const decisionLatestTimestamp = decisionRowsBase
+  const decisionLatestTimestamp = decisionRowsInWindow
     .map((entry) => entry.row.timestamp)
     .sort((left, right) => (parseIsoMs(right) ?? 0) - (parseIsoMs(left) ?? 0))[0];
   const decisionFreshnessSeconds = decisionLatestTimestamp
@@ -572,6 +598,7 @@ export function PoliciesPage() {
     if (!eligible || eligible <= 0) return null;
     return round((decisionBaseSampleSize / eligible) * 100, 2);
   })();
+  const telemetryLabel = telemetryStatus === 'OFF' ? 'Off' : 'On';
 
   const policyOptions = policies.map((policy) => ({ id: policy.policy_id, label: `${policy.name} (${policy.version})` }));
 
@@ -591,7 +618,7 @@ export function PoliciesPage() {
     setActionLoading(true);
     try {
       await deployPolicyById(policy.policy_id);
-      setMessage(`Deployed ${policy.policy_id}.`);
+      setPageMessage(`Deployed ${policy.policy_id}.`);
     } finally {
       setActionLoading(false);
     }
@@ -602,7 +629,7 @@ export function PoliciesPage() {
     setActionLoading(true);
     try {
       await savePolicy({ ...policy, active_flag: false, status: 'inactive' });
-      setMessage(`Disabled ${policy.policy_id}.`);
+      setPageMessage(`Disabled ${policy.policy_id}.`);
     } finally {
       setActionLoading(false);
     }
@@ -613,7 +640,7 @@ export function PoliciesPage() {
       .filter((row) => row.name === policy.name && row.policy_id !== policy.policy_id)
       .sort((left, right) => (parseIsoMs(right.last_modified) ?? 0) - (parseIsoMs(left.last_modified) ?? 0));
     if (candidates.length === 0) {
-      setMessage(`No alternate version found for ${policy.name}.`);
+      setDiffNotice({ policyId: policy.policy_id, text: `No alternate version found for ${policy.name}.` });
       return;
     }
     if (compareMode === 'none') {
@@ -622,8 +649,14 @@ export function PoliciesPage() {
     setCompareType('version');
     setCompareLeft(policy.policy_id);
     setCompareRight(candidates[0]?.policy_id ?? '');
-    setMessage(`Compare mode set for ${policy.name}.`);
+    setDiffNotice({ policyId: policy.policy_id, text: `Diff ready for ${policy.name}.` });
   };
+
+  useEffect(() => {
+    if (!diffNotice) return;
+    const timer = window.setTimeout(() => setDiffNotice(null), 3500);
+    return () => window.clearTimeout(timer);
+  }, [diffNotice]);
 
   const runReplay = async (entry: DecisionTelemetryRow) => {
     setSelectedDecision(entry);
@@ -707,7 +740,7 @@ export function PoliciesPage() {
           {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
           {nodeLoading ? <p className="muted-line">Loading machine coverage...</p> : null}
           {nodeError ? <p className="error-line">{nodeError.code}: {nodeError.message}</p> : null}
-          {message ? <p className="muted-line">{message}</p> : null}
+          {pageMessage ? <p className="muted-line">{pageMessage}</p> : null}
 
           <div className="policy-summary-strip">
             <p>
@@ -718,14 +751,12 @@ export function PoliciesPage() {
           <table className="simple-table">
             <thead>
               <tr>
-                <th>Policy ID</th>
                 <th>Name</th>
                 <th>Version</th>
                 <th>Status</th>
                 <th>Signature</th>
-                <th>Deployed to</th>
-                <th>Decision rate</th>
-                <th>Last decision</th>
+                <th>Deployments</th>
+                <th>Decision activity</th>
                 <th>Coverage</th>
                 <th>Actions</th>
               </tr>
@@ -734,10 +765,19 @@ export function PoliciesPage() {
               {policies.map((policy) => {
                 const telemetry = telemetryByPolicy.get(policy.policy_id);
                 const reasons = telemetry?.dataQualityReasons ?? ['NO_TELEMETRY'];
-                const deployed = telemetry?.deployedCohorts?.join(', ') ?? 'n/a';
+                const deployed = telemetry?.deployedCohorts?.join(', ') ?? 'Unknown';
+                const decisionWindowCount =
+                  (telemetry?.decisionCounts.allow ?? 0)
+                  + (telemetry?.decisionCounts.block ?? 0)
+                  + (telemetry?.decisionCounts.no_op ?? 0)
+                  + (telemetry?.decisionCounts.unknown ?? 0);
+                const decisionActivity = telemetryStatus === 'OFF'
+                  ? 'Unknown'
+                  : decisionWindowCount > 0
+                    ? 'Active'
+                    : 'None';
                 const coverage = telemetry?.coveragePct ?? null;
-                const decisionRate = telemetry?.decisionRatePerMin ?? null;
-                const lastDecision = telemetry?.lastDecisionTs ?? null;
+                const coverageLabel = coverage === null ? 'Unknown' : formatCoverage(coverage);
                 const expanded = selectedPolicyId === policy.policy_id;
                 const reportingMachines = telemetry?.reportingMachinesCount ?? null;
                 const sampleValid = reportingMachines !== null
@@ -749,7 +789,6 @@ export function PoliciesPage() {
                       className={expanded ? 'machine-selected-row click-row' : 'click-row'}
                       onClick={() => setSelectedPolicyId((current) => (current === policy.policy_id ? undefined : policy.policy_id))}
                     >
-                      <td>{policy.policy_id}</td>
                       <td>{policy.name}</td>
                       <td>{policy.version}</td>
                       <td><span className={policyStatusTone(policy)}>{policy.active_flag ? 'Active' : 'Inactive'}</span></td>
@@ -758,10 +797,9 @@ export function PoliciesPage() {
                           {telemetry?.signatureStatus ?? 'UNKNOWN'}
                         </span>
                       </td>
-                      <td title={deployed === 'n/a' ? primaryReason(reasons) : undefined}>{deployed}</td>
-                      <td title={decisionRate === null ? primaryReason(reasons) : undefined}>{formatRate(decisionRate)}</td>
-                      <td title={lastDecision === null ? primaryReason(reasons) : undefined}>{formatUtc(lastDecision ?? undefined)}</td>
-                      <td title={coverage === null ? primaryReason(reasons) : undefined}>{formatCoverage(coverage)}</td>
+                      <td title={deployed === 'Unknown' ? primaryReason(reasons) : undefined}>{deployed}</td>
+                      <td title={decisionActivity === 'Unknown' ? primaryReason(reasons) : undefined}>{decisionActivity}</td>
+                      <td title={coverageLabel === 'Unknown' ? primaryReason(reasons) : undefined}>{coverageLabel}</td>
                       <td>
                         <div className="button-row">
                           <button type="button" onClick={(event) => { event.stopPropagation(); setSelectedPolicyId(policy.policy_id); }}>View</button>
@@ -784,12 +822,24 @@ export function PoliciesPage() {
                             Disable
                           </button>
                         </div>
+                        {diffNotice?.policyId === policy.policy_id ? (
+                          <p className="policy-inline-toast">{diffNotice.text}</p>
+                        ) : null}
                       </td>
                     </tr>
                     {expanded ? (
                       <tr>
-                        <td colSpan={10} className="policy-row-details-cell">
+                        <td colSpan={8} className="policy-row-details-cell">
                           <div className="policy-row-details">
+                            <header className="policy-row-details-header">
+                              <h4>Policy details</h4>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPolicyId(undefined)}
+                              >
+                                Collapse
+                              </button>
+                            </header>
                             <section className="policy-detail-section">
                               <h4>Identity</h4>
                               <p>Name: <strong>{policy.name}</strong></p>
@@ -808,7 +858,10 @@ export function PoliciesPage() {
                               <p>Effective policy seq: <strong>{policy.version}</strong></p>
                               <p>Feature gate dependencies: <strong>n/a</strong></p>
                               {!telemetry?.deployedCohorts ? (
-                                <p className="muted-line">Deployment data not available. Reason code: NO_DEPLOYMENT_INFO.</p>
+                                <details className="policy-detail-reasons">
+                                  <summary>Details</summary>
+                                  <p className="muted-line">Reason code: NO_DEPLOYMENT_INFO</p>
+                                </details>
                               ) : null}
                             </section>
 
@@ -820,9 +873,13 @@ export function PoliciesPage() {
                               <p>Freshness: <strong>{telemetry?.freshnessSeconds === null || telemetry?.freshnessSeconds === undefined ? 'n/a' : `${telemetry.freshnessSeconds}s`}</strong></p>
                               <p>Verdict: <strong>{telemetry?.dataQualityVerdict ?? 'INCONCLUSIVE'}</strong></p>
                               {telemetry?.dataQualityVerdict !== 'OK' ? (
-                                <p className="focus-banner">
-                                  Policy coverage too low to trust decision metrics. Reasons: {(telemetry?.dataQualityReasons ?? ['NO_TELEMETRY']).map((reason) => reasonLabel(reason)).join(', ')}.
-                                </p>
+                                <div className="focus-banner">
+                                  <p>Why metrics are unavailable: {summarizeReasons(telemetry?.dataQualityReasons ?? ['NO_TELEMETRY'])}</p>
+                                  <details className="policy-detail-reasons">
+                                    <summary>Show details</summary>
+                                    <p className="muted-line">{(telemetry?.dataQualityReasons ?? ['NO_TELEMETRY']).join(', ')}</p>
+                                  </details>
+                                </div>
                               ) : null}
                             </section>
 
@@ -847,7 +904,13 @@ export function PoliciesPage() {
                                     : 'n/a'}</strong></p>
                                 </>
                               ) : (
-                                <p className="muted-line">Decision activity unavailable. Reason code: INSUFFICIENT_SAMPLE.</p>
+                                <div>
+                                  <p className="muted-line">Decision activity unavailable: {summarizeReasons(telemetry?.dataQualityReasons ?? ['INSUFFICIENT_SAMPLE'])}</p>
+                                  <details className="policy-detail-reasons">
+                                    <summary>Show details</summary>
+                                    <p className="muted-line">{(telemetry?.dataQualityReasons ?? ['INSUFFICIENT_SAMPLE']).join(', ')}</p>
+                                  </details>
+                                </div>
                               )}
                             </section>
                           </div>
@@ -859,7 +922,7 @@ export function PoliciesPage() {
               })}
               {policies.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="muted-line">No policy records available.</td>
+                  <td colSpan={8} className="muted-line">No policy records available.</td>
                 </tr>
               ) : null}
             </tbody>
@@ -985,7 +1048,13 @@ export function PoliciesPage() {
           <div className="table-controls">
             <label>
               Policy
-              <select value={policyFilter} onChange={(event) => setPolicyFilter(event.target.value)} disabled={disableFiltersExceptTime}>
+              <select
+                value={policyFilter}
+                onChange={(event) => {
+                  setPolicyFilter(event.target.value);
+                  updateParam('policy', event.target.value, 'all');
+                }}
+              >
                 <option value="all">All policies</option>
                 {policyOptions.map((option) => (
                   <option key={option.id} value={option.id}>{option.label}</option>
@@ -994,7 +1063,14 @@ export function PoliciesPage() {
             </label>
             <label>
               Outcome
-              <select value={decisionFilter} onChange={(event) => setDecisionFilter(event.target.value as DecisionOutcomeFilter)} disabled={disableFiltersExceptTime}>
+              <select
+                value={decisionFilter}
+                onChange={(event) => {
+                  const next = parseDecisionFilter(event.target.value);
+                  setDecisionFilter(next);
+                  updateParam('outcome', next, 'all');
+                }}
+              >
                 <option value="all">All</option>
                 <option value="allow">Allow</option>
                 <option value="block">Block</option>
@@ -1009,7 +1085,14 @@ export function PoliciesPage() {
             </label>
             <label>
               Time range
-              <select value={timeRange} onChange={(event) => setTimeRange(event.target.value as TimeRange)}>
+              <select
+                value={timeRange}
+                onChange={(event) => {
+                  const next = parseTimeRange(event.target.value);
+                  setTimeRange(next);
+                  updateParam('window', next, '1h');
+                }}
+              >
                 <option value="15m">15m</option>
                 <option value="1h">1h</option>
                 <option value="6h">6h</option>
@@ -1018,7 +1101,7 @@ export function PoliciesPage() {
             </label>
             <label>
               Cohort
-              <select value={cohortFilter} onChange={(event) => setCohortFilter(event.target.value)} disabled={disableFiltersExceptTime}>
+              <select value={cohortFilter} onChange={(event) => setCohortFilter(event.target.value)}>
                 <option value="all">All cohorts</option>
                 {cohortOptions.map((cohort) => (
                   <option key={cohort} value={cohort}>{cohort}</option>
@@ -1029,7 +1112,6 @@ export function PoliciesPage() {
               className="table-search-input"
               placeholder="Machine ID"
               value={machineFilter}
-              disabled={disableFiltersExceptTime}
               onChange={(event) => {
                 setMachineFilter(event.target.value);
                 updateParam('agent', event.target.value);
@@ -1039,7 +1121,6 @@ export function PoliciesPage() {
               className="table-search-input"
               placeholder="Reason code"
               value={reasonCodeFilter}
-              disabled={disableFiltersExceptTime}
               onChange={(event) => setReasonCodeFilter(event.target.value)}
             />
             <label>
@@ -1052,26 +1133,33 @@ export function PoliciesPage() {
               Only decisions with replay evidence
             </label>
           </div>
-          {telemetryUnavailable ? (
-            <p className="muted-line">Connect telemetry to enable filtering. Reason code: NO_TELEMETRY.</p>
+          {telemetryStatus === 'OFF' ? (
+            <div className="focus-banner">
+              <p>Decision telemetry is not enabled. Enable decision events from agents to see decisions and replay.</p>
+              <details className="policy-detail-reasons">
+                <summary>Details</summary>
+                <p className="muted-line">reason code: NO_TELEMETRY</p>
+                <p className="muted-line">last telemetry seen: n/a</p>
+                <p className="muted-line">pipeline status: unknown</p>
+              </details>
+            </div>
           ) : null}
-          {filtersLimited ? (
-            <p className="muted-line">Filters are limited because no decision rows are available.</p>
+          {telemetryStatus === 'ON_EMPTY' ? (
+            <p className="focus-banner">No decisions recorded in this time range.</p>
           ) : null}
 
           <div className="policy-summary-strip">
             <p>
-              Results: {policyDecisionRows.length} | Sample size: {decisionBaseSampleSize} | Freshness:{' '}
-              {decisionFreshnessSeconds === null ? 'n/a' : `${decisionFreshnessSeconds}s`} | Coverage:{' '}
-              {formatCoverage(decisionCoveragePct)}
+              Results: {policyDecisionRows.length} | Last decision seen:{' '}
+              {decisionLatestTimestamp ? formatUtc(decisionLatestTimestamp) : 'n/a'} | Telemetry: {telemetryLabel}
             </p>
-            {telemetryUnavailable ? (
-              <p className="muted-line">Decision telemetry not available. Reason code: NO_TELEMETRY.</p>
-            ) : noRowsInTimeRange ? (
-              <p className="muted-line">No decisions recorded in this time range.</p>
-            ) : policyDecisionRows.length === 0 ? (
-              <p className="muted-line">No decisions match current filters. Reason code: FILTER_CONFLICT.</p>
+            {policyDecisionRows.length === 0 && telemetryStatus === 'ON_WITH_DATA' ? (
+              <p className="muted-line">No decisions match current filters.</p>
             ) : null}
+            <p className="muted-line">
+              Sample size: {decisionBaseSampleSize} | Freshness: {decisionFreshnessSeconds === null ? 'n/a' : `${decisionFreshnessSeconds}s`}
+              {decisionCoveragePct !== null ? ` | Coverage: ${formatCoverage(decisionCoveragePct)}` : ''}
+            </p>
           </div>
 
           <table className="simple-table">

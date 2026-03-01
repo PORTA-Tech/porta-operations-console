@@ -1660,6 +1660,42 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   gap: 10px;
 }
 
+.policy-row-details-header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.policy-row-details-header h4 {
+  margin: 0;
+}
+
+.policy-detail-reasons {
+  margin-top: 6px;
+}
+
+.policy-detail-reasons summary {
+  cursor: pointer;
+  user-select: none;
+  color: var(--muted);
+}
+
+.policy-inline-toast {
+  margin: 6px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 5px 8px;
+  font-size: 0.83rem;
+  color: var(--muted);
+}
+
 .policy-replay-panel {
   margin-top: 12px;
   border-top: 1px solid var(--line);
