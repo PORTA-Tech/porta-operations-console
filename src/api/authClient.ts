@@ -96,5 +96,18 @@ export const authClient = {
   clearSession(): void {
     localStorage.removeItem('porta.auth.token');
     localStorage.removeItem('porta.auth.session');
+  },
+
+  getRememberedUserId(): string {
+    return localStorage.getItem('porta.auth.remembered_user_id') ?? '';
+  },
+
+  setRememberedUserId(userId: string): void {
+    const trimmed = userId.trim();
+    if (!trimmed) {
+      localStorage.removeItem('porta.auth.remembered_user_id');
+      return;
+    }
+    localStorage.setItem('porta.auth.remembered_user_id', trimmed);
   }
 };

@@ -1,11 +1,18 @@
-﻿import { useEffect, useMemo, useState } from 'react';
-import { getAuthAccessHelp, registerAuthUser, type AuthAccessHelp, type AuthSessionUser } from '../../api/auth';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  getAuthAccessHelp,
+  registerAuthUser,
+  resetForgottenPassword,
+  type AuthAccessHelp,
+  type AuthSessionUser
+} from '../../api/auth';
+import { authClient } from '../../api/authClient';
 import { toApiError } from '../../api/client';
 
 interface LoginPageProps {
   loading: boolean;
   error: string | null;
-  onSubmit: (userId: string, password: string) => Promise<void>;
+  onSubmit: (userId: string, password: string) => Promise<boolean>;
 }
 
 const signupRoles: Array<{ value: AuthSessionUser['role']; label: string }> = [
@@ -37,9 +44,13 @@ function isPasswordValid(password: string, help: AuthAccessHelp | null): boolean
 }
 
 export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
-  const [userId, setUserId] = useState('');
+  const remembered = authClient.getRememberedUserId();
+  const [userId, setUserId] = useState(remembered);
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberUserId, setRememberUserId] = useState(remembered.length > 0);
   const [showRegister, setShowRegister] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
 
   const [help, setHelp] = useState<AuthAccessHelp | null>(null);
   const [helpLoading, setHelpLoading] = useState(true);
@@ -47,9 +58,19 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
   const [registerUserId, setRegisterUserId] = useState('');
   const [registerDisplayName, setRegisterDisplayName] = useState('');
   const [registerPassword, setRegisterPassword] = useState('');
+  const [registerSignupCode, setRegisterSignupCode] = useState('');
   const [registerRole, setRegisterRole] = useState<AuthSessionUser['role']>('developer');
   const [registerLoading, setRegisterLoading] = useState(false);
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false);
   const [registerMessage, setRegisterMessage] = useState<string | null>(null);
+
+  const [forgotUserId, setForgotUserId] = useState('');
+  const [forgotCode, setForgotCode] = useState('');
+  const [forgotPassword, setForgotPassword] = useState('');
+  const [forgotPasswordConfirm, setForgotPasswordConfirm] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotMessage, setForgotMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -75,24 +96,36 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
     return signupRoles.filter((row) => row.value !== 'admin' || help?.admin_signup_enabled);
   }, [help?.admin_signup_enabled]);
 
-  const registerUserIdPattern = help?.user_id_rules.pattern ?? '^[a-z][a-z0-9._-]{2,31}$';
+  const registerUserIdPattern = help?.user_id_rules.pattern ?? '^[a-zA-Z0-9][a-zA-Z0-9._@-]{2,63}$';
   const registerUserMin = help?.user_id_rules.min_length ?? 3;
-  const registerUserMax = help?.user_id_rules.max_length ?? 32;
+  const registerUserMax = help?.user_id_rules.max_length ?? 64;
   const registerPasswordMin = help?.password_rules.min_length ?? 8;
+  const signupCodeLength = help?.signup_code_length ?? 6;
 
   const registerUserIdValid = new RegExp(registerUserIdPattern).test(registerUserId.trim());
   const registerPasswordValid = isPasswordValid(registerPassword, help);
+  const signupCodeValid = new RegExp(`^\\d{${signupCodeLength}}$`).test(registerSignupCode.trim());
   const canRegister = registerUserIdValid
     && registerDisplayName.trim().length > 0
+    && signupCodeValid
     && registerPasswordValid
     && !registerLoading;
+  const canResetForgotPassword = forgotUserId.trim().length > 0
+    && /^\d{6}$/.test(forgotCode.trim())
+    && forgotPassword.length > 0
+    && forgotPassword === forgotPasswordConfirm
+    && isPasswordValid(forgotPassword, help)
+    && !forgotLoading;
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!userId.trim() || !password) {
       return;
     }
-    await onSubmit(userId.trim(), password);
+    const ok = await onSubmit(userId.trim(), password);
+    if (ok) {
+      authClient.setRememberedUserId(rememberUserId ? userId.trim() : '');
+    }
   };
 
   const register = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -108,13 +141,15 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
         user_id: registerUserId.trim(),
         display_name: registerDisplayName.trim(),
         role: registerRole,
-        password: registerPassword
+        password: registerPassword,
+        signup_code: registerSignupCode.trim()
       });
       if (result.ok) {
         setRegisterMessage(`Account created for ${result.user.user_id}.`);
         setUserId(result.user.user_id);
         setPassword('');
         setRegisterPassword('');
+        setRegisterSignupCode('');
         setShowRegister(false);
       }
     } catch (err) {
@@ -122,6 +157,36 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
       setRegisterMessage(`${parsed.code}: ${parsed.message}`);
     } finally {
       setRegisterLoading(false);
+    }
+  };
+
+  const resetForgot = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!canResetForgotPassword) {
+      setForgotMessage('Please complete all fields and password rules.');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotMessage(null);
+    try {
+      const result = await resetForgottenPassword({
+        user_id: forgotUserId.trim(),
+        reset_code: forgotCode.trim(),
+        new_password: forgotPassword
+      });
+      if (result.ok) {
+        setForgotMessage(`Password updated for ${forgotUserId.trim()}. You can sign in now.`);
+        setPassword('');
+        setUserId(forgotUserId.trim());
+        setForgotCode('');
+        setForgotPassword('');
+        setForgotPasswordConfirm('');
+      }
+    } catch (err) {
+      const parsed = toApiError(err);
+      setForgotMessage(`${parsed.code}: ${parsed.message}`);
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -138,24 +203,96 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
               autoComplete="username"
               value={userId}
               onChange={(event) => setUserId(event.target.value)}
-              placeholder="your user id"
+              placeholder="email or user ID"
             />
           </label>
           <label>
             Password
+            <div className="login-password-row">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="your password"
+              />
+              <button type="button" onClick={() => setShowPassword((value) => !value)}>
+                {showPassword ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </label>
+          <label className="login-checkbox">
             <input
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="your password"
+              type="checkbox"
+              checked={rememberUserId}
+              onChange={(event) => setRememberUserId(event.target.checked)}
             />
+            Remember this user ID on this device
           </label>
           <button type="submit" disabled={loading || !userId.trim() || !password}>
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
         {error ? <p className="error-line">{error}</p> : null}
+
+        <button type="button" className="login-toggle-link" onClick={() => setShowForgot((value) => !value)}>
+          {showForgot ? 'Hide password reset' : 'Forgot password?'}
+        </button>
+        {showForgot ? (
+          <form className="login-register-form" onSubmit={(event) => void resetForgot(event)}>
+            <p className="muted-line">Ask an admin for a 6-digit password reset code, then set a new password.</p>
+            <label>
+              User ID
+              <input
+                value={forgotUserId}
+                onChange={(event) => setForgotUserId(event.target.value)}
+                placeholder="email or user ID"
+                required
+              />
+            </label>
+            <label>
+              Reset code
+              <input
+                value={forgotCode}
+                onChange={(event) => setForgotCode(event.target.value)}
+                inputMode="numeric"
+                pattern="\\d{6}"
+                placeholder="6-digit code"
+                required
+              />
+            </label>
+            <label>
+              New password
+              <div className="login-password-row">
+                <input
+                  type={showForgotPassword ? 'text' : 'password'}
+                  value={forgotPassword}
+                  onChange={(event) => setForgotPassword(event.target.value)}
+                  minLength={registerPasswordMin}
+                  required
+                />
+                <button type="button" onClick={() => setShowForgotPassword((value) => !value)}>
+                  {showForgotPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </label>
+            <label>
+              Confirm new password
+              <input
+                type={showForgotPassword ? 'text' : 'password'}
+                value={forgotPasswordConfirm}
+                onChange={(event) => setForgotPasswordConfirm(event.target.value)}
+                minLength={registerPasswordMin}
+                required
+              />
+            </label>
+            <p className="muted-line">Password policy: {passwordRuleText(help)}.</p>
+            <button type="submit" disabled={!canResetForgotPassword}>
+              {forgotLoading ? 'Updating password...' : 'Reset password'}
+            </button>
+            {forgotMessage ? <p className="muted-line">{forgotMessage}</p> : null}
+          </form>
+        ) : null}
 
         <section className="login-access-panel">
           <button type="button" className="login-toggle-link" onClick={() => setShowRegister((value) => !value)}>
@@ -180,7 +317,7 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
                       required
                     />
                   </label>
-                  <p className="muted-line">Allowed: lowercase letters, numbers, dot, dash, underscore ({registerUserMin}-{registerUserMax} chars).</p>
+                  <p className="muted-line">Use letters, numbers, dot, dash, underscore, or @ ({registerUserMin}-{registerUserMax} chars).</p>
 
                   <label>
                     Display name
@@ -202,14 +339,32 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
                   </label>
 
                   <label>
-                    Password
+                    Admin access code
                     <input
-                      type="password"
-                      value={registerPassword}
-                      onChange={(event) => setRegisterPassword(event.target.value)}
-                      minLength={registerPasswordMin}
+                      value={registerSignupCode}
+                      onChange={(event) => setRegisterSignupCode(event.target.value)}
+                      inputMode="numeric"
+                      pattern={`\\d{${signupCodeLength}}`}
+                      placeholder={`${signupCodeLength}-digit code`}
                       required
                     />
+                  </label>
+                  <p className="muted-line">Account creation requires an admin-issued {signupCodeLength}-digit code.</p>
+
+                  <label>
+                    Password
+                    <div className="login-password-row">
+                      <input
+                        type={showRegisterPassword ? 'text' : 'password'}
+                        value={registerPassword}
+                        onChange={(event) => setRegisterPassword(event.target.value)}
+                        minLength={registerPasswordMin}
+                        required
+                      />
+                      <button type="button" onClick={() => setShowRegisterPassword((value) => !value)}>
+                        {showRegisterPassword ? 'Hide' : 'Show'}
+                      </button>
+                    </div>
                   </label>
                   <p className="muted-line">Password policy: {passwordRuleText(help)}.</p>
 
@@ -231,4 +386,3 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
     </div>
   );
 }
-

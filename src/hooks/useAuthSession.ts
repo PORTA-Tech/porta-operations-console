@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
   changeAuthPassword,
+  generatePasswordResetCode,
+  generateSignupCode,
   loginAuth,
   logoutAuth,
   readAuthMe,
@@ -31,6 +33,8 @@ export function useAuthSession(): AuthState & {
   reauth: (password: string) => Promise<boolean>;
   updateProfile: (input: { display_name?: string; avatar_url?: string | null }) => Promise<boolean>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
+  createSignupCode: (ttlMinutes?: number) => Promise<{ ok: boolean; code: string; expires_at_utc: string } | null>;
+  createPasswordResetCode: (userId: string, ttlMinutes?: number) => Promise<{ ok: boolean; user_id: string; code: string; expires_at_utc: string } | null>;
   refresh: () => Promise<void>;
 } {
   const [ready, setReady] = useState(false);
@@ -160,6 +164,31 @@ export function useAuthSession(): AuthState & {
     }
   };
 
+  const createSignupCode = async (ttlMinutes = 30): Promise<{ ok: boolean; code: string; expires_at_utc: string } | null> => {
+    try {
+      const result = await generateSignupCode(ttlMinutes);
+      setError(null);
+      return result;
+    } catch (err) {
+      setError(errorMessage(err, 'Signup code generation failed'));
+      return null;
+    }
+  };
+
+  const createPasswordResetCode = async (
+    userId: string,
+    ttlMinutes = 30
+  ): Promise<{ ok: boolean; user_id: string; code: string; expires_at_utc: string } | null> => {
+    try {
+      const result = await generatePasswordResetCode(userId, ttlMinutes);
+      setError(null);
+      return result;
+    } catch (err) {
+      setError(errorMessage(err, 'Reset code generation failed'));
+      return null;
+    }
+  };
+
   return useMemo(
     () => ({
       ready,
@@ -171,6 +200,8 @@ export function useAuthSession(): AuthState & {
       reauth,
       updateProfile,
       changePassword,
+      createSignupCode,
+      createPasswordResetCode,
       refresh
     }),
     [ready, authenticated, user, error]

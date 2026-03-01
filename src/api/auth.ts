@@ -13,6 +13,8 @@ export interface AuthSessionUser {
 export interface AuthAccessHelp {
   signup_enabled: boolean;
   admin_signup_enabled: boolean;
+  signup_code_required: boolean;
+  signup_code_length: number;
   user_id_rules: {
     pattern: string;
     min_length: number;
@@ -152,6 +154,7 @@ export async function registerAuthUser(input: {
   display_name: string;
   role: AuthSessionUser['role'];
   password: string;
+  signup_code: string;
 }): Promise<{ ok: boolean; user: { user_id: string; role: AuthSessionUser['role']; display_name: string } }> {
   return apiRequestRaw<{ ok: boolean; user: { user_id: string; role: AuthSessionUser['role']; display_name: string } }>({
     path: '/auth/register',
@@ -193,5 +196,33 @@ export async function changeAuthPassword(currentPassword: string, newPassword: s
       current_password: currentPassword,
       new_password: newPassword
     }
+  });
+}
+
+export async function resetForgottenPassword(input: {
+  user_id: string;
+  reset_code: string;
+  new_password: string;
+}): Promise<{ ok: boolean }> {
+  return apiRequestRaw<{ ok: boolean }>({
+    path: '/auth/forgot-password/reset',
+    method: 'post',
+    body: input
+  });
+}
+
+export async function generateSignupCode(ttlMinutes = 30): Promise<{ ok: boolean; code: string; expires_at_utc: string }> {
+  return apiRequestRaw<{ ok: boolean; code: string; expires_at_utc: string }>({
+    path: '/auth/admin/signup-code',
+    method: 'post',
+    body: { ttl_minutes: ttlMinutes }
+  });
+}
+
+export async function generatePasswordResetCode(userId: string, ttlMinutes = 30): Promise<{ ok: boolean; user_id: string; code: string; expires_at_utc: string }> {
+  return apiRequestRaw<{ ok: boolean; user_id: string; code: string; expires_at_utc: string }>({
+    path: '/auth/admin/password-reset-code',
+    method: 'post',
+    body: { user_id: userId, ttl_minutes: ttlMinutes }
   });
 }
