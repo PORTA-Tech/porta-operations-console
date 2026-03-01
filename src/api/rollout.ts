@@ -14,6 +14,33 @@ export type RolloutDryRunView = components['schemas']['RolloutDryRunView'];
 
 export type RolloutGuardrailStatus = 'PASS' | 'FAIL' | 'INCONCLUSIVE' | 'NOT_APPLICABLE';
 export type RolloutPromotionVerdict = 'ALLOW' | 'BLOCK' | 'INCONCLUSIVE';
+export type RolloutEvaluationEventType =
+  | 'RolloutEvaluationComputed'
+  | 'PromotionBlocked'
+  | 'PromotionAllowed'
+  | 'PromotionRequested'
+  | 'PromotionExecuted'
+  | 'MonitoringStarted'
+  | 'GuardrailFailed'
+  | 'CooldownActivated'
+  | 'HaltRaised'
+  | 'RollbackStarted'
+  | 'RollbackCompleted'
+  | 'RolloutEvent';
+
+export type RolloutEvaluationPermissions = {
+  can_promote: boolean;
+  can_halt: boolean;
+  can_export_evidence: boolean;
+  can_view_replay_logs: boolean;
+  blocked_reason_code?: string;
+  blocked_reason_details?: Record<string, string | number | boolean | null>;
+  by_action?: Partial<Record<'promote' | 'halt' | 'rollback' | 'export_evidence' | 'view_replay_logs', {
+    allowed: boolean;
+    blocked_reason_code?: string;
+    blocked_reason_details?: Record<string, string | number | boolean | null>;
+  }>>;
+};
 
 export type RolloutEvaluation = {
   rollout_state: RolloutStatusView['state'];
@@ -35,6 +62,12 @@ export type RolloutEvaluation = {
     ws_stream_ok: boolean;
     metrics_available: boolean;
     trust_status: 'VALID' | 'INVALID' | 'UNKNOWN';
+    trust?: {
+      status: 'VALID' | 'INVALID' | 'PARTIAL' | 'UNKNOWN';
+      reason_code?: string;
+      affected_nodes_count: number | null;
+      issuer: string | null;
+    };
     sample_valid: boolean;
     coverage_valid: boolean;
     valid: boolean;
@@ -79,19 +112,23 @@ export type RolloutEvaluation = {
   rollout_stage_progression_preview: RolloutStatusView['state'][];
   events: Array<{
     event_id: string;
-    type: string;
+    type: RolloutEvaluationEventType | string;
     timestamp_utc: string;
     actor: string;
     config_version: number;
     cohorts: string[];
     correlation_ids: string[];
     details: string;
+    details_map?: Record<string, string | number | boolean | null>;
+    duplicate_count?: number;
   }>;
   evidence: {
     correlation_ids: string[];
     available: boolean;
     generated_at_utc: string;
+    export_url?: string;
   };
+  permissions?: RolloutEvaluationPermissions;
 };
 
 export type RolloutEvidencePack = {

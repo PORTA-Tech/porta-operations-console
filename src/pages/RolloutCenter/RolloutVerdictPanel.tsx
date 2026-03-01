@@ -35,6 +35,92 @@ function formatDetails(details: Record<string, string | number | boolean | null>
     .join(', ');
 }
 
+type DisplayEvent = RolloutEvaluation['events'][number] & { duplicate_count: number };
+
+function buildEventKey(event: RolloutEvaluation['events'][number]): string {
+  return [
+    event.type,
+    event.timestamp_utc,
+    event.actor,
+    event.config_version,
+    event.cohorts.join(','),
+    event.details
+  ].join('|');
+}
+
+function normalizeEvents(data: RolloutEvaluation | undefined): DisplayEvent[] {
+  if (!data) return [];
+  const baseEvents = [...data.events];
+  const hasEvaluationTick = baseEvents.some(
+    (event) => event.type === 'RolloutEvaluationComputed' && event.timestamp_utc === data.evaluated_at_utc
+  );
+  if (!hasEvaluationTick) {
+    baseEvents.unshift({
+      event_id: `eval-${data.evaluated_at_utc}`,
+      type: 'RolloutEvaluationComputed',
+      timestamp_utc: data.evaluated_at_utc,
+      actor: 'rollout-evaluator',
+      config_version: data.config_version,
+      cohorts: [data.data_quality.baseline_cohort_id, data.data_quality.target_cohort_id],
+      correlation_ids: data.evidence.correlation_ids,
+      details: data.decision.trigger_reason_code,
+      details_map: data.decision.trigger_reason_details
+    });
+  }
+
+  const grouped = new Map<string, DisplayEvent>();
+  for (const event of baseEvents) {
+    const key = buildEventKey(event);
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.duplicate_count += 1;
+      if (existing.correlation_ids.length === 0 && event.correlation_ids.length > 0) {
+        existing.correlation_ids = event.correlation_ids;
+      }
+      continue;
+    }
+    grouped.set(key, { ...event, duplicate_count: 1 });
+  }
+
+  return [...grouped.values()].sort((left, right) => {
+    const leftTs = Date.parse(left.timestamp_utc);
+    const rightTs = Date.parse(right.timestamp_utc);
+    return rightTs - leftTs;
+  });
+}
+
+function operatorSummary(data: RolloutEvaluation): string {
+  const reasons: string[] = [];
+  if (!data.data_quality.sample_valid) {
+    reasons.push(
+      `${data.data_quality.target_cohort_id} has ${data.data_quality.sample_size_by_cohort[data.data_quality.target_cohort_id] ?? 0} reporting machines (min ${data.data_quality.min_sample_machines})`
+    );
+  }
+  if (!data.data_quality.coverage_valid) {
+    reasons.push(`coverage is below ${data.data_quality.min_coverage_pct}%`);
+  }
+  if (!data.data_quality.metrics_available) {
+    reasons.push('SLO deltas are unavailable');
+  }
+  const trustStatus = data.data_quality.trust?.status ?? data.data_quality.trust_status;
+  if (trustStatus !== 'VALID') {
+    reasons.push(`trust is ${trustStatus.toLowerCase()}`);
+  }
+  const featureGate = data.guardrail_eval.find((guardrail) => guardrail.guardrail_id === 'FEATURE_GATE');
+  if (featureGate?.status === 'FAIL') {
+    reasons.push('adapter metrics are disabled by policy');
+  }
+  if (reasons.length === 0) {
+    return 'Promotion can proceed: data quality checks and guardrails are currently healthy.';
+  }
+  const verdictText = data.decision.promotion_verdict === 'BLOCK'
+    ? 'blocked'
+    : data.decision.promotion_verdict === 'INCONCLUSIVE'
+      ? 'inconclusive'
+      : 'allowed';
+  return `Promotion is ${verdictText} because ${reasons.join(', ')}.`;
+}
+
 function downloadJson(name: string, payload: unknown): void {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = window.URL.createObjectURL(blob);
@@ -47,16 +133,33 @@ function downloadJson(name: string, payload: unknown): void {
 
 export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPanelProps) {
   const [selectedEventId, setSelectedEventId] = useState<string | undefined>();
+  const [selectedGuardrailId, setSelectedGuardrailId] = useState<string | undefined>();
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<ApiError | undefined>();
 
+  const normalizedEvents = useMemo(() => normalizeEvents(data), [data]);
   const selectedEvent = useMemo(
-    () => data?.events.find((event) => event.event_id === selectedEventId) ?? data?.events[0],
-    [data?.events, selectedEventId]
+    () => normalizedEvents.find((event) => event.event_id === selectedEventId) ?? normalizedEvents[0],
+    [normalizedEvents, selectedEventId]
+  );
+  const selectedGuardrail = useMemo(
+    () => data?.guardrail_eval.find((guardrail) => guardrail.guardrail_id === selectedGuardrailId),
+    [data?.guardrail_eval, selectedGuardrailId]
+  );
+  const canExportEvidence = (data?.permissions?.can_export_evidence ?? true) && (data?.evidence.available ?? false);
+  const exportBlockedReason = data?.permissions?.by_action?.export_evidence?.blocked_reason_code
+    ?? data?.permissions?.blocked_reason_code;
+  const trust = data?.data_quality.trust;
+  const selectedEventHasDetails = Boolean(
+    selectedEvent
+    && (
+      selectedEvent.details.length > 0
+      || (selectedEvent.details_map && Object.keys(selectedEvent.details_map).length > 0)
+    )
   );
 
   const exportEvidence = async (): Promise<void> => {
-    if (!data?.evidence.available) return;
+    if (!canExportEvidence) return;
     setExporting(true);
     setExportError(undefined);
     try {
@@ -84,6 +187,7 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
             </p>
             <p className="muted-line">{formatDetails(data.decision.trigger_reason_details)}</p>
             <p className="muted-line">Evaluated: {formatUtc(data.evaluated_at_utc)} ({formatRelativeFromNow(data.evaluated_at_utc)})</p>
+            <p className="muted-line">Operator summary: {operatorSummary(data)}</p>
           </section>
 
           <div className="machines-data-banner">
@@ -93,7 +197,7 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
               data.data_quality.coverage_pct_by_cohort[data.data_quality.target_cohort_id] ?? 0
             ).toFixed(1)}%</strong></span>
             <span>Stream: <strong>{data.data_quality.ws_stream_ok ? 'Live' : 'Disconnected'}</strong></span>
-            <span>Trust: <strong>{data.data_quality.trust_status}</strong></span>
+            <span>Trust: <strong>{trust?.status ?? data.data_quality.trust_status}</strong></span>
           </div>
 
           <table className="simple-table">
@@ -127,6 +231,15 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
                 <td>{'<= stale limit'}</td>
                 <td>{data.data_quality.freshness_ok ? 'OK' : 'Stale'}</td>
               </tr>
+              <tr>
+                <td>Trust</td>
+                <td colSpan={2}>
+                  {trust?.status ?? data.data_quality.trust_status}
+                  {trust?.issuer ? ` (issuer: ${trust.issuer})` : ''}
+                </td>
+                <td>VALID</td>
+                <td>{(trust?.status ?? data.data_quality.trust_status) === 'VALID' ? 'OK' : 'Review'}</td>
+              </tr>
             </tbody>
           </table>
 
@@ -159,12 +272,38 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
                   <td>{guardrail.value_label || 'n/a'}</td>
                   <td>{guardrail.threshold_label || 'n/a'}</td>
                   <td>{guardrail.window}</td>
-                  <td>{guardrail.evidence.correlation_ids.length > 0 ? guardrail.evidence.correlation_ids.join(', ') : 'none'}</td>
+                  <td>
+                    {guardrail.evidence.correlation_ids.length > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedGuardrailId(guardrail.guardrail_id)}
+                      >
+                        View evidence ({guardrail.evidence.correlation_ids.length} traces)
+                      </button>
+                    ) : (
+                      'none'
+                    )}
+                  </td>
                   <td>{guardrail.reason_code ?? 'n/a'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {selectedGuardrail ? (
+            <div className="timeline-side">
+              <h4>Guardrail Evidence: {selectedGuardrail.guardrail_id}</h4>
+              <p className="muted-line">
+                Correlation IDs: {selectedGuardrail.evidence.correlation_ids.join(', ')}
+              </p>
+              <div className="button-row">
+                {selectedGuardrail.evidence.correlation_ids.map((id) => (
+                  <a key={id} className="inline-button-link" href={`/audit-traces?correlation=${encodeURIComponent(id)}`}>
+                    Open trace {id}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <section className="rollout-fsm-wrap">
             <h4>Rollout FSM Timeline</h4>
@@ -176,18 +315,19 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
               ))}
             </ol>
             <div className="rollout-marker-row">
-              {data.events.slice(0, 12).map((event) => (
+              {normalizedEvents.slice(0, 12).map((event) => (
                 <button
                   key={event.event_id}
                   type="button"
                   className={selectedEvent?.event_id === event.event_id ? 'active' : undefined}
                   onClick={() => setSelectedEventId(event.event_id)}
+                  disabled={!event.details && !event.details_map}
                 >
-                  {event.type}
+                  {event.type}{event.duplicate_count > 1 ? ` x${event.duplicate_count}` : ''}
                 </button>
               ))}
             </div>
-            {selectedEvent ? (
+            {selectedEvent && selectedEventHasDetails ? (
               <div className="timeline-side">
                 <h4>Click to explain</h4>
                 <ul className="kv-list">
@@ -198,6 +338,9 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
                   <li><span>Cohorts</span><strong>{selectedEvent.cohorts.join(', ') || 'n/a'}</strong></li>
                   <li><span>Correlation IDs</span><strong>{selectedEvent.correlation_ids.join(', ') || 'none'}</strong></li>
                   <li><span>Details</span><strong>{selectedEvent.details}</strong></li>
+                  {selectedEvent.details_map ? (
+                    <li><span>Structured details</span><strong>{formatDetails(selectedEvent.details_map)}</strong></li>
+                  ) : null}
                 </ul>
               </div>
             ) : null}
@@ -216,17 +359,21 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
               </tr>
             </thead>
             <tbody>
-              {data.events.slice(0, 20).map((event) => (
+              {normalizedEvents.slice(0, 20).map((event) => (
                 <tr key={event.event_id}>
                   <td>{formatUtc(event.timestamp_utc)}</td>
                   <td>{event.type}</td>
                   <td>{event.actor}</td>
                   <td>{event.config_version}</td>
                   <td>{event.cohorts.join(', ') || 'n/a'}</td>
-                  <td>{event.correlation_ids.join(', ') || 'none'}</td>
+                  <td>
+                    {event.correlation_ids.length > 0
+                      ? `${event.correlation_ids.join(', ')}${event.duplicate_count > 1 ? ` (+${event.duplicate_count - 1} duplicate rows collapsed)` : ''}`
+                      : 'none'}
+                  </td>
                 </tr>
               ))}
-              {data.events.length === 0 ? (
+              {normalizedEvents.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="muted-line">No rollout events yet.</td>
                 </tr>
@@ -243,12 +390,13 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
               <button
                 type="button"
                 onClick={() => void exportEvidence()}
-                disabled={!data.evidence.available || exporting}
-                title={!data.evidence.available ? 'No traces generated yet' : 'Export rollout evidence pack'}
+                disabled={!canExportEvidence || exporting}
+                title={!canExportEvidence ? (exportBlockedReason ?? 'No traces generated yet') : 'Export rollout evidence pack'}
               >
                 {exporting ? 'Exporting...' : 'Export rollout evidence pack'}
               </button>
             </div>
+            {!canExportEvidence && exportBlockedReason ? <p className="muted-line">Export blocked: {exportBlockedReason}</p> : null}
             {exportError ? <p className="error-line">{exportError.code}: {exportError.message}</p> : null}
           </section>
         </div>

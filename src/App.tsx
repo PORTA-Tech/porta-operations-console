@@ -32,13 +32,22 @@ function RolloutPage() {
 
   return (
     <div className="stack">
-      <RolloutVerdictPanel {...evaluation} />
-      <RolloutControl />
-      <AdapterActivationControls />
-      <AdapterPromotionPathPanel />
-      <AdapterObservabilityPanel />
-      <BlastRadiusPreview {...evaluation} />
-      <DryRunSimulation {...evaluation} />
+      <section className="rollout-zone">
+        <h2 className="rollout-zone-title">Decision</h2>
+        <RolloutVerdictPanel {...evaluation} />
+      </section>
+      <section className="rollout-zone">
+        <h2 className="rollout-zone-title">What Will Happen</h2>
+        <BlastRadiusPreview {...evaluation} />
+        <DryRunSimulation {...evaluation} />
+      </section>
+      <section className="rollout-zone">
+        <h2 className="rollout-zone-title">Controls and Observability</h2>
+        <RolloutControl evaluation={evaluation.data} />
+        <AdapterActivationControls />
+        <AdapterPromotionPathPanel />
+        <AdapterObservabilityPanel evaluation={evaluation.data} />
+      </section>
     </div>
   );
 }

@@ -8,7 +8,7 @@ export function AdapterPromotionPathPanel() {
   const canMutate = operatorRole === 'operator';
 
   return (
-    <Panel title="Adapter Promotion Path">
+    <Panel title="Promotion Path">
       {loading ? <p className="muted-line">Loading promotion path...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       {data ? (

@@ -12,6 +12,7 @@ export function AuditTracesPage() {
   const [cohortFilter, setCohortFilter] = useState(params.get('cohort') ?? 'all');
   const [agentFilter, setAgentFilter] = useState(params.get('agent') ?? 'all');
   const [traceFocus, setTraceFocus] = useState(params.get('trace') ?? '');
+  const [correlationFilter, setCorrelationFilter] = useState(params.get('correlation') ?? '');
   const [confidenceMin, setConfidenceMin] = useState(0);
   const [agentCohortMap, setAgentCohortMap] = useState<Record<string, string>>({});
   const [cohortOptions, setCohortOptions] = useState<string[]>([]);
@@ -20,6 +21,7 @@ export function AuditTracesPage() {
     setCohortFilter(params.get('cohort') ?? 'all');
     setAgentFilter(params.get('agent') ?? 'all');
     setTraceFocus(params.get('trace') ?? '');
+    setCorrelationFilter(params.get('correlation') ?? '');
   }, [params]);
 
   useEffect(() => {
@@ -71,10 +73,11 @@ export function AuditTracesPage() {
         if (cohortFilter !== 'all' && agentCohortMap[row.agent_id] !== cohortFilter) return false;
         if (agentFilter !== 'all' && row.agent_id !== agentFilter) return false;
         if (traceFocus && row.trace_id !== traceFocus) return false;
+        if (correlationFilter && row.correlation_id !== correlationFilter) return false;
         if (row.confidence_score < confidenceMin) return false;
         return true;
       }),
-    [agentCohortMap, agentFilter, audits, cohortFilter, confidenceMin, decisionFilter, policyFilter, traceFocus]
+    [agentCohortMap, agentFilter, audits, cohortFilter, confidenceMin, correlationFilter, decisionFilter, policyFilter, traceFocus]
   );
 
   return (
@@ -134,6 +137,15 @@ export function AuditTracesPage() {
             onChange={(event) => {
               setTraceFocus(event.target.value);
               updateParam('trace', event.target.value);
+            }}
+          />
+          <input
+            className="table-search-input"
+            placeholder="Focus correlation id..."
+            value={correlationFilter}
+            onChange={(event) => {
+              setCorrelationFilter(event.target.value);
+              updateParam('correlation', event.target.value);
             }}
           />
           <button type="button" onClick={() => void exportRows('csv', filtered)}>Export CSV</button>

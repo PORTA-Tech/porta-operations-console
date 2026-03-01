@@ -15,6 +15,12 @@ export interface AdapterCohortObservabilityRow {
   sample_size: number;
   sample_min_required: number;
   availability_reason_code?: string;
+  replay_log_count?: number;
+  permissions?: {
+    can_view_replay_logs: boolean;
+    blocked_reason_code?: string;
+    blocked_reason_details?: Record<string, string | number | boolean | null>;
+  };
   sampled_at_utc: string;
 }
 
