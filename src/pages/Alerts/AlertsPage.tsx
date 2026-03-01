@@ -163,11 +163,11 @@ function suggestedActionForCategory(
 ): { label: string; path: string } {
   switch (category) {
     case 'agent_offline':
-      return { label: 'Open machines filtered', path: '/machines?offline=1' };
+      return { label: 'Open machines filtered', path: '/machines?scope=recent_issues&offline=1' };
     case 'backend_disconnected':
       return { label: 'Open system health', path: '/system-health' };
     case 'signature_invalid':
-      return { label: 'Open machines filtered', path: '/machines?signature=invalid' };
+      return { label: 'Open machines filtered', path: '/machines?scope=recent_issues&signatureInvalid=1&signature=invalid' };
     case 'config_drift':
       return { label: 'Open config integrity', path: '/config' };
     case 'slo_breach':

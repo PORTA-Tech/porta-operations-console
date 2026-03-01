@@ -23,6 +23,8 @@ interface NodeListProps {
   highInterventionRateThreshold: number;
 }
 
+type MachineScope = 'active' | 'recent_issues' | 'all_known';
+
 function formatAge(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds < 0) return 'unknown';
   if (seconds < 60) return `${seconds}s`;
@@ -30,6 +32,19 @@ function formatAge(seconds: number): string {
   if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
   return `${hours}h`;
+}
+
+function parseMachineScope(value: string | null): MachineScope {
+  if (value === 'recent_issues') return 'recent_issues';
+  if (value === 'all_known') return 'all_known';
+  return 'active';
+}
+
+function formatIssueReason(reason: string): string {
+  if (reason === 'SIGNATURE_INVALID') return 'signature invalid';
+  if (reason === 'CONFIG_DRIFT') return 'config drift';
+  if (reason === 'AGENT_OFFLINE') return 'agent offline';
+  return reason.toLowerCase();
 }
 
 function formatStateValue(value: number | null): string {
@@ -106,6 +121,13 @@ function formatWhyHere(node: NodeDetail): string {
   if (node.demo) {
     return 'Demo seed row. This machine is synthetic and only exists for simulator coverage/testing.';
   }
+  if (node.sourceKind === 'recent_issue') {
+    const summary = node.issueSummary ?? 'recent machine issue';
+    return `This machine is shown from recent issue history (${summary}) at ${formatUtc(node.lastIssueAtUtc ?? undefined)}.`;
+  }
+  if (node.issueSummary) {
+    return `This machine is active and also has recent issues: ${node.issueSummary}.`;
+  }
   return `Registered via heartbeat at ${formatUtc(node.lastHeartbeatUtc)}.`;
 }
 
@@ -138,6 +160,8 @@ export function NodeList({
   const navigate = useNavigate();
   const wsStatus = useWsConnectionStatus();
   const [params, setParams] = useSearchParams();
+  const [scope, setScope] = useState<MachineScope>(parseMachineScope(params.get('scope')));
+  const [showSyntheticIssues, setShowSyntheticIssues] = useState(params.get('showSyntheticIssues') === '1');
   const [search, setSearch] = useState(params.get('search') ?? '');
   const [cohortFilter, setCohortFilter] = useState(params.get('cohort') ?? 'all');
   const [offlineOnly, setOfflineOnly] = useState(params.get('offline') === '1');
@@ -153,6 +177,8 @@ export function NodeList({
   const selectedMachineId = params.get('machine') ?? '';
 
   useEffect(() => {
+    setScope(parseMachineScope(params.get('scope')));
+    setShowSyntheticIssues(params.get('showSyntheticIssues') === '1');
     setSearch(params.get('search') ?? '');
     setCohortFilter(params.get('cohort') ?? 'all');
     setOfflineOnly(params.get('offline') === '1');
@@ -173,12 +199,44 @@ export function NodeList({
     setParams(next, { replace: true });
   };
 
-  const cohorts = useMemo(() => Array.from(new Set(nodes.map((node) => node.cohortId))), [nodes]);
+  const activeSnapshotNodes = useMemo(
+    () => nodes.filter((node) => node.sourceKind === 'snapshot' && (!node.demo || demoModeOn)),
+    [nodes, demoModeOn]
+  );
+
+  const recentIssueNodes = useMemo(
+    () => nodes.filter((node) => node.issueReasonCodes.length > 0 || node.sourceKind === 'recent_issue'),
+    [nodes]
+  );
+
+  const hiddenSyntheticIssueNodes = useMemo(
+    () => recentIssueNodes.filter((node) => node.demo && !demoModeOn),
+    [recentIssueNodes, demoModeOn]
+  );
+
+  const scopedNodes = useMemo(() => {
+    let base: NodeDetail[];
+    if (scope === 'recent_issues') {
+      base = recentIssueNodes;
+    } else if (scope === 'all_known') {
+      base = nodes;
+    } else {
+      base = activeSnapshotNodes;
+    }
+    return base.filter((node) => {
+      if (!node.demo) return true;
+      if (demoModeOn) return true;
+      if (scope === 'recent_issues' && showSyntheticIssues && node.issueReasonCodes.length > 0) return true;
+      return false;
+    });
+  }, [scope, recentIssueNodes, nodes, activeSnapshotNodes, demoModeOn, showSyntheticIssues]);
+
+  const cohorts = useMemo(() => Array.from(new Set(scopedNodes.map((node) => node.cohortId))), [scopedNodes]);
 
   const filteredNodes = useMemo(() => {
     const query = search.trim().toLowerCase();
 
-    return nodes.filter((node) => {
+    return scopedNodes.filter((node) => {
       const matchesSearch =
         query.length === 0
         || [
@@ -202,7 +260,7 @@ export function NodeList({
       return true;
     });
   }, [
-    nodes,
+    scopedNodes,
     search,
     cohortFilter,
     offlineOnly,
@@ -216,13 +274,13 @@ export function NodeList({
   ]);
 
   const counts = useMemo(() => {
-    const total = nodes.length;
-    const online = nodes.filter((node) => !node.offline).length;
+    const total = scopedNodes.length;
+    const online = scopedNodes.filter((node) => !node.offline).length;
     const offline = total - online;
-    const demo = nodes.filter((node) => node.demo).length;
+    const demo = scopedNodes.filter((node) => node.demo).length;
     return { total, online, offline, demo };
-  }, [nodes]);
-  const noCacheWhileDisconnected = !snapshotConnected && nodes.length === 0;
+  }, [scopedNodes]);
+  const noCacheWhileDisconnected = !snapshotConnected && activeSnapshotNodes.length === 0;
   const environmentDisplayLabel = dataMode === 'demo' ? 'Local / Demo' : environmentLabel;
 
   return (
@@ -255,6 +313,9 @@ export function NodeList({
         <div>
           <strong>Counts:</strong> Total {counts.total} | Online {counts.online} | Offline {counts.offline} | Demo {counts.demo}
         </div>
+        <div>
+          <strong>Scope:</strong> {scope === 'active' ? 'Active machines' : scope === 'recent_issues' ? 'Recent issues (24h)' : 'All known'}
+        </div>
         {allowDemoMode ? (
           <label className="machines-demo-toggle">
             <strong>Demo Mode</strong>
@@ -280,9 +341,39 @@ export function NodeList({
           Connection is disconnected and no cached snapshot is available. Machines table is intentionally empty until live data returns.
         </p>
       ) : null}
+      {scope === 'active' && activeSnapshotNodes.length === 0 && recentIssueNodes.length > 0 ? (
+        <p className="focus-banner">
+          No active machines are reporting, but {recentIssueNodes.length} machine issue{recentIssueNodes.length === 1 ? '' : 's'} were seen in the last 24h.
+          {' '}
+          <button
+            type="button"
+            onClick={() => {
+              setScope('recent_issues');
+              updateParam('scope', 'recent_issues', 'active');
+            }}
+          >
+            View recent issues
+          </button>
+        </p>
+      ) : null}
       {simulatedSnapshotDetected && !demoModeOn ? (
         <p className="focus-banner">
           Simulated snapshot rows detected and hidden by default. Enable Demo Mode to inspect synthetic fleet data.
+        </p>
+      ) : null}
+      {scope === 'recent_issues' && hiddenSyntheticIssueNodes.length > 0 && !showSyntheticIssues ? (
+        <p className="focus-banner">
+          {hiddenSyntheticIssueNodes.length} recent issue row{hiddenSyntheticIssueNodes.length === 1 ? '' : 's'} are synthetic and hidden.
+          {' '}
+          <button
+            type="button"
+            onClick={() => {
+              setShowSyntheticIssues(true);
+              updateParam('showSyntheticIssues', '1');
+            }}
+          >
+            Show synthetic issue rows
+          </button>
         </p>
       ) : null}
       {dataMode === 'demo' || (counts.demo > 0 && demoModeOn) ? (
@@ -292,6 +383,19 @@ export function NodeList({
       ) : null}
 
       <div className="table-controls">
+        <select
+          value={scope}
+          onChange={(event) => {
+            const next = parseMachineScope(event.target.value);
+            setScope(next);
+            updateParam('scope', next, 'active');
+          }}
+          aria-label="Machine scope"
+        >
+          <option value="active">Active machines</option>
+          <option value="recent_issues">Machines with recent issues (24h)</option>
+          <option value="all_known">All known machines</option>
+        </select>
         <input
           className="table-search-input"
           type="search"
@@ -318,6 +422,19 @@ export function NodeList({
             </option>
           ))}
         </select>
+        <label>
+          Include synthetic issue rows
+          <input
+            type="checkbox"
+            checked={showSyntheticIssues}
+            disabled={scope !== 'recent_issues'}
+            onChange={(event) => {
+              const enabled = event.target.checked;
+              setShowSyntheticIssues(enabled);
+              updateParam('showSyntheticIssues', enabled ? '1' : '', '');
+            }}
+          />
+        </label>
         <label>
           Offline/stale
           <input
@@ -428,7 +545,13 @@ export function NodeList({
                   }}
                   title="Select machine for drilldown"
                 >
-                  <td>{node.nodeId}</td>
+                  <td>
+                    {node.nodeId}
+                    {node.sourceKind === 'recent_issue' ? <span className="delta-chip warn">recent issue</span> : null}
+                    {node.issueReasonCodes.length > 0 && node.sourceKind !== 'recent_issue' ? (
+                      <div className="muted-line">{node.issueReasonCodes.slice(0, 2).map(formatIssueReason).join(', ')}</div>
+                    ) : null}
+                  </td>
                   <td>{node.cohortId}</td>
                   <td>
                     {formatUtc(node.lastHeartbeatUtc)}
@@ -539,7 +662,7 @@ export function NodeList({
               <td colSpan={11} className="muted-line">
                 {noCacheWhileDisconnected
                   ? '0 machines shown: disconnected and no cached snapshot.'
-                  : 'No machines match the current filters.'}
+                  : `No machines match the current filters in ${scope === 'active' ? 'Active machines' : scope === 'recent_issues' ? 'Recent issues' : 'All known'} scope.`}
               </td>
             </tr>
           ) : null}

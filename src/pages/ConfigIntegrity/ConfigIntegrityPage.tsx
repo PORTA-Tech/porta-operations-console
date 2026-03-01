@@ -529,7 +529,7 @@ export function ConfigIntegrityPage() {
         </div>
         {invalidSignatureMachines > 0 ? (
           <div className="button-row">
-            <button type="button" onClick={() => navigate('/machines?signatureInvalid=1')}>
+            <button type="button" onClick={() => navigate('/machines?scope=all_known&signatureInvalid=1')}>
               Open affected machines
             </button>
           </div>
@@ -599,7 +599,7 @@ export function ConfigIntegrityPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          navigate(`/machines?cohort=${encodeURIComponent(row.cohort)}&signatureInvalid=1`);
+                          navigate(`/machines?scope=all_known&cohort=${encodeURIComponent(row.cohort)}&signatureInvalid=1`);
                         }}
                       >
                         Open invalid
@@ -607,7 +607,7 @@ export function ConfigIntegrityPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          navigate(`/machines?cohort=${encodeURIComponent(row.cohort)}&configDrift=1`);
+                          navigate(`/machines?scope=all_known&cohort=${encodeURIComponent(row.cohort)}&configDrift=1`);
                         }}
                       >
                         Open drifted

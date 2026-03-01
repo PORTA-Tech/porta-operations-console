@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { getNodeSnapshot, type NodeSnapshotRow } from '../api/nodes';
-import { fetchAuditDecisions } from '../api/operations';
+import { fetchAlerts, fetchAuditDecisions } from '../api/operations';
 import { toApiError, type ApiError } from '../api/client';
 import type { MachineDataMode, NodeDetail } from '../types/ui';
-import type { AuditDecisionRecord } from '../types/consoleOperations';
+import type { AlertRecord, AuditDecisionRecord } from '../types/consoleOperations';
 
 type StreamState = {
   focus: number | null;
@@ -20,6 +20,16 @@ const OFFLINE_HEARTBEAT_THRESHOLD_SEC = 30;
 const HIGH_OVERLOAD_THRESHOLD = 0.75;
 const HIGH_INTERVENTION_RATE_15M = 3;
 const SYNTHETIC_NODE_ID_PATTERN = /^00000000-0000-4000-8000-0000000000\d+$/;
+const RECENT_ISSUE_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+type MachineIssueReasonCode = 'SIGNATURE_INVALID' | 'CONFIG_DRIFT' | 'AGENT_OFFLINE';
+
+interface MachineIssueSignal {
+  machineId: string;
+  lastSeenUtc: string;
+  cohortId: string | null;
+  reasons: Set<MachineIssueReasonCode>;
+}
 
 function parseNumber(value: unknown): number | null {
   const parsed = Number(value);
@@ -143,6 +153,101 @@ function buildFleetVersionMode(rows: NodeSnapshotRow[]): string | null {
 function decisionTimestampMs(decision: AuditDecisionRecord): number {
   const ms = Date.parse(decision.timestamp);
   return Number.isFinite(ms) ? ms : 0;
+}
+
+function isRecentTimestamp(utc: string): boolean {
+  const ms = Date.parse(utc);
+  if (!Number.isFinite(ms)) return false;
+  return Date.now() - ms <= RECENT_ISSUE_WINDOW_MS;
+}
+
+function normalizeIssueTimestamp(candidate: string | null | undefined): string {
+  if (!candidate) return new Date().toISOString();
+  const ms = Date.parse(candidate);
+  if (!Number.isFinite(ms)) return new Date().toISOString();
+  return new Date(ms).toISOString();
+}
+
+function parseMachineIdFromText(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const uuid = trimmed.match(/\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i);
+  if (uuid?.[0]) return uuid[0];
+
+  const keywordToken = trimmed.match(/\b(?:machine|node|agent)[-_:][A-Za-z0-9._:-]+\b/i);
+  if (keywordToken?.[0]) return keywordToken[0];
+
+  const keyedValue = trimmed.match(/\b(?:machine|node|agent)(?:\s+id)?\s*[:=#]\s*([A-Za-z0-9._:-]{3,})\b/i);
+  if (keyedValue?.[1]) return keyedValue[1];
+
+  if (!/\s/.test(trimmed) && /^[A-Za-z0-9._:-]{3,}$/.test(trimmed)) {
+    return trimmed;
+  }
+  return null;
+}
+
+function extractMachineIdFromAlert(alert: AlertRecord): string | null {
+  const raw = alert as unknown as Record<string, unknown>;
+  const directCandidates = [
+    parseString(raw.machine_id),
+    parseString(raw.machineId),
+    parseString(raw.agent_id),
+    parseString(raw.agentId),
+    parseString(raw.node_id),
+    parseString(raw.nodeId),
+    alert.target_service
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of directCandidates) {
+    const parsed = parseMachineIdFromText(candidate);
+    if (parsed) return parsed;
+  }
+
+  const reasonParsed = parseMachineIdFromText(alert.reason);
+  return reasonParsed;
+}
+
+function pushMachineIssue(
+  issuesByMachine: Map<string, MachineIssueSignal>,
+  machineId: string,
+  reason: MachineIssueReasonCode,
+  timestampUtc: string,
+  cohortId: string | null
+): void {
+  const key = machineId.trim();
+  if (!key) return;
+
+  const existing = issuesByMachine.get(key);
+  if (!existing) {
+    issuesByMachine.set(key, {
+      machineId: key,
+      lastSeenUtc: normalizeIssueTimestamp(timestampUtc),
+      cohortId,
+      reasons: new Set<MachineIssueReasonCode>([reason])
+    });
+    return;
+  }
+
+  existing.reasons.add(reason);
+  const existingMs = Date.parse(existing.lastSeenUtc);
+  const incomingMs = Date.parse(timestampUtc);
+  if (Number.isFinite(incomingMs) && (!Number.isFinite(existingMs) || incomingMs > existingMs)) {
+    existing.lastSeenUtc = new Date(incomingMs).toISOString();
+  }
+  if (!existing.cohortId && cohortId) {
+    existing.cohortId = cohortId;
+  }
+}
+
+function issueSummaryFromReasons(reasons: string[]): string | null {
+  if (reasons.length === 0) return null;
+  const labels = reasons.map((reason) => {
+    if (reason === 'SIGNATURE_INVALID') return 'signature invalid';
+    if (reason === 'CONFIG_DRIFT') return 'config drift';
+    return 'agent offline';
+  });
+  return labels.join(', ');
 }
 
 function detectEnvironmentLabel(): 'Local' | 'Staging' | 'Prod' {
@@ -298,9 +403,10 @@ export function useNodeDrilldown(): {
 
     const refresh = async (): Promise<void> => {
       try {
-        const [snapshotResult, decisions] = await Promise.all([
+        const [snapshotResult, decisions, alerts] = await Promise.all([
           getNodeSnapshot(),
-          fetchAuditDecisions().catch(() => [])
+          fetchAuditDecisions().catch(() => []),
+          fetchAlerts(true).catch(() => [])
         ]);
         if (!mounted) return;
 
@@ -311,13 +417,48 @@ export function useNodeDrilldown(): {
         const window15m = nowMs - 15 * 60 * 1000;
 
         const decisionsByAgent = new Map<string, AuditDecisionRecord[]>();
+        const machineIssues = new Map<string, MachineIssueSignal>();
         for (const decision of decisions) {
           const bucket = decisionsByAgent.get(decision.agent_id) ?? [];
           bucket.push(decision);
           decisionsByAgent.set(decision.agent_id, bucket);
+
+          const decisionAtMs = decisionTimestampMs(decision);
+          if (decisionAtMs <= 0 || Date.now() - decisionAtMs > RECENT_ISSUE_WINDOW_MS) continue;
+          const reason = String(decision.reason_code ?? decision.triggered_by ?? '').toLowerCase();
+          const signatureInvalid = decision.signature_status === 'INVALID' || reason.includes('signature');
+          const configDrift = reason.includes('drift') || reason.includes('version_mismatch');
+          if (!signatureInvalid && !configDrift) continue;
+          const machineId = (decision.machine_id ?? decision.agent_id ?? '').trim();
+          if (!machineId) continue;
+
+          if (signatureInvalid) {
+            pushMachineIssue(machineIssues, machineId, 'SIGNATURE_INVALID', decision.timestamp, decision.cohort_id ?? null);
+          }
+          if (configDrift) {
+            pushMachineIssue(machineIssues, machineId, 'CONFIG_DRIFT', decision.timestamp, decision.cohort_id ?? null);
+          }
         }
         for (const entries of decisionsByAgent.values()) {
           entries.sort((left, right) => decisionTimestampMs(right) - decisionTimestampMs(left));
+        }
+
+        for (const alert of alerts) {
+          const type = alert.alert_type.toLowerCase();
+          let reasonCode: MachineIssueReasonCode | null = null;
+          if (type === 'signature_invalid' || type === 'signature_verification_failure') {
+            reasonCode = 'SIGNATURE_INVALID';
+          } else if (type === 'config_drift' || type === 'policy_version_mismatch') {
+            reasonCode = 'CONFIG_DRIFT';
+          } else if (type === 'agent_offline') {
+            reasonCode = 'AGENT_OFFLINE';
+          }
+          if (!reasonCode) continue;
+          const observedAtUtc = normalizeIssueTimestamp(alert.last_seen_at || alert.first_seen_at);
+          if (!isRecentTimestamp(observedAtUtc)) continue;
+          const machineId = extractMachineIdFromAlert(alert);
+          if (!machineId) continue;
+          pushMachineIssue(machineIssues, machineId, reasonCode, observedAtUtc, null);
         }
 
         const nextNodesRaw = snapshot.map((row) => {
@@ -377,10 +518,17 @@ export function useNodeDrilldown(): {
           }).length;
           const policyVersions = [...new Set(machineDecisions.map((event) => event.policy_id).filter((id) => id !== ''))];
           const demo = isSyntheticSnapshotRow(row);
+          const issueSignal = machineIssues.get(row.node_id);
+          const issueReasonCodes = new Set<MachineIssueReasonCode>(issueSignal ? [...issueSignal.reasons] : []);
+          if (!row.signature_valid) issueReasonCodes.add('SIGNATURE_INVALID');
+          if (configDrift) issueReasonCodes.add('CONFIG_DRIFT');
+          if (offline) issueReasonCodes.add('AGENT_OFFLINE');
+          const issueReasonList = [...issueReasonCodes];
 
           return {
             nodeId: row.node_id,
             cohortId: row.cohort,
+            sourceKind: 'snapshot',
             configSeq: row.config_seq,
             signatureStatus: row.signature_valid ? 'verified' : 'invalid',
             lastHeartbeatUtc: row.last_heartbeat,
@@ -406,13 +554,63 @@ export function useNodeDrilldown(): {
             configDiffSummary: pickString(raw, ['config_diff_summary', 'configDiffSummary']),
             appliedPolicyVersions: policyVersions,
             recentEvents,
+            issueReasonCodes: issueReasonList,
+            issueSummary: issueSummaryFromReasons(issueReasonList),
+            lastIssueAtUtc: issueSignal?.lastSeenUtc ?? null,
             demo
           } satisfies NodeDetail;
         });
+        const snapshotNodeIds = new Set(nextNodesRaw.map((node) => node.nodeId));
+        const issueOnlyNodes: NodeDetail[] = [];
+        for (const issue of machineIssues.values()) {
+          if (snapshotNodeIds.has(issue.machineId)) continue;
+          const reasonList = [...issue.reasons];
+          const syntheticIssueRow = SYNTHETIC_NODE_ID_PATTERN.test(issue.machineId) || issue.machineId.startsWith('demo-');
+          issueOnlyNodes.push({
+            nodeId: issue.machineId,
+            cohortId: issue.cohortId ?? 'unknown',
+            sourceKind: 'recent_issue',
+            configSeq: 0,
+            signatureStatus: reasonList.includes('SIGNATURE_INVALID') ? 'invalid' : 'unknown',
+            lastHeartbeatUtc: issue.lastSeenUtc,
+            degradationState: 'safe',
+            sloCompliant: true,
+            heartbeatAgeSec: parseHeartbeatAgeSec(issue.lastSeenUtc),
+            offline: true,
+            expectedConfigSeq: 0,
+            configDrift: reasonList.includes('CONFIG_DRIFT'),
+            agentVersion: 'unknown',
+            versionMismatch: false,
+            backendConnected: false,
+            stateSummary: {
+              focus: null,
+              overload: null,
+              fatigue: null,
+              stress: null,
+              stability: null,
+              confidence: null,
+              contributors: [],
+              source: 'unavailable',
+              lastUpdatedUtc: null
+            },
+            lastIntervention: 'none',
+            lastInterventionUtc: null,
+            interventionRate15m: 0,
+            errorRatePct: null,
+            degradationTag: 'warning',
+            configIssuer: null,
+            configExpiryUtc: null,
+            configDiffSummary: null,
+            appliedPolicyVersions: [],
+            recentEvents: [],
+            issueReasonCodes: reasonList,
+            issueSummary: issueSummaryFromReasons(reasonList),
+            lastIssueAtUtc: issue.lastSeenUtc,
+            demo: syntheticIssueRow
+          });
+        }
 
-        const nextNodes = demoModeOn && allowDemoMode
-          ? nextNodesRaw
-          : nextNodesRaw.filter((node) => !node.demo);
+        const nextNodes = [...nextNodesRaw, ...issueOnlyNodes];
 
         setNodes(nextNodes);
         setLastUpdatedUtc(new Date().toISOString());
@@ -433,6 +631,7 @@ export function useNodeDrilldown(): {
             return {
               nodeId: row.node_id,
               cohortId: row.cohort,
+              sourceKind: 'snapshot',
               configSeq: row.config_seq,
               signatureStatus: row.signature_valid ? 'verified' : 'invalid',
               lastHeartbeatUtc: row.last_heartbeat,
@@ -466,6 +665,9 @@ export function useNodeDrilldown(): {
               configDiffSummary: null,
               appliedPolicyVersions: [],
               recentEvents: [],
+              issueReasonCodes: [],
+              issueSummary: null,
+              lastIssueAtUtc: null,
               demo: true
             } satisfies NodeDetail;
           });

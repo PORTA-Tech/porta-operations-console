@@ -1,6 +1,7 @@
 export interface NodeDetail {
   nodeId: string;
   cohortId: string;
+  sourceKind: 'snapshot' | 'recent_issue';
   configSeq: number;
   signatureStatus: 'verified' | 'invalid' | 'unknown';
   lastHeartbeatUtc: string;
@@ -42,6 +43,9 @@ export interface NodeDetail {
     confidence: number;
     trigger: string;
   }>;
+  issueReasonCodes: string[];
+  issueSummary: string | null;
+  lastIssueAtUtc: string | null;
   demo: boolean;
 }
 
