@@ -1532,16 +1532,21 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   margin: 0 0 8px;
 }
 
-.rollout-stage-track {
-  margin: 0;
-  padding-left: 16px;
+.rollout-stepper {
+  margin: 0 0 10px;
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  list-style: decimal;
+  gap: 6px;
+  align-items: center;
 }
 
-.rollout-stage-track li {
+.rollout-stepper-item-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rollout-stepper-item {
   border: 1px solid var(--line);
   border-radius: 999px;
   padding: 3px 10px;
@@ -1549,9 +1554,13 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   font-size: 0.84rem;
 }
 
-.rollout-stage-track li.active {
+.rollout-stepper-item.active {
   border-color: color-mix(in oklab, var(--accent-2) 65%, var(--line));
   background: color-mix(in oklab, white 90%, var(--accent-2));
+}
+
+.rollout-stepper-arrow {
+  color: var(--muted);
 }
 
 .rollout-marker-row {
@@ -1569,6 +1578,28 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
 .rollout-zone {
   display: grid;
   gap: 10px;
+}
+
+.rollout-detail-box {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.rollout-detail-box summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+.rollout-detail-content {
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.rollout-detail-content p {
+  margin: 0;
 }
 
 .rollout-zone-title {

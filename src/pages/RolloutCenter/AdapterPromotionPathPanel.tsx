@@ -2,10 +2,23 @@ import { Panel } from '../../components/Layout/Panel';
 import { useAdapterPromotionPath } from '../../hooks/useAdapterPromotionPath';
 import { useOperatorAuth } from '../../hooks/useOperatorAuth';
 
+function reasonToSentence(code: string): string {
+  if (code === 'feature_gate_disabled') return 'Feature gate is disabled by policy.';
+  if (code === 'adapter_not_enabled') return 'Adapter is not enabled yet.';
+  if (code === 'cooldown_active') return 'Cooldown is active.';
+  if (code === 'rollout_state_blocked') return 'Rollout state does not allow advancement.';
+  if (code === 'slo_guard_failed') return 'One or more SLO guardrails failed.';
+  if (code === 'fsm_blocked') return 'FSM guardrail is blocking advancement.';
+  return code;
+}
+
 export function AdapterPromotionPathPanel() {
   const { data, loading, error, advancing, advanceError, advance } = useAdapterPromotionPath();
   const { operatorRole } = useOperatorAuth();
   const canMutate = operatorRole === 'operator';
+  const why = data?.guard_reasons.length
+    ? data.guard_reasons.map((reason) => reasonToSentence(reason)).join(' ')
+    : 'All path guardrails are currently healthy.';
 
   return (
     <Panel title="Promotion Path">
@@ -13,12 +26,20 @@ export function AdapterPromotionPathPanel() {
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       {data ? (
         <>
-          <p>stage: <strong>{data.stage}</strong></p>
-          <p>next_stage: <strong>{data.next_stage ?? 'n/a'}</strong></p>
-          <p>rollout_state: <strong>{data.rollout_state}</strong></p>
-          <p>cooldown_active: <strong>{data.cooldown_active ? 'true' : 'false'}</strong></p>
-          <p>SLO/FSM/Cooldown guards: <strong>{data.allowed_to_advance ? 'pass' : 'blocked'}</strong></p>
-          {data.guard_reasons.length > 0 ? <p className="muted-line">{data.guard_reasons.join(', ')}</p> : null}
+          <p>Current stage: <strong>{data.stage}</strong></p>
+          <p>Next stage: <strong>{data.next_stage ?? 'n/a'}</strong></p>
+          <p>Path status: <strong>{data.allowed_to_advance ? 'Ready to advance' : 'Blocked'}</strong></p>
+          <p className="muted-line">Why: {why}</p>
+          <details className="rollout-detail-box">
+            <summary>Show details</summary>
+            <div className="rollout-detail-content">
+              <p className="muted-line">Rollout state: {data.rollout_state}</p>
+              <p className="muted-line">Cooldown: {data.cooldown_active ? 'Active' : 'Inactive'}</p>
+              {data.guard_reasons.length > 0 ? (
+                <p className="muted-line">Reason codes: {data.guard_reasons.join(', ')}</p>
+              ) : null}
+            </div>
+          </details>
 
           {canMutate ? (
             <div className="button-row">

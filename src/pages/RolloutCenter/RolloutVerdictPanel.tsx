@@ -10,6 +10,8 @@ interface RolloutVerdictPanelProps {
   error: ApiError | undefined;
 }
 
+type DisplayEvent = RolloutEvaluation['events'][number] & { duplicate_count: number };
+
 function verdictLabel(verdict: RolloutEvaluation['decision']['promotion_verdict']): string {
   if (verdict === 'ALLOW') return 'Yes';
   if (verdict === 'BLOCK') return 'No';
@@ -28,14 +30,6 @@ function guardrailTone(status: RolloutEvaluation['guardrail_eval'][number]['stat
   if (status === 'INCONCLUSIVE') return 'warn';
   return 'neutral';
 }
-
-function formatDetails(details: Record<string, string | number | boolean | null>): string {
-  return Object.entries(details)
-    .map(([key, value]) => `${key}=${value === null ? 'null' : String(value)}`)
-    .join(', ');
-}
-
-type DisplayEvent = RolloutEvaluation['events'][number] & { duplicate_count: number };
 
 function buildEventKey(event: RolloutEvaluation['events'][number]): string {
   return [
@@ -89,36 +83,146 @@ function normalizeEvents(data: RolloutEvaluation | undefined): DisplayEvent[] {
   });
 }
 
-function operatorSummary(data: RolloutEvaluation): string {
-  const reasons: string[] = [];
-  if (!data.data_quality.sample_valid) {
-    reasons.push(
-      `${data.data_quality.target_cohort_id} has ${data.data_quality.sample_size_by_cohort[data.data_quality.target_cohort_id] ?? 0} reporting machines (min ${data.data_quality.min_sample_machines})`
-    );
+function eventTypeLabel(type: string): string {
+  if (type === 'RolloutEvaluationComputed') return 'Evaluation computed';
+  if (type === 'PromotionBlocked') return 'Promotion blocked';
+  if (type === 'PromotionAllowed') return 'Promotion allowed';
+  if (type === 'PromotionRequested') return 'Promotion requested';
+  if (type === 'PromotionExecuted') return 'Promotion executed';
+  if (type === 'MonitoringStarted') return 'Monitoring started';
+  if (type === 'GuardrailFailed') return 'Guardrail failed';
+  if (type === 'CooldownActivated') return 'Cooldown started';
+  if (type === 'HaltRaised') return 'Halt raised';
+  if (type === 'RollbackStarted') return 'Rollback started';
+  if (type === 'RollbackCompleted') return 'Rollback completed';
+  return type;
+}
+
+function stageLabel(stage: string): string {
+  if (stage === 'PROMOTING') return 'Promoting';
+  if (stage === 'MONITORING') return 'Monitoring';
+  if (stage === 'IDLE') return 'Idle';
+  if (stage === 'HALTED') return 'Halted';
+  if (stage === 'ROLLED_BACK') return 'Rolled back';
+  if (stage === 'COOLDOWN') return 'Cooldown';
+  return stage;
+}
+
+function reasonCodeLabel(code: string): string {
+  if (code === 'INSUFFICIENT_SAMPLE') return 'Insufficient sample';
+  if (code === 'INSUFFICIENT_COVERAGE') return 'Coverage too low';
+  if (code === 'STREAM_STALE') return 'Stream stale';
+  if (code === 'TRUST_UNKNOWN') return 'Trust unknown';
+  if (code === 'COOLDOWN_ACTIVE') return 'Cooldown active';
+  if (code === 'FEATURE_GATE_DISABLED') return 'Feature gate disabled';
+  if (code === 'GUARDRAIL_INCONCLUSIVE') return 'Guardrail inconclusive';
+  if (code === 'SLO_RISK_TOO_HIGH') return 'SLO risk too high';
+  if (code === 'ALL_GUARDRAILS_PASS') return 'All guardrails pass';
+  return code;
+}
+
+function whySentence(data: RolloutEvaluation): string {
+  const code = data.decision.trigger_reason_code;
+  const baseline = data.data_quality.baseline_cohort_id;
+  const target = data.data_quality.target_cohort_id;
+  const baselineCount = data.data_quality.sample_size_by_cohort[baseline] ?? 0;
+  const targetCount = data.data_quality.sample_size_by_cohort[target] ?? 0;
+  const minSample = data.data_quality.min_sample_machines;
+
+  if (code === 'INSUFFICIENT_SAMPLE') {
+    return `Not enough machines reporting in ${target} (${targetCount}/${minSample}).`;
   }
-  if (!data.data_quality.coverage_valid) {
-    reasons.push(`coverage is below ${data.data_quality.min_coverage_pct}%`);
+  if (code === 'INSUFFICIENT_COVERAGE') {
+    const coverage = data.data_quality.coverage_pct_by_cohort[target] ?? 0;
+    return `Coverage in ${target} is below minimum (${coverage.toFixed(1)}%/${data.data_quality.min_coverage_pct.toFixed(1)}%).`;
   }
-  if (!data.data_quality.metrics_available) {
-    reasons.push('SLO deltas are unavailable');
+  if (code === 'STREAM_STALE') {
+    return 'Metrics stream is stale, so promotion cannot be evaluated yet.';
   }
-  const trustStatus = data.data_quality.trust?.status ?? data.data_quality.trust_status;
-  if (trustStatus !== 'VALID') {
-    reasons.push(`trust is ${trustStatus.toLowerCase()}`);
+  if (code === 'TRUST_UNKNOWN') {
+    return 'Trust could not be validated for this evaluation window.';
   }
-  const featureGate = data.guardrail_eval.find((guardrail) => guardrail.guardrail_id === 'FEATURE_GATE');
-  if (featureGate?.status === 'FAIL') {
-    reasons.push('adapter metrics are disabled by policy');
+  if (code === 'COOLDOWN_ACTIVE') {
+    return 'Cooldown is still active, so promotion is blocked right now.';
   }
-  if (reasons.length === 0) {
-    return 'Promotion can proceed: data quality checks and guardrails are currently healthy.';
+  if (code === 'FEATURE_GATE_DISABLED') {
+    return 'Adapter metrics are disabled by policy.';
   }
-  const verdictText = data.decision.promotion_verdict === 'BLOCK'
-    ? 'blocked'
-    : data.decision.promotion_verdict === 'INCONCLUSIVE'
-      ? 'inconclusive'
-      : 'allowed';
-  return `Promotion is ${verdictText} because ${reasons.join(', ')}.`;
+  if (code === 'ALL_GUARDRAILS_PASS') {
+    return 'Guardrails are healthy and data quality checks are passing.';
+  }
+
+  const verdict = data.decision.promotion_verdict === 'ALLOW'
+    ? 'allowed'
+    : data.decision.promotion_verdict === 'BLOCK'
+      ? 'blocked'
+      : 'inconclusive';
+  return `Promotion is ${verdict} for ${target} versus ${baseline} (${targetCount} vs ${baselineCount} machines).`;
+}
+
+function reasonDetailLines(data: RolloutEvaluation): string[] {
+  const baseline = data.data_quality.baseline_cohort_id;
+  const target = data.data_quality.target_cohort_id;
+  const baselineCount = data.data_quality.sample_size_by_cohort[baseline] ?? 0;
+  const targetCount = data.data_quality.sample_size_by_cohort[target] ?? 0;
+  const lines = [
+    `Baseline: ${baseline} (${baselineCount} machine${baselineCount === 1 ? '' : 's'})`,
+    `Target: ${target} (${targetCount} machine${targetCount === 1 ? '' : 's'})`,
+    `Minimum required: ${data.data_quality.min_sample_machines} machines`,
+    `Coverage: ${(data.data_quality.coverage_pct_by_cohort[target] ?? 0).toFixed(1)}% (min ${data.data_quality.min_coverage_pct.toFixed(1)}%)`
+  ];
+  if (data.data_quality.freshness_seconds !== null) {
+    lines.push(`Freshness: ${data.data_quality.freshness_seconds}s`);
+  }
+  return lines;
+}
+
+function fixHints(data: RolloutEvaluation): string[] {
+  const code = data.decision.trigger_reason_code;
+  if (code === 'INSUFFICIENT_SAMPLE') {
+    return ['Wait for canary machines to report.', 'Increase canary sample size before evaluating again.'];
+  }
+  if (code === 'INSUFFICIENT_COVERAGE') {
+    return ['Raise reporting coverage in baseline/target cohorts.', 'Re-evaluate once coverage exceeds minimum threshold.'];
+  }
+  if (code === 'TRUST_UNKNOWN') {
+    return ['Validate config and policy signatures.', 'Check trust issuers on reporting nodes.'];
+  }
+  if (code === 'FEATURE_GATE_DISABLED') {
+    return ['Enable the adapter feature gate in policy if required.', 'Re-run evaluation after gate changes propagate.'];
+  }
+  if (code === 'COOLDOWN_ACTIVE') {
+    return ['Wait for cooldown window to end.', 'Review recent halt/rollback events before retrying promotion.'];
+  }
+  return ['Review failing/inconclusive guardrails and open evidence traces.', 'Re-evaluate after the next monitoring window.'];
+}
+
+function guardrailReasonLabel(code: string | undefined): string {
+  if (!code) return 'n/a';
+  if (code === 'INSUFFICIENT_SAMPLE') return 'Insufficient sample';
+  if (code === 'THRESHOLD_EXCEEDED') return 'Threshold exceeded';
+  if (code === 'FEATURE_GATE_DISABLED') return 'Feature gate disabled';
+  if (code === 'ADAPTER_NOT_ENABLED') return 'Adapter not enabled';
+  if (code === 'CIRCUIT_OPEN') return 'Circuit open';
+  if (code === 'FSM_BLOCKED') return 'FSM blocked';
+  if (code === 'COOLDOWN_ACTIVE') return 'Cooldown active';
+  if (code === 'SIGNATURE_INVALID') return 'Signature invalid';
+  if (code === 'SIGNATURE_UNKNOWN') return 'Signature unknown';
+  return code;
+}
+
+function markerEvents(events: DisplayEvent[]): DisplayEvent[] {
+  const hasEvaluationEvent = events.some((event) => event.type === 'RolloutEvaluationComputed');
+  const filtered = hasEvaluationEvent
+    ? events.filter((event) => event.type !== 'GuardrailFailed')
+    : events;
+  return filtered.slice(0, 12);
+}
+
+function formatRawDetailRows(details: Record<string, string | number | boolean | null>): string {
+  return Object.entries(details)
+    .map(([key, value]) => `${key}=${value === null ? 'null' : String(value)}`)
+    .join(', ');
 }
 
 function downloadJson(name: string, payload: unknown): void {
@@ -138,10 +242,12 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
   const [exportError, setExportError] = useState<ApiError | undefined>();
 
   const normalizedEvents = useMemo(() => normalizeEvents(data), [data]);
-  const selectedEvent = useMemo(
-    () => normalizedEvents.find((event) => event.event_id === selectedEventId) ?? normalizedEvents[0],
-    [normalizedEvents, selectedEventId]
-  );
+  const timelineEvents = useMemo(() => markerEvents(normalizedEvents), [normalizedEvents]);
+  const selectedEvent = useMemo(() => {
+    const selected = normalizedEvents.find((event) => event.event_id === selectedEventId);
+    if (selected) return selected;
+    return timelineEvents[0] ?? normalizedEvents[0];
+  }, [normalizedEvents, selectedEventId, timelineEvents]);
   const selectedGuardrail = useMemo(
     () => data?.guardrail_eval.find((guardrail) => guardrail.guardrail_id === selectedGuardrailId),
     [data?.guardrail_eval, selectedGuardrailId]
@@ -183,22 +289,38 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
             <p className="rollout-verdict-label">Promote now</p>
             <p className="rollout-verdict-value">{verdictLabel(data.decision.promotion_verdict)}</p>
             <p className="rollout-verdict-reason">
-              Triggered by: <strong>{data.decision.trigger_reason_code}</strong>
+              Why: <strong>{whySentence(data)}</strong>
             </p>
-            <p className="muted-line">{formatDetails(data.decision.trigger_reason_details)}</p>
-            <p className="muted-line">Evaluated: {formatUtc(data.evaluated_at_utc)} ({formatRelativeFromNow(data.evaluated_at_utc)})</p>
-            <p className="muted-line">Operator summary: {operatorSummary(data)}</p>
+            <div className="machines-data-banner">
+              <span>Coverage <strong>{Math.min(
+                data.data_quality.coverage_pct_by_cohort[data.data_quality.baseline_cohort_id] ?? 0,
+                data.data_quality.coverage_pct_by_cohort[data.data_quality.target_cohort_id] ?? 0
+              ).toFixed(1)}%</strong></span>
+              <span>Freshness <strong>{data.data_quality.freshness_seconds === null ? 'n/a' : `${data.data_quality.freshness_seconds}s`}</strong></span>
+              <span>Trust <strong>{trust?.status ?? data.data_quality.trust_status}</strong></span>
+            </div>
+            <details className="rollout-detail-box">
+              <summary>Show details</summary>
+              <div className="rollout-detail-content">
+                <p><strong>Reason code:</strong> {reasonCodeLabel(data.decision.trigger_reason_code)}</p>
+                {reasonDetailLines(data).map((line) => (
+                  <p key={line} className="muted-line">{line}</p>
+                ))}
+                {data.decision.trigger_reason_details && Object.keys(data.decision.trigger_reason_details).length > 0 ? (
+                  <p className="muted-line">
+                    Raw fields: {formatRawDetailRows(data.decision.trigger_reason_details)}
+                  </p>
+                ) : null}
+                <p className="muted-line">
+                  Evaluated: {formatUtc(data.evaluated_at_utc)} ({formatRelativeFromNow(data.evaluated_at_utc)})
+                </p>
+                <p><strong>How to fix</strong></p>
+                {fixHints(data).map((hint) => (
+                  <p key={hint} className="muted-line">{hint}</p>
+                ))}
+              </div>
+            </details>
           </section>
-
-          <div className="machines-data-banner">
-            <span>Freshness: <strong>{data.data_quality.freshness_seconds === null ? 'n/a' : `${data.data_quality.freshness_seconds}s`}</strong></span>
-            <span>Coverage: <strong>{Math.min(
-              data.data_quality.coverage_pct_by_cohort[data.data_quality.baseline_cohort_id] ?? 0,
-              data.data_quality.coverage_pct_by_cohort[data.data_quality.target_cohort_id] ?? 0
-            ).toFixed(1)}%</strong></span>
-            <span>Stream: <strong>{data.data_quality.ws_stream_ok ? 'Live' : 'Disconnected'}</strong></span>
-            <span>Trust: <strong>{trust?.status ?? data.data_quality.trust_status}</strong></span>
-          </div>
 
           <table className="simple-table">
             <thead>
@@ -284,7 +406,7 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
                       'none'
                     )}
                   </td>
-                  <td>{guardrail.reason_code ?? 'n/a'}</td>
+                  <td title={guardrail.reason_code ?? undefined}>{guardrailReasonLabel(guardrail.reason_code)}</td>
                 </tr>
               ))}
             </tbody>
@@ -306,16 +428,21 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
           ) : null}
 
           <section className="rollout-fsm-wrap">
-            <h4>Rollout FSM Timeline</h4>
-            <ol className="rollout-stage-track">
-              {data.rollout_stage_progression_preview.map((stage) => (
-                <li key={stage} className={stage === data.rollout_state ? 'active' : undefined}>
-                  {stage}
-                </li>
+            <h4>Rollout state</h4>
+            <div className="rollout-stepper">
+              {data.rollout_stage_progression_preview.map((stage, index) => (
+                <span key={`${stage}-${index}`} className="rollout-stepper-item-wrap">
+                  <span className={`rollout-stepper-item ${stage === data.rollout_state ? 'active' : ''}`}>
+                    {stageLabel(stage)}
+                  </span>
+                  {index < data.rollout_stage_progression_preview.length - 1 ? (
+                    <span className="rollout-stepper-arrow">→</span>
+                  ) : null}
+                </span>
               ))}
-            </ol>
+            </div>
             <div className="rollout-marker-row">
-              {normalizedEvents.slice(0, 12).map((event) => (
+              {timelineEvents.map((event) => (
                 <button
                   key={event.event_id}
                   type="button"
@@ -323,23 +450,23 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
                   onClick={() => setSelectedEventId(event.event_id)}
                   disabled={!event.details && !event.details_map}
                 >
-                  {event.type}{event.duplicate_count > 1 ? ` x${event.duplicate_count}` : ''}
+                  {eventTypeLabel(event.type)}
                 </button>
               ))}
             </div>
             {selectedEvent && selectedEventHasDetails ? (
               <div className="timeline-side">
-                <h4>Click to explain</h4>
+                <h4>Event details</h4>
                 <ul className="kv-list">
-                  <li><span>Type</span><strong>{selectedEvent.type}</strong></li>
+                  <li><span>Type</span><strong>{eventTypeLabel(selectedEvent.type)}</strong></li>
                   <li><span>At</span><strong>{formatUtc(selectedEvent.timestamp_utc)}</strong></li>
                   <li><span>Actor</span><strong>{selectedEvent.actor}</strong></li>
                   <li><span>Config version</span><strong>{selectedEvent.config_version}</strong></li>
                   <li><span>Cohorts</span><strong>{selectedEvent.cohorts.join(', ') || 'n/a'}</strong></li>
                   <li><span>Correlation IDs</span><strong>{selectedEvent.correlation_ids.join(', ') || 'none'}</strong></li>
-                  <li><span>Details</span><strong>{selectedEvent.details}</strong></li>
+                  <li><span>Summary</span><strong>{selectedEvent.details || 'n/a'}</strong></li>
                   {selectedEvent.details_map ? (
-                    <li><span>Structured details</span><strong>{formatDetails(selectedEvent.details_map)}</strong></li>
+                    <li><span>Structured details</span><strong>{formatRawDetailRows(selectedEvent.details_map)}</strong></li>
                   ) : null}
                 </ul>
               </div>
@@ -362,7 +489,7 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
               {normalizedEvents.slice(0, 20).map((event) => (
                 <tr key={event.event_id}>
                   <td>{formatUtc(event.timestamp_utc)}</td>
-                  <td>{event.type}</td>
+                  <td>{eventTypeLabel(event.type)}</td>
                   <td>{event.actor}</td>
                   <td>{event.config_version}</td>
                   <td>{event.cohorts.join(', ') || 'n/a'}</td>
@@ -396,7 +523,7 @@ export function RolloutVerdictPanel({ data, loading, error }: RolloutVerdictPane
                 {exporting ? 'Exporting...' : 'Export rollout evidence pack'}
               </button>
             </div>
-            {!canExportEvidence && exportBlockedReason ? <p className="muted-line">Export blocked: {exportBlockedReason}</p> : null}
+            {!canExportEvidence && exportBlockedReason ? <p className="muted-line">Export blocked by policy.</p> : null}
             {exportError ? <p className="error-line">{exportError.code}: {exportError.message}</p> : null}
           </section>
         </div>

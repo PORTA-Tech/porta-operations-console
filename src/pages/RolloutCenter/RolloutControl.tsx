@@ -46,6 +46,18 @@ function readActionBlockReason(
   return undefined;
 }
 
+function reasonToSentence(code: string | undefined): string | undefined {
+  if (!code) return undefined;
+  if (code === 'INSUFFICIENT_SAMPLE') return 'Not enough machine data is available for this action.';
+  if (code === 'INSUFFICIENT_COVERAGE') return 'Coverage is below the required threshold.';
+  if (code === 'COOLDOWN_ACTIVE') return 'Cooldown is active.';
+  if (code === 'FSM_BLOCKED') return 'Rollout FSM currently blocks this action.';
+  if (code === 'FEATURE_GATE_DISABLED') return 'Feature gate is disabled by policy.';
+  if (code === 'CIRCUIT_OPEN') return 'Circuit breaker is open.';
+  if (code === 'SIGNATURE_INVALID') return 'Trust validation failed.';
+  return code;
+}
+
 function formatReasonDetails(details: Record<string, string | number | boolean | null> | undefined): string {
   if (!details) return '';
   return Object.entries(details).map(([key, value]) => `${key}=${String(value)}`).join(', ');
@@ -188,9 +200,18 @@ export function RolloutControl({ evaluation }: RolloutControlProps) {
       ) : (
         <p className="muted-line">Mutation actions hidden: operator role required.</p>
       )}
-      {blockedReason ? <p className="muted-line">Backend policy gate: {blockedReason}</p> : null}
-      {evaluation?.permissions?.blocked_reason_details ? (
-        <p className="muted-line">{formatReasonDetails(evaluation.permissions.blocked_reason_details)}</p>
+      {blockedReason ? <p className="muted-line">Some actions are currently blocked by backend policy.</p> : null}
+      {blockedReason || evaluation?.permissions?.blocked_reason_details ? (
+        <details className="rollout-detail-box">
+          <summary>Show policy details</summary>
+          <div className="rollout-detail-content">
+            {blockedReason ? <p className="muted-line">Why: {reasonToSentence(blockedReason)}</p> : null}
+            {blockedReason ? <p className="muted-line">Reason code: {blockedReason}</p> : null}
+            {evaluation?.permissions?.blocked_reason_details ? (
+              <p className="muted-line">{formatReasonDetails(evaluation.permissions.blocked_reason_details)}</p>
+            ) : null}
+          </div>
+        </details>
       ) : null}
       {selectedAction ? (
         <div className="confirm-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="rollout-confirm-title">

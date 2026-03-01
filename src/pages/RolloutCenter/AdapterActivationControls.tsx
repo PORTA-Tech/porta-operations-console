@@ -45,17 +45,17 @@ export function AdapterActivationControls() {
     data.rollout_state !== 'PROMOTING';
 
   return (
-    <Panel title="Adapter Activation Controls (Flag-Gated)">
+    <Panel title="Adapter Controls">
       {loading ? <p className="muted-line">Loading adapter controls...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       {data ? (
         <>
-          <p>feature gate enabled: <strong>{data.feature_gate_enabled ? 'true' : 'false'}</strong></p>
-          <p>rollout_state: <strong>{data.rollout_state}</strong></p>
+          <p>Policy gate: <strong>{data.feature_gate_enabled ? 'Enabled' : 'Disabled'}</strong></p>
+          <p>Rollout state: <strong>{data.rollout_state}</strong></p>
 
           <div className="adapter-form-grid">
             <label className="adapter-row">
-              <span>feature.adapter.enabled</span>
+              <span>Adapter enabled</span>
               <input
                 type="checkbox"
                 checked={draft.feature_adapter_enabled}
@@ -65,7 +65,7 @@ export function AdapterActivationControls() {
             </label>
 
             <div className="adapter-row">
-              <span>allowed_cohorts[]</span>
+              <span>Allowed cohorts</span>
               <div className="adapter-cohort-list">
                 {cohortOptions.map((cohort) => (
                   <label key={cohort}>
@@ -82,7 +82,7 @@ export function AdapterActivationControls() {
             </div>
 
             <label className="adapter-row">
-              <span>rate_limit</span>
+              <span>Rate limit</span>
               <input
                 type="number"
                 min={1}
@@ -95,7 +95,7 @@ export function AdapterActivationControls() {
             </label>
 
             <label className="adapter-row">
-              <span>circuit_breaker_threshold</span>
+              <span>Circuit breaker threshold</span>
               <input
                 type="number"
                 min={1}
@@ -111,7 +111,7 @@ export function AdapterActivationControls() {
             </label>
 
             <label className="adapter-row">
-              <span>schema_version</span>
+              <span>Schema version</span>
               <input
                 type="text"
                 value={draft.schema_version}
@@ -122,15 +122,22 @@ export function AdapterActivationControls() {
           </div>
 
           {!data.feature_gate_enabled ? (
-            <p className="muted-line">Adapter expansion gate is disabled by backend policy.</p>
+            <p className="focus-banner">Adapter is disabled by policy. Metrics and promotions stay unavailable until the gate is enabled.</p>
           ) : null}
           {enablingBypassBlocked ? (
-            <p className="error-line">
-              Activation bypass blocked: enabling adapter requires rollout_state PROMOTING (8A rollout FSM).
-            </p>
+            <p className="error-line">Adapter can only be enabled while rollout is in the Promoting state.</p>
           ) : null}
           {!canMutate ? <p className="muted-line">Mutation actions hidden: operator role required.</p> : null}
           {saveError ? <p className="error-line">{saveError.code}: {saveError.message}</p> : null}
+
+          <details className="rollout-detail-box">
+            <summary>Show details</summary>
+            <div className="rollout-detail-content">
+              <p className="muted-line">feature_gate_enabled={String(data.feature_gate_enabled)}</p>
+              <p className="muted-line">feature_adapter_enabled={String(draft.feature_adapter_enabled)}</p>
+              <p className="muted-line">rollout_state={data.rollout_state}</p>
+            </div>
+          </details>
 
           {canMutate ? (
             <div className="button-row">
