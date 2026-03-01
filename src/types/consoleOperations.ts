@@ -86,6 +86,8 @@ export interface RbacAssignment {
   scope_id: string;
   assigned_at: string;
   assigned_by: string;
+  expires_at?: string;
+  reason?: string;
 }
 
 export interface ConsoleOpsMetrics {

@@ -269,6 +269,32 @@ export async function assignRole(assignment: RbacAssignment): Promise<{ ok: bool
   });
 }
 
+export async function revokeRole(assignment: Pick<RbacAssignment, 'user_id' | 'role' | 'scope' | 'scope_id'>): Promise<{ ok: boolean }> {
+  return apiRequestRaw<{ ok: boolean }>({
+    path: '/v1/rbac/revoke',
+    method: 'post',
+    body: assignment
+  });
+}
+
+export async function fetchEffectivePermissions(userId: string): Promise<string[] | null> {
+  try {
+    const payload = await apiRequestRaw<unknown>({
+      path: `/v1/rbac/effective-permissions?user_id=${encodeURIComponent(userId)}`,
+      method: 'get'
+    });
+    const root = (payload ?? {}) as Record<string, unknown>;
+    const list = Array.isArray(root.permissions)
+      ? root.permissions
+      : Array.isArray(payload)
+        ? payload
+        : [];
+    return list.map((value) => String(value));
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchConsoleOpsMetrics(): Promise<ConsoleOpsMetrics> {
   try {
     const rows = await apiRequestRaw<Array<{ metric_name: string; value: number }>>({ path: '/v1/audit/metrics', method: 'get' });

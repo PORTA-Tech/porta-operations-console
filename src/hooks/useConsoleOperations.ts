@@ -3,11 +3,13 @@ import {
   assignRole,
   deployPolicy,
   exportAudit,
+  fetchEffectivePermissions,
   fetchAlerts,
   fetchAuditDecisions,
   fetchConsoleOpsMetrics,
   fetchPolicies,
   fetchRbacAssignments,
+  revokeRole,
   resolveAlert,
   replayTrace,
   upsertPolicy
@@ -97,6 +99,15 @@ export function useConsoleOperations(options: UseConsoleOperationsOptions = {}) 
     await refresh();
   };
 
+  const revoke = async (record: Pick<RbacAssignment, 'user_id' | 'role' | 'scope' | 'scope_id'>): Promise<void> => {
+    await revokeRole(record);
+    await refresh();
+  };
+
+  const effectivePermissions = async (userId: string): Promise<string[] | null> => {
+    return fetchEffectivePermissions(userId);
+  };
+
   const resolveAlertById = async (alertId: string): Promise<void> => {
     await resolveAlert(alertId);
     await refresh();
@@ -125,6 +136,8 @@ export function useConsoleOperations(options: UseConsoleOperationsOptions = {}) 
       replay,
       exportRows,
       assign,
+      revoke,
+      effectivePermissions,
       resolveAlertById,
       resolveAlertsByIds,
       refresh

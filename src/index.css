@@ -1485,6 +1485,93 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   gap: 12px;
 }
 
+.security-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+}
+
+.security-status-pill {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  text-align: left;
+  padding: 8px;
+}
+
+.security-status-pill.ok {
+  border-color: color-mix(in oklab, var(--ok) 65%, var(--line));
+  background: color-mix(in oklab, white 93%, var(--ok));
+}
+
+.security-status-pill.warn {
+  border-color: color-mix(in oklab, var(--warn) 65%, var(--line));
+  background: color-mix(in oklab, white 93%, var(--warn));
+}
+
+.security-status-pill.critical {
+  border-color: color-mix(in oklab, var(--critical) 65%, var(--line));
+  background: color-mix(in oklab, white 93%, var(--critical));
+}
+
+.security-attention-list {
+  display: grid;
+  gap: 6px;
+}
+
+.security-attention-item {
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px;
+  display: grid;
+  gap: 2px;
+}
+
+.security-top-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.security-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.security-timeline-chart {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px;
+  display: flex;
+  gap: 4px;
+  align-items: end;
+  min-height: 120px;
+  overflow-x: auto;
+}
+
+.security-timeline-col {
+  min-width: 22px;
+  display: grid;
+  gap: 4px;
+  align-items: end;
+  justify-items: center;
+}
+
+.security-timeline-col span {
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.security-timeline-bar {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: color-mix(in oklab, var(--critical) 70%, var(--line));
+}
+
 .ops-editor {
   border: 1px solid var(--line);
   border-radius: 10px;
