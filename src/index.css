@@ -53,6 +53,71 @@ a { color: inherit; text-decoration: none; }
   align-items: center;
   gap: 8px;
   margin-left: auto;
+  position: relative;
+}
+
+.account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+}
+
+.account-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  object-fit: cover;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.account-avatar.initials {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+.account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 1200;
+  width: min(340px, 92vw);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fffef9;
+  box-shadow: 0 10px 24px rgba(16, 34, 38, 0.16);
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.account-menu h4 {
+  margin: 0;
+}
+
+.account-menu label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.account-menu input {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 9px;
+  background: #fff;
+}
+
+.account-security-block {
+  margin-top: 8px;
+  display: grid;
+  gap: 8px;
 }
 
 .login-page {
@@ -70,6 +135,11 @@ a { color: inherit; text-decoration: none; }
   padding: 16px;
   display: grid;
   gap: 12px;
+}
+
+.login-card.compact {
+  gap: 8px;
+  padding: 14px;
 }
 
 .login-brand {
@@ -104,9 +174,9 @@ a { color: inherit; text-decoration: none; }
 
 .login-access-panel {
   border-top: 1px solid var(--line);
-  padding-top: 10px;
+  padding-top: 8px;
   display: grid;
-  gap: 8px;
+  gap: 6px;
 }
 
 .login-access-panel h4 {
@@ -137,6 +207,15 @@ a { color: inherit; text-decoration: none; }
   padding: 8px 10px;
   background: #fff;
   color: var(--ink);
+}
+
+.login-toggle-link {
+  border: none;
+  background: none;
+  color: var(--accent-2);
+  text-decoration: underline;
+  padding: 0;
+  justify-self: start;
 }
 
 .shell-main {

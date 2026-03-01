@@ -24,6 +24,7 @@ export const authClient = {
         user_id: operatorId,
         role: operatorRole,
         display_name: operatorId,
+        avatar_url: null,
         session_expires_at_utc: null,
         reauth_expires_at_utc: null
       })
@@ -39,6 +40,7 @@ export const authClient = {
     user_id: string;
     role: 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer';
     display_name: string;
+    avatar_url?: string | null;
     session_expires_at_utc: string;
     reauth_expires_at_utc: string;
   }): void {
@@ -49,6 +51,7 @@ export const authClient = {
         user_id: input.user_id,
         role: input.role,
         display_name: input.display_name,
+        avatar_url: input.avatar_url ?? null,
         session_expires_at_utc: input.session_expires_at_utc,
         reauth_expires_at_utc: input.reauth_expires_at_utc
       })
@@ -59,6 +62,7 @@ export const authClient = {
     user_id: string;
     role: 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer';
     display_name: string;
+    avatar_url?: string | null;
     session_expires_at_utc: string | null;
     reauth_expires_at_utc: string | null;
   } | null {
@@ -69,6 +73,7 @@ export const authClient = {
         user_id?: string;
         role?: 'viewer' | 'operator' | 'admin' | 'auditor' | 'developer';
         display_name?: string;
+        avatar_url?: string | null;
         session_expires_at_utc?: string | null;
         reauth_expires_at_utc?: string | null;
       };
@@ -77,6 +82,9 @@ export const authClient = {
         user_id: parsed.user_id,
         role: parsed.role,
         display_name: parsed.display_name ?? parsed.user_id,
+        ...(typeof parsed.avatar_url === 'string' || parsed.avatar_url === null
+          ? { avatar_url: parsed.avatar_url }
+          : {}),
         session_expires_at_utc: parsed.session_expires_at_utc ?? null,
         reauth_expires_at_utc: parsed.reauth_expires_at_utc ?? null
       };

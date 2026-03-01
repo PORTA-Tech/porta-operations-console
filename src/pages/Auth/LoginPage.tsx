@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { getAuthAccessHelp, registerAuthUser, type AuthAccessHelp, type AuthSessionUser } from '../../api/auth';
 import { toApiError } from '../../api/client';
 
@@ -39,6 +39,7 @@ function isPasswordValid(password: string, help: AuthAccessHelp | null): boolean
 export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
+  const [showRegister, setShowRegister] = useState(false);
 
   const [help, setHelp] = useState<AuthAccessHelp | null>(null);
   const [helpLoading, setHelpLoading] = useState(true);
@@ -97,7 +98,7 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
   const register = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!canRegister) {
-      setRegisterMessage('Please fix the validation errors before creating the account.');
+      setRegisterMessage('Please fix validation errors first.');
       return;
     }
     setRegisterLoading(true);
@@ -110,9 +111,11 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
         password: registerPassword
       });
       if (result.ok) {
-        setRegisterMessage(`Account created for ${result.user.user_id}. You can sign in now.`);
+        setRegisterMessage(`Account created for ${result.user.user_id}.`);
         setUserId(result.user.user_id);
+        setPassword('');
         setRegisterPassword('');
+        setShowRegister(false);
       }
     } catch (err) {
       const parsed = toApiError(err);
@@ -124,7 +127,7 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
 
   return (
     <div className="login-page">
-      <section className="login-card">
+      <section className="login-card compact">
         <p className="login-brand">PORTA Operations Console</p>
         <p className="login-subtitle">Sign in to access Internal R&D controls.</p>
 
@@ -155,67 +158,72 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
         {error ? <p className="error-line">{error}</p> : null}
 
         <section className="login-access-panel">
-          <h4>Need access?</h4>
-          {helpLoading ? <p className="muted-line">Loading access rules...</p> : null}
+          <button type="button" className="login-toggle-link" onClick={() => setShowRegister((value) => !value)}>
+            {showRegister ? 'Hide account creation' : "Don't have an account yet?"}
+          </button>
 
-          {help ? (
-            help.signup_enabled ? (
-              <form className="login-register-form" onSubmit={(event) => void register(event)}>
-                <label>
-                  New user ID
-                  <input
-                    value={registerUserId}
-                    onChange={(event) => setRegisterUserId(event.target.value)}
-                    placeholder={help.user_id_rules.example}
-                    pattern={registerUserIdPattern}
-                    minLength={registerUserMin}
-                    maxLength={registerUserMax}
-                    required
-                  />
-                </label>
-                <p className="muted-line">Use lowercase letters, numbers, dot, dash, underscore ({registerUserMin}-{registerUserMax} chars).</p>
+          {showRegister ? (
+            helpLoading ? (
+              <p className="muted-line">Loading access rules...</p>
+            ) : help ? (
+              help.signup_enabled ? (
+                <form className="login-register-form" onSubmit={(event) => void register(event)}>
+                  <label>
+                    New user ID
+                    <input
+                      value={registerUserId}
+                      onChange={(event) => setRegisterUserId(event.target.value)}
+                      placeholder={help.user_id_rules.example}
+                      pattern={registerUserIdPattern}
+                      minLength={registerUserMin}
+                      maxLength={registerUserMax}
+                      required
+                    />
+                  </label>
+                  <p className="muted-line">Allowed: lowercase letters, numbers, dot, dash, underscore ({registerUserMin}-{registerUserMax} chars).</p>
 
-                <label>
-                  Display name
-                  <input
-                    value={registerDisplayName}
-                    onChange={(event) => setRegisterDisplayName(event.target.value)}
-                    placeholder="Your display name"
-                    required
-                  />
-                </label>
+                  <label>
+                    Display name
+                    <input
+                      value={registerDisplayName}
+                      onChange={(event) => setRegisterDisplayName(event.target.value)}
+                      placeholder="Your display name"
+                      required
+                    />
+                  </label>
 
-                <label>
-                  Role
-                  <select value={registerRole} onChange={(event) => setRegisterRole(event.target.value as AuthSessionUser['role'])}>
-                    {visibleSignupRoles.map((row) => (
-                      <option key={row.value} value={row.value}>{row.label}</option>
-                    ))}
-                  </select>
-                </label>
+                  <label>
+                    Role
+                    <select value={registerRole} onChange={(event) => setRegisterRole(event.target.value as AuthSessionUser['role'])}>
+                      {visibleSignupRoles.map((row) => (
+                        <option key={row.value} value={row.value}>{row.label}</option>
+                      ))}
+                    </select>
+                  </label>
 
-                <label>
-                  Password
-                  <input
-                    type="password"
-                    value={registerPassword}
-                    onChange={(event) => setRegisterPassword(event.target.value)}
-                    minLength={registerPasswordMin}
-                    required
-                  />
-                </label>
-                <p className="muted-line">Password policy: {passwordRuleText(help)}.</p>
+                  <label>
+                    Password
+                    <input
+                      type="password"
+                      value={registerPassword}
+                      onChange={(event) => setRegisterPassword(event.target.value)}
+                      minLength={registerPasswordMin}
+                      required
+                    />
+                  </label>
+                  <p className="muted-line">Password policy: {passwordRuleText(help)}.</p>
 
-                <button type="submit" disabled={!canRegister}>
-                  {registerLoading ? 'Creating account...' : 'Create account'}
-                </button>
-              </form>
+                  <button type="submit" disabled={!canRegister}>
+                    {registerLoading ? 'Creating account...' : 'Create account'}
+                  </button>
+                </form>
+              ) : (
+                <p className="muted-line">Self registration is disabled. Contact your platform admin.</p>
+              )
             ) : (
-              <p className="muted-line">Self registration is disabled. Contact your platform admin.</p>
+              <p className="muted-line">Access helper is unavailable. Contact your platform admin.</p>
             )
-          ) : (
-            <p className="muted-line">Access helper is unavailable. Contact your platform admin.</p>
-          )}
+          ) : null}
 
           {registerMessage ? <p className="muted-line">{registerMessage}</p> : null}
         </section>
@@ -223,3 +231,4 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
     </div>
   );
 }
+

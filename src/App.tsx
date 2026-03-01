@@ -74,26 +74,21 @@ function ProtectedConsoleApp(props: {
     user_id: string;
     role: string;
     display_name: string;
-    reauth_expires_at_utc?: string | null;
+    avatar_url?: string | null;
   };
   onLogout: () => Promise<void>;
-  onReauth: (password: string) => Promise<boolean>;
+  onUpdateProfile: (input: { display_name?: string; avatar_url?: string | null }) => Promise<boolean>;
+  onChangePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
 }) {
   const { loading, error } = useFleetState();
 
-  const handleReauth = async (): Promise<void> => {
-    const password = window.prompt('Enter your password to re-authenticate for sensitive actions.');
-    if (!password) return;
-    const ok = await props.onReauth(password);
-    if (!ok) {
-      window.alert('Re-authentication failed. Verify password and retry.');
-      return;
-    }
-    window.alert('Re-authentication refreshed.');
-  };
-
   return (
-    <AppShell authUser={props.authUser} onReauth={handleReauth} onLogout={props.onLogout}>
+    <AppShell
+      authUser={props.authUser}
+      onLogout={props.onLogout}
+      onUpdateProfile={props.onUpdateProfile}
+      onChangePassword={props.onChangePassword}
+    >
       {loading ? <p>Connecting to control plane...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <Routes>
@@ -161,7 +156,12 @@ export default function App() {
         path="*"
         element={
           auth.authenticated && auth.user ? (
-            <ProtectedConsoleApp authUser={auth.user} onLogout={auth.logout} onReauth={auth.reauth} />
+            <ProtectedConsoleApp
+              authUser={auth.user}
+              onLogout={auth.logout}
+              onUpdateProfile={auth.updateProfile}
+              onChangePassword={auth.changePassword}
+            />
           ) : (
             <Navigate to="/login" replace />
           )

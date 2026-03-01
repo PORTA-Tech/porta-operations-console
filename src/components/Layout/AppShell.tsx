@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+﻿import { useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { getGlossaryTerms } from '../../data/glossary';
 import { GlossaryDrawer } from './GlossaryDrawer';
@@ -10,10 +10,11 @@ interface AppShellProps {
     user_id: string;
     role: string;
     display_name: string;
-    reauth_expires_at_utc?: string | null;
+    avatar_url?: string | null;
   } | null;
-  onReauth?: () => void | Promise<void>;
   onLogout?: () => void | Promise<void>;
+  onUpdateProfile?: (input: { display_name?: string; avatar_url?: string | null }) => Promise<boolean>;
+  onChangePassword?: (currentPassword: string, newPassword: string) => Promise<boolean>;
 }
 
 const navItems = [
@@ -30,10 +31,65 @@ const navItems = [
   { to: '/system-health', label: 'System Health' }
 ];
 
-export function AppShell({ children, authUser, onReauth, onLogout }: AppShellProps) {
+function initialsFromName(name: string): string {
+  const parts = name
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+  if (parts.length === 0) return 'U';
+  return parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
+}
+
+export function AppShell({ children, authUser, onLogout, onUpdateProfile, onChangePassword }: AppShellProps) {
   const location = useLocation();
   const [glossaryOpen, setGlossaryOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const glossaryTerms = getGlossaryTerms(location.pathname);
+
+  const [displayName, setDisplayName] = useState(authUser?.display_name ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(authUser?.avatar_url ?? '');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [accountMessage, setAccountMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDisplayName(authUser?.display_name ?? '');
+    setAvatarUrl(authUser?.avatar_url ?? '');
+  }, [authUser?.display_name, authUser?.avatar_url]);
+
+  const saveProfile = async (): Promise<void> => {
+    if (!onUpdateProfile) return;
+    setBusy(true);
+    setAccountMessage(null);
+    try {
+      const ok = await onUpdateProfile({
+        display_name: displayName.trim(),
+        avatar_url: avatarUrl.trim().length > 0 ? avatarUrl.trim() : null
+      });
+      setAccountMessage(ok ? 'Profile updated.' : 'Profile update failed.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const savePassword = async (): Promise<void> => {
+    if (!onChangePassword) return;
+    if (!currentPassword || !newPassword) return;
+    setBusy(true);
+    setAccountMessage(null);
+    try {
+      const ok = await onChangePassword(currentPassword, newPassword);
+      setAccountMessage(ok ? 'Password updated.' : 'Password update failed.');
+      if (ok) {
+        setCurrentPassword('');
+        setNewPassword('');
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <div className="app-shell">
@@ -42,9 +98,47 @@ export function AppShell({ children, authUser, onReauth, onLogout }: AppShellPro
         <span className="topbar-pill">Internal R&D Edition</span>
         {authUser ? (
           <div className="topbar-auth">
-            <span className="topbar-pill">{authUser.display_name} ({authUser.role})</span>
-            <button type="button" onClick={onReauth} disabled={!onReauth}>Re-auth</button>
-            <button type="button" onClick={onLogout} disabled={!onLogout}>Logout</button>
+            <button type="button" className="account-trigger" onClick={() => setAccountOpen((value) => !value)}>
+              {authUser.avatar_url ? (
+                <img src={authUser.avatar_url} alt={authUser.display_name} className="account-avatar" />
+              ) : (
+                <span className="account-avatar initials">{initialsFromName(authUser.display_name)}</span>
+              )}
+              <span>{authUser.display_name}</span>
+            </button>
+            {accountOpen ? (
+              <section className="account-menu">
+                <h4>Account</h4>
+                <p className="muted-line">@{authUser.user_id} · {authUser.role}</p>
+                <label>
+                  Display name
+                  <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
+                </label>
+                <label>
+                  Profile picture URL
+                  <input value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} placeholder="https://..." />
+                </label>
+                <button type="button" onClick={() => void saveProfile()} disabled={busy || !displayName.trim()}>Save profile</button>
+
+                <details>
+                  <summary>Security</summary>
+                  <div className="account-security-block">
+                    <label>
+                      Current password
+                      <input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+                    </label>
+                    <label>
+                      New password
+                      <input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="min 8 + upper/lower/number" />
+                    </label>
+                    <button type="button" onClick={() => void savePassword()} disabled={busy || !currentPassword || !newPassword}>Update password</button>
+                  </div>
+                </details>
+
+                <button type="button" onClick={onLogout} className="danger" disabled={busy || !onLogout}>Log out</button>
+                {accountMessage ? <p className="muted-line">{accountMessage}</p> : null}
+              </section>
+            ) : null}
           </div>
         ) : null}
       </header>
@@ -65,4 +159,3 @@ export function AppShell({ children, authUser, onReauth, onLogout }: AppShellPro
     </div>
   );
 }
-

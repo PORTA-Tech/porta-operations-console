@@ -1,5 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
-import { loginAuth, logoutAuth, readAuthMe, reauthAuth, type AuthSessionUser } from '../api/auth';
+import {
+  changeAuthPassword,
+  loginAuth,
+  logoutAuth,
+  readAuthMe,
+  reauthAuth,
+  updateAuthProfile,
+  type AuthSessionUser
+} from '../api/auth';
 import { authClient } from '../api/authClient';
 
 interface AuthState {
@@ -21,6 +29,8 @@ export function useAuthSession(): AuthState & {
   login: (userId: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   reauth: (password: string) => Promise<boolean>;
+  updateProfile: (input: { display_name?: string; avatar_url?: string | null }) => Promise<boolean>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
   refresh: () => Promise<void>;
 } {
   const [ready, setReady] = useState(false);
@@ -102,6 +112,7 @@ export function useAuthSession(): AuthState & {
           user_id: current.user_id,
           role: current.role,
           display_name: current.display_name,
+          ...(current.avatar_url !== undefined ? { avatar_url: current.avatar_url } : {}),
           session_expires_at_utc: current.session_expires_at_utc ?? new Date().toISOString(),
           reauth_expires_at_utc: updated.reauth_expires_at_utc
         });
@@ -110,6 +121,41 @@ export function useAuthSession(): AuthState & {
       return true;
     } catch (err) {
       setError(errorMessage(err, 'Re-auth failed'));
+      return false;
+    }
+  };
+
+  const updateProfile = async (input: { display_name?: string; avatar_url?: string | null }): Promise<boolean> => {
+    try {
+      const result = await updateAuthProfile(input);
+      if (result.ok) {
+        const current = authClient.getSession();
+        if (current) {
+          setUser({
+            user_id: current.user_id,
+            role: current.role,
+            display_name: current.display_name,
+            ...(current.avatar_url !== undefined ? { avatar_url: current.avatar_url } : {}),
+            session_expires_at_utc: current.session_expires_at_utc ?? new Date().toISOString(),
+            reauth_expires_at_utc: current.reauth_expires_at_utc ?? new Date().toISOString()
+          });
+        }
+        setError(null);
+      }
+      return result.ok;
+    } catch (err) {
+      setError(errorMessage(err, 'Profile update failed'));
+      return false;
+    }
+  };
+
+  const changePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
+    try {
+      const result = await changeAuthPassword(currentPassword, newPassword);
+      setError(null);
+      return result.ok;
+    } catch (err) {
+      setError(errorMessage(err, 'Password update failed'));
       return false;
     }
   };
@@ -123,6 +169,8 @@ export function useAuthSession(): AuthState & {
       login,
       logout,
       reauth,
+      updateProfile,
+      changePassword,
       refresh
     }),
     [ready, authenticated, user, error]
