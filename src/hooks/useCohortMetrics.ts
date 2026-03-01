@@ -12,6 +12,7 @@ import type { CohortWindow } from '../types/ui';
 
 export function useCohortMetrics(): {
   snapshot: CohortEvaluationSnapshot | undefined;
+  dataQuality: CohortEvaluationSnapshot['dataQuality'];
   rows: CohortSummary[];
   generatedAtUtc: string | undefined;
   source: string | undefined;
@@ -78,6 +79,7 @@ export function useCohortMetrics(): {
 
   return {
     snapshot,
+    dataQuality: snapshot?.dataQuality,
     rows,
     generatedAtUtc: snapshot?.generatedAtUtc,
     source: snapshot?.source,

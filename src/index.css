@@ -725,6 +725,14 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   background: color-mix(in oklab, white 94%, var(--accent-2));
 }
 
+.cohort-event-row-warn {
+  background: color-mix(in oklab, white 96%, var(--warn));
+}
+
+.cohort-event-row-critical {
+  background: color-mix(in oklab, white 96%, var(--critical));
+}
+
 .delta-chip {
   display: inline-flex;
   align-items: center;
