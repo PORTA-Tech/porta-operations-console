@@ -12,6 +12,8 @@ export interface SecurityPermissionMatrixView {
   rows: SecurityPermissionMatrixRow[];
   source: string;
   updated_at_utc: string | null;
+  visibility?: 'full' | 'restricted';
+  scoped_role?: string | null;
 }
 
 export interface SecurityRoleView {
@@ -104,7 +106,15 @@ export async function getSecurityPermissionsMatrix(): Promise<SecurityPermission
         ? root.updatedAtUtc
         : null;
     const source = typeof root.source === 'string' ? root.source : 'security_api';
-    return { rows, source, updated_at_utc: updatedAtUtc };
+    const visibility = root.visibility === 'restricted' ? 'restricted' : 'full';
+    const scopedRole = typeof root.scoped_role === 'string' ? root.scoped_role : null;
+    return {
+      rows,
+      source,
+      updated_at_utc: updatedAtUtc,
+      visibility,
+      scoped_role: scopedRole
+    };
   } catch {
     return null;
   }

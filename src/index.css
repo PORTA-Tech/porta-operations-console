@@ -1802,6 +1802,45 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   background: color-mix(in oklab, var(--critical) 70%, var(--line));
 }
 
+.security-roles-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+}
+
+.security-role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+}
+
+.security-role-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+.security-role-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.security-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.security-roles-table td:nth-child(2) {
+  min-width: 190px;
+}
+
 .ops-editor {
   border: 1px solid var(--line);
   border-radius: 10px;

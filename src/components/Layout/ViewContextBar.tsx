@@ -47,7 +47,7 @@ const viewMap: Record<string, ViewMeta> = {
     subtitle: 'Config trust, signatures, and drift visibility'
   },
   '/security-access': {
-    title: 'Security And Access',
+    title: 'Security & Access',
     subtitle: 'RBAC controls and sensitive access monitoring'
   },
   '/system-health': {

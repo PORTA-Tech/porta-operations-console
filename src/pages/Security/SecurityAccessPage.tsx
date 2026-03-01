@@ -170,6 +170,8 @@ export function SecurityAccessPage() {
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [matrix, setMatrix] = useState<SecurityPermissionMatrixRow[]>(DEFAULT_MATRIX);
   const [matrixSource, setMatrixSource] = useState('fallback');
+  const [matrixVisibility, setMatrixVisibility] = useState<'full' | 'restricted'>('full');
+  const [matrixScopedRole, setMatrixScopedRole] = useState<string | null>(null);
   const [policy, setPolicy] = useState<SensitiveOpsPolicyView>(DEFAULT_POLICY);
   const [securityLoading, setSecurityLoading] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
@@ -202,9 +204,13 @@ export function SecurityAccessPage() {
       if (matrixRes && matrixRes.rows.length > 0) {
         setMatrix(matrixRes.rows);
         setMatrixSource(matrixRes.source);
+        setMatrixVisibility(matrixRes.visibility ?? 'full');
+        setMatrixScopedRole(matrixRes.scoped_role ?? null);
       } else {
         setMatrix(DEFAULT_MATRIX);
         setMatrixSource('fallback');
+        setMatrixVisibility('full');
+        setMatrixScopedRole(null);
       }
       if (policyRes) {
         setPolicy(policyRes);
@@ -340,11 +346,66 @@ export function SecurityAccessPage() {
         {tab === 'roles' ? (
           <div className="stack">
             {focus ? <p className="focus-banner">Filter applied: RBAC activity spike detected.</p> : null}
-            <p className="muted-line">Matrix source: {matrixSource}</p>
+            <div className="security-roles-header">
+              <p className="muted-line">Matrix source: {matrixSource}</p>
+              {matrixVisibility === 'restricted' ? (
+                <p className="muted-line">Showing effective permissions for your role ({matrixScopedRole ?? operatorRole}).</p>
+              ) : (
+                <p className="muted-line">Full role matrix visibility enabled.</p>
+              )}
+            </div>
+
+            <div className="security-role-grid">
+              {matrix.map((row) => (
+                <article key={row.role} className="security-role-card">
+                  <div className="security-role-head">
+                    <strong>{row.role}</strong>
+                    {row.role === operatorRole ? <span className="delta-chip ok">Current role</span> : null}
+                  </div>
+                  <div className="security-chip-row">
+                    <span className={`delta-chip ${row.read ? 'ok' : 'neutral'}`}>Read</span>
+                    <span className={`delta-chip ${row.write ? 'ok' : 'neutral'}`}>Write</span>
+                    <span className={`delta-chip ${row.override ? 'warn' : 'neutral'}`}>Override</span>
+                  </div>
+                  <p className="muted-line">
+                    High-impact actions:{' '}
+                    {matrixVisibility === 'full'
+                      ? (row.sensitive_actions.length > 0 ? row.sensitive_actions.length : 'none')
+                      : 'hidden for this role'}
+                  </p>
+                </article>
+              ))}
+            </div>
+
             <div className="table-scroll-wrap">
-              <table className="simple-table"><thead><tr><th>Role</th><th>Read</th><th>Write</th><th>Override</th><th>Sensitive actions</th></tr></thead><tbody>
-                {matrix.map((row) => <tr key={row.role}><td>{row.role}</td><td>{row.read ? 'Y' : '-'}</td><td>{row.write ? 'Y' : '-'}</td><td>{row.override ? 'Y' : '-'}</td><td>{row.sensitive_actions.join(', ') || 'none'}</td></tr>)}
-              </tbody></table>
+              <table className="simple-table security-roles-table">
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Access</th>
+                    <th>High-impact actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {matrix.map((row) => (
+                    <tr key={row.role}>
+                      <td>{row.role}</td>
+                      <td>
+                        <div className="security-chip-row">
+                          <span className={`delta-chip ${row.read ? 'ok' : 'neutral'}`}>Read</span>
+                          <span className={`delta-chip ${row.write ? 'ok' : 'neutral'}`}>Write</span>
+                          <span className={`delta-chip ${row.override ? 'warn' : 'neutral'}`}>Override</span>
+                        </div>
+                      </td>
+                      <td>
+                        {matrixVisibility === 'full'
+                          ? (row.sensitive_actions.join(', ') || 'none')
+                          : 'Visible to admin/auditor only'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         ) : null}
