@@ -90,7 +90,7 @@ function ProtectedConsoleApp(props: {
       onChangePassword={props.onChangePassword}
     >
       {loading ? <p>Connecting to control plane...</p> : null}
-      {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
+      {error && error.status !== 403 ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <Routes>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/alerts" element={<AlertsPage />} />

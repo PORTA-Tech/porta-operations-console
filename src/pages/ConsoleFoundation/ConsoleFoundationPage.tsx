@@ -131,8 +131,14 @@ export function ConsoleFoundationPage() {
             <section className={`rollout-verdict-card ${verdictTone(data.verdict.status)}`}>
               <p className="rollout-verdict-label">Reliability verdict</p>
               <p className="rollout-verdict-value">{verdictLabel(data.verdict.status)}</p>
-              <p className="rollout-verdict-reason">Triggered by: <strong>{data.verdict.reason_code}</strong></p>
-              <p className="muted-line">{data.verdict.reason_message}</p>
+              <p className="rollout-verdict-reason"><strong>Why:</strong> {data.verdict.reason_message}</p>
+              <details className="rollout-detail-box">
+                <summary>Details</summary>
+                <div className="rollout-detail-content">
+                  <p>reason_code: {data.verdict.reason_code}</p>
+                  <p>trigger_count: {data.verdict.trigger_count}</p>
+                </div>
+              </details>
               <p className="muted-line">
                 Last successful data update: {formatUtc(data.verdict.last_successful_update_utc ?? undefined)}
                 {' · '}
@@ -168,6 +174,7 @@ export function ConsoleFoundationPage() {
             <div className="needs-attention-list">
               {data.needs_attention.map((item) => (
                 <button key={item.id} type="button" className="needs-attention-item" onClick={() => openPanel(item.panel)}>
+                  <span className={`delta-chip ${item.severity === 'critical' ? 'critical' : 'warn'}`}>{item.severity}</span>
                   <span className="needs-attention-title">{item.title}</span>
                   <span className="needs-attention-detail">{item.detail}</span>
                 </button>
