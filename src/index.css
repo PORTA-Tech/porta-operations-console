@@ -334,8 +334,45 @@ a { color: inherit; text-decoration: none; }
   margin: 0;
 }
 
-.audit-trace-table-wrap .simple-table {
-  min-width: 1480px;
+.audit-trace-table-wrap {
+  overflow-x: hidden;
+}
+
+.audit-trace-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.audit-trace-table th,
+.audit-trace-table td {
+  font-size: 0.82rem;
+  padding: 6px 4px;
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+.audit-trace-table th:first-child,
+.audit-trace-table td:first-child {
+  width: 34px;
+}
+
+.audit-trace-table th:last-child,
+.audit-trace-table td:last-child {
+  width: 72px;
+}
+
+.audit-ledger-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.audit-ledger-table th,
+.audit-ledger-table td {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .inline-stage-list {

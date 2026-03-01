@@ -770,7 +770,7 @@ export function AuditTracesPage() {
         ) : null}
 
         <div className="table-scroll-wrap audit-trace-table-wrap">
-          <table className="simple-table">
+          <table className="simple-table audit-trace-table">
           <thead>
             <tr>
               <th>
@@ -931,7 +931,7 @@ export function AuditTracesPage() {
         {ledger.loading ? <p className="muted-line">Loading audit ledger...</p> : null}
         {ledger.error ? <p className="error-line">{ledger.error.code}: {ledger.error.message}</p> : null}
         <div className="table-scroll-wrap">
-          <table className="simple-table">
+          <table className="simple-table audit-ledger-table">
           <thead>
             <tr>
               <th>Timestamp</th>
