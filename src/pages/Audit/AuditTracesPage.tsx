@@ -395,7 +395,10 @@ export function AuditTracesPage() {
   };
 
   const exportTracePack = () => {
-    if (selectedRows.length === 0) return;
+    if (selectedRows.length === 0) {
+      setActionMessage('Select one or more trace rows to export a trace pack.');
+      return;
+    }
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     downloadJson(`audit-trace-pack-${stamp}.json`, {
       generated_at_utc: new Date().toISOString(),
@@ -736,7 +739,7 @@ export function AuditTracesPage() {
           <button type="button" onClick={enableRealtime}>Enable realtime</button>
           <button type="button" onClick={() => void exportRows('csv', filtered)}>Export CSV</button>
           <button type="button" onClick={() => void exportRows('json', filtered)}>Export JSON</button>
-          <button type="button" onClick={exportTracePack} disabled={selectedRows.length === 0}>
+          <button type="button" onClick={exportTracePack}>
             Export Trace Pack
           </button>
         </div>
@@ -751,7 +754,7 @@ export function AuditTracesPage() {
             {' | '}
             Freshness: {formatRelativeFromNow(lastDecisionTs)}
             {' | '}
-            Coverage: {coveragePct === null ? 'unknown' : `${coveragePct.toFixed(1)}%`}
+            Coverage: {telemetryStatus === 'OFF' || coveragePct === null ? 'unknown' : `${coveragePct.toFixed(1)}%`}
             {' | '}
             Telemetry: {telemetryStatus === 'OFF' ? 'Off' : 'On'}
           </p>
@@ -766,7 +769,8 @@ export function AuditTracesPage() {
           </div>
         ) : null}
 
-        <table className="simple-table">
+        <div className="table-scroll-wrap audit-trace-table-wrap">
+          <table className="simple-table">
           <thead>
             <tr>
               <th>
@@ -841,10 +845,13 @@ export function AuditTracesPage() {
                   <td>
                     <button
                       type="button"
-                      disabled={!row.trace_id}
-                      title={!row.trace_id ? 'No trace generated' : 'Replay trace'}
+                      title={!row.trace_id ? 'Trace id not reported' : 'Replay trace'}
                       onClick={(event) => {
                         event.stopPropagation();
+                        if (!row.trace_id) {
+                          setActionMessage('Replay unavailable: trace id was not reported for this row.');
+                          return;
+                        }
                         void replaySelected(row);
                       }}
                     >
@@ -860,7 +867,8 @@ export function AuditTracesPage() {
               </tr>
             ) : null}
           </tbody>
-        </table>
+          </table>
+        </div>
 
         <section className="policy-replay-panel">
           <h4>Replay</h4>
@@ -922,7 +930,8 @@ export function AuditTracesPage() {
       <Panel title="Immutable Audit Ledger">
         {ledger.loading ? <p className="muted-line">Loading audit ledger...</p> : null}
         {ledger.error ? <p className="error-line">{ledger.error.code}: {ledger.error.message}</p> : null}
-        <table className="simple-table">
+        <div className="table-scroll-wrap">
+          <table className="simple-table">
           <thead>
             <tr>
               <th>Timestamp</th>
@@ -950,7 +959,8 @@ export function AuditTracesPage() {
               </tr>
             ) : null}
           </tbody>
-        </table>
+          </table>
+        </div>
       </Panel>
     </div>
   );

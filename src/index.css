@@ -322,6 +322,22 @@ a { color: inherit; text-decoration: none; }
   min-width: 220px;
 }
 
+.table-scroll-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.table-scroll-wrap .simple-table {
+  margin: 0;
+}
+
+.audit-trace-table-wrap .simple-table {
+  min-width: 1480px;
+}
+
 .inline-stage-list {
   margin: 8px 0 0;
   padding-left: 18px;
