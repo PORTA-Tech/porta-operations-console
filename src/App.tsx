@@ -11,8 +11,7 @@ import { AdapterPromotionPathPanel } from './pages/RolloutCenter/AdapterPromotio
 import { RolloutVerdictPanel } from './pages/RolloutCenter/RolloutVerdictPanel';
 import { NodeList } from './pages/NodeDrilldown/NodeList';
 import { NodeDetails } from './pages/NodeDrilldown/NodeDetails';
-import { ConfigAuditTable } from './pages/ConfigIntegrity/ConfigAuditTable';
-import { ConfigDiffViewer } from './pages/ConfigIntegrity/ConfigDiffViewer';
+import { ConfigIntegrityPage } from './pages/ConfigIntegrity/ConfigIntegrityPage';
 import { ConsoleFoundationPage } from './pages/ConsoleFoundation/ConsoleFoundationPage';
 import { useFleetState } from './hooks/useFleetState';
 import { useNodeDrilldown } from './hooks/useNodeDrilldown';
@@ -64,12 +63,7 @@ function NodePage() {
 }
 
 function ConfigPage() {
-  return (
-    <div className="stack">
-      <ConfigAuditTable />
-      <ConfigDiffViewer />
-    </div>
-  );
+  return <ConfigIntegrityPage />;
 }
 
 export default function App() {

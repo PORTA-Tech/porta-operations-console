@@ -1771,6 +1771,47 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   padding-bottom: 4px;
 }
 
+.config-top-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.config-indicator-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: #fff;
+  padding: 10px;
+}
+
+.config-indicator-card p {
+  margin: 4px 0;
+}
+
+.config-indicator-card.ok {
+  border-color: color-mix(in oklab, var(--ok) 60%, var(--line));
+}
+
+.config-indicator-card.warn {
+  border-color: color-mix(in oklab, var(--warn) 60%, var(--line));
+}
+
+.config-indicator-card.critical {
+  border-color: color-mix(in oklab, var(--critical) 60%, var(--line));
+}
+
+.config-active-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 10px;
+}
+
+.config-active-card p {
+  margin: 5px 0;
+}
+
 .trace-segment-list {
   display: grid;
   gap: 8px;

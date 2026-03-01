@@ -10,22 +10,28 @@ export function useConfigAudit(): { rows: ConfigLedgerRecord[]; loading: boolean
 
   useEffect(() => {
     let mounted = true;
-
-    getConfigLedger()
-      .then((data) => {
+    const refresh = async (): Promise<void> => {
+      try {
+        const data = await getConfigLedger();
         if (!mounted) return;
         setRows(data);
-      })
-      .catch((err) => {
+        setError(undefined);
+      } catch (err) {
         if (!mounted) return;
         setError(toApiError(err));
-      })
-      .finally(() => {
+      } finally {
         if (mounted) setLoading(false);
-      });
+      }
+    };
+
+    void refresh();
+    const timer = window.setInterval(() => {
+      void refresh();
+    }, 5_000);
 
     return () => {
       mounted = false;
+      window.clearInterval(timer);
     };
   }, []);
 
