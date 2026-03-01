@@ -9,6 +9,7 @@ import {
   type AuthSessionUser
 } from '../api/auth';
 import { authClient } from '../api/authClient';
+import { toApiError } from '../api/client';
 
 interface AuthState {
   ready: boolean;
@@ -53,10 +54,31 @@ export function useAuthSession(): AuthState & {
       setUser(session);
       setError(null);
     } catch (err) {
-      authClient.clearSession();
-      setAuthenticated(false);
-      setUser(null);
-      setError(null);
+      const apiErr = toApiError(err);
+      if (apiErr.status === 401) {
+        authClient.clearSession();
+        setAuthenticated(false);
+        setUser(null);
+        setError(null);
+      } else {
+        const cached = authClient.getSession();
+        if (cached) {
+          setAuthenticated(true);
+          setUser({
+            user_id: cached.user_id,
+            role: cached.role,
+            display_name: cached.display_name,
+            ...(cached.avatar_url !== undefined ? { avatar_url: cached.avatar_url } : {}),
+            session_expires_at_utc: cached.session_expires_at_utc ?? new Date().toISOString(),
+            reauth_expires_at_utc: cached.reauth_expires_at_utc ?? new Date().toISOString()
+          });
+          setError(null);
+        } else {
+          setAuthenticated(false);
+          setUser(null);
+          setError(errorMessage(err, 'Session refresh failed'));
+        }
+      }
     } finally {
       setReady(true);
     }
