@@ -217,6 +217,17 @@ a { color: inherit; text-decoration: none; }
   gap: 8px;
   font-size: 0.85rem;
   color: var(--muted);
+  width: fit-content;
+}
+
+.login-form label.login-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.login-checkbox input {
+  margin: 0;
 }
 
 .login-access-panel {

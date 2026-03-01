@@ -15,8 +15,6 @@ interface AppShellProps {
   onLogout?: () => void | Promise<void>;
   onUpdateProfile?: (input: { display_name?: string; avatar_url?: string | null }) => Promise<boolean>;
   onChangePassword?: (currentPassword: string, newPassword: string) => Promise<boolean>;
-  onCreateSignupCode?: (ttlMinutes?: number) => Promise<{ ok: boolean; code: string; expires_at_utc: string } | null>;
-  onCreatePasswordResetCode?: (userId: string, ttlMinutes?: number) => Promise<{ ok: boolean; user_id: string; code: string; expires_at_utc: string } | null>;
 }
 
 const navItems = [
@@ -43,23 +41,12 @@ function initialsFromName(name: string): string {
   return parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
 }
 
-async function copyText(value: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(value);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export function AppShell({
   children,
   authUser,
   onLogout,
   onUpdateProfile,
-  onChangePassword,
-  onCreateSignupCode,
-  onCreatePasswordResetCode
+  onChangePassword
 }: AppShellProps) {
   const location = useLocation();
   const [glossaryOpen, setGlossaryOpen] = useState(false);
@@ -67,23 +54,20 @@ export function AppShell({
   const glossaryTerms = getGlossaryTerms(location.pathname);
 
   const [displayName, setDisplayName] = useState(authUser?.display_name ?? '');
-  const [avatarUrl, setAvatarUrl] = useState(authUser?.avatar_url ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordEditorOpen, setPasswordEditorOpen] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
 
-  const [resetTargetUser, setResetTargetUser] = useState('');
-  const [generatedSignupCode, setGeneratedSignupCode] = useState<{ code: string; expiresAt: string } | null>(null);
-  const [generatedResetCode, setGeneratedResetCode] = useState<{ userId: string; code: string; expiresAt: string } | null>(null);
-
   useEffect(() => {
     setDisplayName(authUser?.display_name ?? '');
-    setAvatarUrl(authUser?.avatar_url ?? '');
-  }, [authUser?.display_name, authUser?.avatar_url]);
+  }, [authUser?.display_name]);
 
   const saveProfile = async (): Promise<void> => {
     if (!onUpdateProfile) return;
@@ -91,8 +75,7 @@ export function AppShell({
     setAccountMessage(null);
     try {
       const ok = await onUpdateProfile({
-        display_name: displayName.trim(),
-        avatar_url: avatarUrl.trim().length > 0 ? avatarUrl.trim() : null
+        display_name: displayName.trim()
       });
       setAccountMessage(ok ? 'Profile updated.' : 'Profile update failed.');
     } finally {
@@ -101,7 +84,11 @@ export function AppShell({
   };
 
   const savePassword = async (): Promise<void> => {
-    if (!onChangePassword || !currentPassword || !newPassword) return;
+    if (!onChangePassword || !currentPassword || !newPassword || !confirmNewPassword) return;
+    if (newPassword !== confirmNewPassword) {
+      setAccountMessage('New password and confirmation do not match.');
+      return;
+    }
     setBusy(true);
     setAccountMessage(null);
     try {
@@ -110,40 +97,8 @@ export function AppShell({
       if (ok) {
         setCurrentPassword('');
         setNewPassword('');
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const createSignupCode = async (): Promise<void> => {
-    if (!onCreateSignupCode) return;
-    setBusy(true);
-    setAccountMessage(null);
-    try {
-      const result = await onCreateSignupCode(30);
-      if (result) {
-        setGeneratedSignupCode({ code: result.code, expiresAt: result.expires_at_utc });
-        setAccountMessage('Signup code generated.');
-      } else {
-        setAccountMessage('Signup code generation failed.');
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const createResetCode = async (): Promise<void> => {
-    if (!onCreatePasswordResetCode || !resetTargetUser.trim()) return;
-    setBusy(true);
-    setAccountMessage(null);
-    try {
-      const result = await onCreatePasswordResetCode(resetTargetUser.trim(), 30);
-      if (result) {
-        setGeneratedResetCode({ userId: result.user_id, code: result.code, expiresAt: result.expires_at_utc });
-        setAccountMessage(`Password reset code generated for ${result.user_id}.`);
-      } else {
-        setAccountMessage('Password reset code generation failed.');
+        setConfirmNewPassword('');
+        setPasswordEditorOpen(false);
       }
     } finally {
       setBusy(false);
@@ -168,7 +123,8 @@ export function AppShell({
             {accountOpen ? (
               <section className="account-menu">
                 <h4>Account</h4>
-                <p className="muted-line">@{authUser.user_id} · {authUser.role}</p>
+                <p className="muted-line">{authUser.display_name} · {authUser.role}</p>
+                <p className="muted-line">Email: {authUser.user_id}</p>
 
                 <div className="account-section">
                   <h5>Profile</h5>
@@ -176,58 +132,58 @@ export function AppShell({
                     Display name
                     <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
                   </label>
-                  <label>
-                    Profile picture URL
-                    <input value={avatarUrl} onChange={(event) => setAvatarUrl(event.target.value)} placeholder="https://..." />
-                  </label>
                   <button type="button" onClick={() => void saveProfile()} disabled={busy || !displayName.trim()}>Save profile</button>
                 </div>
 
                 <div className="account-section">
                   <h5>Security</h5>
-                  <label>
-                    Current password
-                    <div className="account-password-row">
-                      <input type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
-                      <button type="button" onClick={() => setShowCurrentPassword((v) => !v)}>{showCurrentPassword ? 'Hide' : 'Show'}</button>
-                    </div>
-                  </label>
-                  <label>
-                    New password
-                    <div className="account-password-row">
-                      <input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="min 8 + upper/lower/number" />
-                      <button type="button" onClick={() => setShowNewPassword((v) => !v)}>{showNewPassword ? 'Hide' : 'Show'}</button>
-                    </div>
-                  </label>
-                  <button type="button" onClick={() => void savePassword()} disabled={busy || !currentPassword || !newPassword}>Update password</button>
+                  {!passwordEditorOpen ? (
+                    <button type="button" onClick={() => setPasswordEditorOpen(true)} disabled={busy}>
+                      Change password
+                    </button>
+                  ) : (
+                    <>
+                      <label>
+                        Current password
+                        <div className="account-password-row">
+                          <input type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
+                          <button type="button" onClick={() => setShowCurrentPassword((v) => !v)}>{showCurrentPassword ? 'Hide' : 'Show'}</button>
+                        </div>
+                      </label>
+                      <label>
+                        New password
+                        <div className="account-password-row">
+                          <input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="At least 8 chars, uppercase, lowercase, number" />
+                          <button type="button" onClick={() => setShowNewPassword((v) => !v)}>{showNewPassword ? 'Hide' : 'Show'}</button>
+                        </div>
+                      </label>
+                      <label>
+                        Confirm new password
+                        <div className="account-password-row">
+                          <input type={showConfirmPassword ? 'text' : 'password'} value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} />
+                          <button type="button" onClick={() => setShowConfirmPassword((v) => !v)}>{showConfirmPassword ? 'Hide' : 'Show'}</button>
+                        </div>
+                      </label>
+                      <div className="button-row">
+                        <button type="button" onClick={() => void savePassword()} disabled={busy || !currentPassword || !newPassword || !confirmNewPassword}>
+                          Update password
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPasswordEditorOpen(false);
+                            setCurrentPassword('');
+                            setNewPassword('');
+                            setConfirmNewPassword('');
+                          }}
+                          disabled={busy}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
-
-                {authUser.role === 'admin' ? (
-                  <div className="account-section">
-                    <h5>Admin Access Codes</h5>
-                    <button type="button" onClick={() => void createSignupCode()} disabled={busy}>Generate account creation code</button>
-                    {generatedSignupCode ? (
-                      <p className="muted-line">
-                        Code: <strong>{generatedSignupCode.code}</strong> (expires {new Date(generatedSignupCode.expiresAt).toLocaleString()})
-                        {' '}
-                        <button type="button" onClick={() => void copyText(generatedSignupCode.code)}>Copy</button>
-                      </p>
-                    ) : null}
-
-                    <label>
-                      User ID for password reset
-                      <input value={resetTargetUser} onChange={(event) => setResetTargetUser(event.target.value)} placeholder="name@company.com" />
-                    </label>
-                    <button type="button" onClick={() => void createResetCode()} disabled={busy || !resetTargetUser.trim()}>Generate password reset code</button>
-                    {generatedResetCode ? (
-                      <p className="muted-line">
-                        {generatedResetCode.userId}: <strong>{generatedResetCode.code}</strong> (expires {new Date(generatedResetCode.expiresAt).toLocaleString()})
-                        {' '}
-                        <button type="button" onClick={() => void copyText(generatedResetCode.code)}>Copy</button>
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
 
                 <button type="button" onClick={onLogout} className="danger" disabled={busy || !onLogout}>Log out</button>
                 {accountMessage ? <p className="muted-line">{accountMessage}</p> : null}

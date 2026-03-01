@@ -26,10 +26,10 @@ const signupRoles: Array<{ value: AuthSessionUser['role']; label: string }> = [
 function passwordRuleText(help: AuthAccessHelp | null): string {
   const rules = help?.password_rules;
   if (!rules) return 'Use a strong password.';
-  const pieces = [`min ${rules.min_length} chars`];
-  if (rules.requires_upper) pieces.push('1 uppercase');
-  if (rules.requires_lower) pieces.push('1 lowercase');
-  if (rules.requires_number) pieces.push('1 number');
+  const pieces: string[] = [`at least ${rules.min_length} characters`];
+  if (rules.requires_upper) pieces.push('an uppercase letter');
+  if (rules.requires_lower) pieces.push('a lowercase letter');
+  if (rules.requires_number) pieces.push('a number');
   return pieces.join(', ');
 }
 
@@ -235,7 +235,7 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
         </form>
-        {error ? <p className="error-line">{error}</p> : null}
+        {error && !error.toLowerCase().includes('session expired') ? <p className="error-line">{error}</p> : null}
 
         <button type="button" className="login-toggle-link" onClick={() => setShowForgot((value) => !value)}>
           {showForgot ? 'Hide password reset' : 'Forgot password?'}
@@ -319,7 +319,7 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
                       required
                     />
                   </label>
-                  <p className="muted-line">Use a valid email address ({registerUserMin}-{registerUserMax} chars).</p>
+                  <p className="muted-line">Use your work email address.</p>
 
                   <label>
                     Display name

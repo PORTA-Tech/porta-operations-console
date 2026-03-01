@@ -79,8 +79,6 @@ function ProtectedConsoleApp(props: {
   onLogout: () => Promise<void>;
   onUpdateProfile: (input: { display_name?: string; avatar_url?: string | null }) => Promise<boolean>;
   onChangePassword: (currentPassword: string, newPassword: string) => Promise<boolean>;
-  onCreateSignupCode: (ttlMinutes?: number) => Promise<{ ok: boolean; code: string; expires_at_utc: string } | null>;
-  onCreatePasswordResetCode: (userId: string, ttlMinutes?: number) => Promise<{ ok: boolean; user_id: string; code: string; expires_at_utc: string } | null>;
 }) {
   const { loading, error } = useFleetState();
 
@@ -90,8 +88,6 @@ function ProtectedConsoleApp(props: {
       onLogout={props.onLogout}
       onUpdateProfile={props.onUpdateProfile}
       onChangePassword={props.onChangePassword}
-      onCreateSignupCode={props.onCreateSignupCode}
-      onCreatePasswordResetCode={props.onCreatePasswordResetCode}
     >
       {loading ? <p>Connecting to control plane...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
@@ -165,8 +161,6 @@ export default function App() {
               onLogout={auth.logout}
               onUpdateProfile={auth.updateProfile}
               onChangePassword={auth.changePassword}
-              onCreateSignupCode={auth.createSignupCode}
-              onCreatePasswordResetCode={auth.createPasswordResetCode}
             />
           ) : (
             <Navigate to="/login" replace />
