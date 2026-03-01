@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Panel } from '../../components/Layout/Panel';
 import { useActiveConfigIntegrity } from '../../hooks/useActiveConfigIntegrity';
 import { useConfigAudit } from '../../hooks/useConfigAudit';
@@ -72,6 +73,7 @@ function round(value: number, decimals = 1): number {
 function buildTrustVerdict(input: {
   reportingMachines: number;
   verifiedMachines: number;
+  invalidSignatureMachines: number;
   verifiedCoveragePct: number;
   freshnessSeconds: number | null;
   wsStreamOk: boolean;
@@ -81,6 +83,40 @@ function buildTrustVerdict(input: {
   issuer: string | null;
   fingerprint: string | null;
 }): TrustVerdict {
+  if (input.signatureValidity === false || input.invalidSignatureMachines > 0) {
+    return {
+      status: 'INVALID',
+      reasonCode: 'SIGNATURE_INVALID',
+      reasonDetails: {
+        invalid_signature_machines: input.invalidSignatureMachines,
+        reporting_machines: input.reportingMachines
+      },
+      summary: `${input.invalidSignatureMachines} machines failed signature validation.`
+    };
+  }
+
+  if (input.expiredMachines > 0) {
+    return {
+      status: 'INVALID',
+      reasonCode: 'CONFIG_EXPIRED',
+      reasonDetails: {
+        expired_machines: input.expiredMachines
+      },
+      summary: `${input.expiredMachines} machines report expired config.`
+    };
+  }
+
+  if (input.driftedMachines > 0) {
+    return {
+      status: 'WARNING',
+      reasonCode: 'DRIFT_DETECTED',
+      reasonDetails: {
+        drifted_machines: input.driftedMachines
+      },
+      summary: `${input.driftedMachines} machines are drifting from expected config sequence.`
+    };
+  }
+
   if (input.reportingMachines < MIN_REQUIRED_MACHINES) {
     return {
       status: 'INCONCLUSIVE',
@@ -140,40 +176,6 @@ function buildTrustVerdict(input: {
     };
   }
 
-  if (input.signatureValidity === false) {
-    return {
-      status: 'INVALID',
-      reasonCode: 'SIGNATURE_INVALID',
-      reasonDetails: {
-        verified_machines: input.verifiedMachines,
-        reporting_machines: input.reportingMachines
-      },
-      summary: 'Config signature validation failed.'
-    };
-  }
-
-  if (input.expiredMachines > 0) {
-    return {
-      status: 'INVALID',
-      reasonCode: 'CONFIG_EXPIRED',
-      reasonDetails: {
-        expired_machines: input.expiredMachines
-      },
-      summary: `${input.expiredMachines} machines report expired config.`
-    };
-  }
-
-  if (input.driftedMachines > 0) {
-    return {
-      status: 'WARNING',
-      reasonCode: 'DRIFT_DETECTED',
-      reasonDetails: {
-        drifted_machines: input.driftedMachines
-      },
-      summary: `${input.driftedMachines} machines are drifting from expected config sequence.`
-    };
-  }
-
   return {
     status: 'TRUSTED',
     reasonCode: 'VERIFICATION_SUCCEEDED',
@@ -203,6 +205,7 @@ function downloadJson(name: string, payload: unknown): void {
 }
 
 export function ConfigIntegrityPage() {
+  const navigate = useNavigate();
   const active = useActiveConfigIntegrity();
   const configAudit = useConfigAudit();
   const auditLedger = useAuditLedgerView();
@@ -213,6 +216,10 @@ export function ConfigIntegrityPage() {
   const [nodesLoading, setNodesLoading] = useState(true);
   const [nodesError, setNodesError] = useState<ApiError | undefined>();
   const [actionMessage, setActionMessage] = useState('');
+  const [dataQualityExpanded, setDataQualityExpanded] = useState(false);
+  const [trustReasonExpanded, setTrustReasonExpanded] = useState(false);
+  const dataQualityDetailsRef = useRef<HTMLDetailsElement | null>(null);
+  const trustReasonDetailsRef = useRef<HTMLDetailsElement | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -274,6 +281,7 @@ export function ConfigIntegrityPage() {
       buildTrustVerdict({
         reportingMachines,
         verifiedMachines,
+        invalidSignatureMachines,
         verifiedCoveragePct,
         freshnessSeconds,
         wsStreamOk,
@@ -286,6 +294,7 @@ export function ConfigIntegrityPage() {
     [
       reportingMachines,
       verifiedMachines,
+      invalidSignatureMachines,
       verifiedCoveragePct,
       freshnessSeconds,
       wsStreamOk,
@@ -431,18 +440,40 @@ export function ConfigIntegrityPage() {
     setActionMessage('Config integrity snapshot exported.');
   };
 
-  const copyFingerprint = async () => {
-    const fingerprint = active.data?.hash_fingerprint;
-    if (!fingerprint) {
-      setActionMessage('Fingerprint is unavailable.');
+  const copyValue = async (label: string, value: string | number | null | undefined) => {
+    if (value === null || value === undefined || String(value).trim().length === 0) {
+      setActionMessage(`${label} is unavailable.`);
       return;
     }
     try {
-      await navigator.clipboard.writeText(fingerprint);
-      setActionMessage('Fingerprint copied.');
+      await navigator.clipboard.writeText(String(value));
+      setActionMessage(`${label} copied.`);
     } catch {
-      setActionMessage('Clipboard unavailable. Fingerprint could not be copied.');
+      setActionMessage(`Clipboard unavailable. ${label} could not be copied.`);
     }
+  };
+
+  const openDataQualityDetails = () => {
+    setDataQualityExpanded(true);
+    window.setTimeout(() => {
+      dataQualityDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
+  };
+
+  const openDriftView = () => {
+    setTab('drift');
+    if (driftedMachines === 0) {
+      setActionMessage('No drift detected in the last 24h.');
+    }
+  };
+
+  const openVerificationView = () => {
+    setTab('verification');
+    setTrustReasonExpanded(true);
+    openDataQualityDetails();
+    window.setTimeout(() => {
+      trustReasonDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 0);
   };
 
   return (
@@ -458,29 +489,77 @@ export function ConfigIntegrityPage() {
             : `Polling mode (${wsStatus.statusLabel.toLowerCase()}). Last stream change: ${formatRelativeFromNow(wsStatus.lastChangedUtc)}.`}
         </p>
         <div className="config-top-grid">
-          <div className={`config-indicator-card ${toneClass(verdict.status)}`}>
+          <button
+            type="button"
+            className={`config-indicator-card interactive ${toneClass(verdict.status)}`}
+            onClick={openVerificationView}
+          >
             <p className="status-card-title">Config Trust</p>
             <p className="right-now-value">{verdict.status}</p>
             <p>{verdict.summary}</p>
-          </div>
-          <div className="config-indicator-card">
+          </button>
+          <button
+            type="button"
+            className="config-indicator-card interactive"
+            onClick={openDataQualityDetails}
+          >
             <p className="status-card-title">Fleet Coverage</p>
             <p className="right-now-value">{round(fleetCoveragePct, 1)}%</p>
-            <p>{verifiedMachines} / {nodes.length} machines verified</p>
-          </div>
-          <div className={`config-indicator-card ${driftedMachines > 0 ? 'warn' : 'ok'}`}>
+            <p>{reportingMachines} reporting machines</p>
+            <p>{verifiedMachines} verified | minimum required: {MIN_REQUIRED_MACHINES}</p>
+          </button>
+          <button
+            type="button"
+            className={`config-indicator-card interactive ${driftedMachines > 0 ? 'warn' : 'ok'}`}
+            onClick={openDriftView}
+          >
             <p className="status-card-title">Drift</p>
             <p className="right-now-value">{driftedMachines > 0 ? 'Detected' : 'None'}</p>
             <p>{driftedMachines} machines drifting</p>
-          </div>
-          <div className={`config-indicator-card ${freshnessSeconds !== null && freshnessSeconds <= HEARTBEAT_STALE_SECONDS ? 'ok' : 'warn'}`}>
+          </button>
+          <button
+            type="button"
+            className={`config-indicator-card interactive ${freshnessSeconds !== null && freshnessSeconds <= HEARTBEAT_STALE_SECONDS ? 'ok' : 'warn'}`}
+            onClick={openDataQualityDetails}
+          >
             <p className="status-card-title">Freshness</p>
             <p className="right-now-value">{freshnessSeconds === null ? 'Stale' : `${freshnessSeconds}s`}</p>
             <p>Last updated: {formatUtc(latestHeartbeatMs === null ? undefined : new Date(latestHeartbeatMs).toISOString())}</p>
-          </div>
+          </button>
         </div>
-        <details className="rollout-detail-box">
-          <summary>Details</summary>
+        {invalidSignatureMachines > 0 ? (
+          <div className="button-row">
+            <button type="button" onClick={() => navigate('/machines?signatureInvalid=1')}>
+              Open affected machines
+            </button>
+          </div>
+        ) : null}
+        <details
+          ref={dataQualityDetailsRef}
+          className="rollout-detail-box"
+          open={dataQualityExpanded}
+          onToggle={(event) => setDataQualityExpanded(event.currentTarget.open)}
+        >
+          <summary>Data Quality Details</summary>
+          <div className="rollout-detail-content">
+            <p>reporting_machines: {reportingMachines}</p>
+            <p>verified_machines: {verifiedMachines}</p>
+            <p>invalid_signature_machines: {invalidSignatureMachines}</p>
+            <p>min_required_machines: {MIN_REQUIRED_MACHINES}</p>
+            <p>coverage_pct: {round(verifiedCoveragePct, 1)}%</p>
+            <p>min_required_coverage_pct: {MIN_REQUIRED_COVERAGE_PCT}%</p>
+            <p>freshness_seconds: {freshnessSeconds ?? 'Unavailable'}</p>
+            <p>realtime_channel_status: {wsStatus.statusLabel}</p>
+            <p>ws_stream_ok: {wsStreamOk ? 'true' : 'false'}</p>
+          </div>
+        </details>
+        <details
+          ref={trustReasonDetailsRef}
+          className="rollout-detail-box"
+          open={trustReasonExpanded}
+          onToggle={(event) => setTrustReasonExpanded(event.currentTarget.open)}
+        >
+          <summary>Trust Reason Details</summary>
           <div className="rollout-detail-content">
             <p>reason_code: {verdict.reasonCode}</p>
             <p>reason_details: {JSON.stringify(verdict.reasonDetails)}</p>
@@ -517,12 +596,22 @@ export function ConfigIntegrityPage() {
                   </td>
                   <td>
                     <div className="button-row">
-                      <a className="inline-button-link" href={`/machines?cohort=${encodeURIComponent(row.cohort)}&signatureInvalid=1`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate(`/machines?cohort=${encodeURIComponent(row.cohort)}&signatureInvalid=1`);
+                        }}
+                      >
                         Open invalid
-                      </a>
-                      <a className="inline-button-link" href={`/machines?cohort=${encodeURIComponent(row.cohort)}&configDrift=1`}>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate(`/machines?cohort=${encodeURIComponent(row.cohort)}&configDrift=1`);
+                        }}
+                      >
                         Open drifted
-                      </a>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -559,14 +648,35 @@ export function ConfigIntegrityPage() {
               <button type="button" onClick={exportSnapshot}>Export snapshot JSON</button>
             </div>
             <div className="config-active-card">
-              <p><strong>Active config:</strong> {active.data?.config_seq ?? 'Unavailable'} ({active.data?.config_version ?? 'Unavailable'})</p>
-              <p><strong>Issuer:</strong> {active.data?.issuer || 'Unavailable'}</p>
+              <p>
+                <strong>Active config seq:</strong> {active.data?.config_seq ?? 'Unavailable'}
+                {' '}
+                <button type="button" disabled={active.data?.config_seq == null} onClick={() => void copyValue('Config seq', active.data?.config_seq ?? null)}>
+                  Copy
+                </button>
+              </p>
+              <p>
+                <strong>Active config version:</strong> {active.data?.config_version ?? 'Unavailable'}
+                {' '}
+                <button type="button" disabled={!active.data?.config_version} onClick={() => void copyValue('Config version', active.data?.config_version ?? null)}>
+                  Copy
+                </button>
+              </p>
+              <p>
+                <strong>Issuer:</strong> {active.data?.issuer || 'Unavailable'}
+                {' '}
+                <button type="button" disabled={!active.data?.issuer} onClick={() => void copyValue('Issuer', active.data?.issuer ?? null)}>
+                  Copy
+                </button>
+              </p>
               <p><strong>Signature:</strong> {active.data ? (active.data.signature_validity ? 'Verified' : 'Failed') : 'Unavailable'}</p>
               <p><strong>Expiry:</strong> {active.data?.expires_at_utc ? `${formatUtc(active.data.expires_at_utc)} (${formatRelativeFromNow(active.data.expires_at_utc)})` : 'Unavailable'}</p>
               <p>
                 <strong>Fingerprint:</strong> {active.data?.hash_fingerprint ? shortHash(active.data.hash_fingerprint) : 'Unavailable'}
                 {' '}
-                <button type="button" onClick={() => void copyFingerprint()}>Copy</button>
+                <button type="button" disabled={!active.data?.hash_fingerprint} onClick={() => void copyValue('Fingerprint', active.data?.hash_fingerprint ?? null)}>
+                  Copy
+                </button>
               </p>
             </div>
             <div className="table-scroll-wrap">
@@ -639,18 +749,18 @@ export function ConfigIntegrityPage() {
                       <td>{record.diffSummary}</td>
                       <td>{record.correlationId ?? 'Unavailable'}</td>
                       <td>
-                        {record.correlationId ? (
-                          <a className="inline-button-link" href={`/audit-traces?correlation=${encodeURIComponent(record.correlationId)}`}>
-                            Open trace
-                          </a>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setActionMessage('No correlation id is available for this drift record.')}
-                          >
-                            Open trace
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!record.correlationId) {
+                              setActionMessage('No correlation id is available for this drift record.');
+                              return;
+                            }
+                            navigate(`/audit-traces?correlation=${encodeURIComponent(record.correlationId)}`);
+                          }}
+                        >
+                          Open trace
+                        </button>
                       </td>
                     </tr>
                   ))}

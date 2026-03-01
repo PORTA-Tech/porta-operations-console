@@ -1789,6 +1789,12 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   margin: 4px 0;
 }
 
+.config-indicator-card.interactive {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+
 .config-indicator-card.ok {
   border-color: color-mix(in oklab, var(--ok) 60%, var(--line));
 }
