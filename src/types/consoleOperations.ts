@@ -34,6 +34,14 @@ export interface AuditDecisionRecord {
   confidence_score: number;
   triggered_by: string;
   signature_valid: boolean;
+  signature_status?: 'VALID' | 'INVALID' | 'UNKNOWN';
+  cohort_id?: string | null;
+  machine_id?: string | null;
+  reason_code?: string | null;
+  policy_version?: string | null;
+  trace_generated?: boolean;
+  evidence_available?: boolean;
+  raw_trace?: Record<string, unknown>;
   contributing_primitives: string[];
 }
 

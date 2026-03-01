@@ -1621,6 +1621,55 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   color: inherit;
 }
 
+.policy-summary-strip {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+}
+
+.policy-summary-strip p {
+  margin: 0;
+}
+
+.policy-detail-section {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.policy-detail-section h4 {
+  margin: 0 0 6px;
+}
+
+.policy-detail-section p {
+  margin: 4px 0;
+}
+
+.policy-replay-panel {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.policy-replay-panel h4 {
+  margin: 0 0 8px;
+}
+
+.policy-chain-list {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.policy-chain-list p {
+  margin: 0;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 4px;
+}
+
 @media (max-width: 900px) {
   .shell-main { grid-template-columns: 1fr; }
   .sidebar {

@@ -74,17 +74,55 @@ export async function fetchAuditDecisions(): Promise<AuditDecisionRecord[]> {
       path: '/v1/audit/decision-traces?limit=1000',
       method: 'get'
     });
+    const normalizeDecision = (raw: unknown): AuditDecisionRecord['action_decision'] => {
+      const value = typeof raw === 'string' ? raw.toLowerCase() : '';
+      if (value === 'intervene' || value === 'allow') return 'intervene';
+      if (value === 'blocked' || value === 'block') return 'blocked';
+      if (value === 'cooldown' || value === 'no_op' || value === 'noop') return 'cooldown';
+      return 'skip';
+    };
+
+    const normalizeSignatureStatus = (raw: unknown, fallback: boolean): 'VALID' | 'INVALID' | 'UNKNOWN' => {
+      if (typeof raw !== 'string') {
+        return fallback ? 'VALID' : 'INVALID';
+      }
+      const value = raw.toUpperCase();
+      if (value === 'VALID' || value === 'INVALID' || value === 'UNKNOWN') {
+        return value;
+      }
+      return fallback ? 'VALID' : 'INVALID';
+    };
+
     return traces.map((trace) => ({
       trace_id: String(trace.trace_id ?? ''),
       correlation_id: String(trace.correlation_id ?? ''),
       timestamp: String(trace.timestamp ?? ''),
-      agent_id: String(trace.target_service ?? 'unknown'),
+      agent_id: String(trace.agent_id ?? trace.machine_id ?? trace.target_service ?? 'unknown'),
       policy_id: String(trace.policy_id ?? ''),
-      action_decision: (trace.action_decision as AuditDecisionRecord['action_decision']) ?? 'skip',
+      action_decision: normalizeDecision(trace.action_decision ?? trace.decision),
       confidence_score: Number(trace.confidence_score ?? 0),
-      triggered_by: String(trace.triggered_by ?? ''),
-      signature_valid: true,
-      contributing_primitives: Object.keys((trace.metrics_snapshot ?? {}) as Record<string, unknown>)
+      triggered_by: String(trace.triggered_by ?? trace.reason_code ?? ''),
+      signature_valid: Boolean(trace.signature_valid ?? trace.config_signature_valid ?? true),
+      signature_status: normalizeSignatureStatus(
+        trace.signature_status,
+        Boolean(trace.signature_valid ?? trace.config_signature_valid ?? true)
+      ),
+      cohort_id: typeof trace.cohort_id === 'string'
+        ? trace.cohort_id
+        : typeof trace.cohort === 'string'
+          ? trace.cohort
+          : null,
+      machine_id: typeof trace.machine_id === 'string' ? trace.machine_id : null,
+      reason_code: typeof trace.reason_code === 'string' ? trace.reason_code : null,
+      policy_version: typeof trace.policy_version === 'string' ? trace.policy_version : null,
+      trace_generated: typeof trace.trace_generated === 'boolean'
+        ? trace.trace_generated
+        : String(trace.trace_id ?? '').length > 0,
+      evidence_available: typeof trace.evidence_available === 'boolean'
+        ? trace.evidence_available
+        : String(trace.trace_id ?? '').length > 0 || String(trace.correlation_id ?? '').length > 0,
+      raw_trace: trace,
+      contributing_primitives: Object.keys((trace.metrics_snapshot ?? trace.primitives ?? {}) as Record<string, unknown>)
     }));
   } catch {
     return [];
