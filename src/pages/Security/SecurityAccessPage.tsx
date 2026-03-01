@@ -39,16 +39,17 @@ type EventRow = {
 };
 
 const DEFAULT_MATRIX: SecurityPermissionMatrixRow[] = [
-  { role: 'admin', read: true, write: true, override: true, sensitive_actions: ['rollout.promote', 'policy.deploy', 'rbac.assign'] },
+  { role: 'admin', read: true, write: true, override: true, sensitive_actions: ['rollout.promote', 'policy.deploy', 'rbac.assign', 'rbac.revoke'] },
   { role: 'operator', read: true, write: true, override: false, sensitive_actions: ['rollout.promote', 'policy.deploy'] },
   { role: 'auditor', read: true, write: false, override: false, sensitive_actions: [] },
-  { role: 'developer', read: true, write: false, override: false, sensitive_actions: [] }
+  { role: 'developer', read: true, write: false, override: false, sensitive_actions: [] },
+  { role: 'viewer', read: true, write: false, override: false, sensitive_actions: [] }
 ];
 
 const DEFAULT_POLICY: SensitiveOpsPolicyView = {
   reauth_window_minutes: 10,
   require_2fa_override: false,
-  sensitive_actions: ['rollout.promote', 'rollout.halt', 'policy.deploy', 'config.override', 'rbac.assign'],
+  sensitive_actions: ['rollout.promote', 'rollout.halt', 'policy.deploy', 'config.override', 'rbac.assign', 'rbac.revoke'],
   blocked_missing_reauth_last_1h: 0,
   expired_sessions: 0,
   source: 'fallback',
@@ -158,7 +159,7 @@ export function SecurityAccessPage() {
   const [params] = useSearchParams();
   const focus = params.get('focus') === 'rbac-violations';
   const { operatorRole, operatorId } = authClient.getOperatorAuth();
-  const canMutate = operatorRole === 'admin' || operatorRole === 'operator';
+  const canMutate = operatorRole === 'admin';
   const ws = useWsConnectionStatus();
   const auditLedger = useAuditLedgerView();
   const { assignments, loading, error, assign, revoke, metrics } = useConsoleOperations();
@@ -358,14 +359,14 @@ export function SecurityAccessPage() {
               <label>Scope ID<input value={scopeId} onChange={(e) => setScopeId(e.target.value)} /></label>
               <label>Reason<input value={reason} onChange={(e) => setReason(e.target.value)} /></label>
               <label>Expires<input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} /></label>
-              <button type="button" onClick={() => void assignRole()} disabled={!canMutate || !userId.trim()} title={!canMutate ? 'Requires operator/admin' : 'Assign role'}>Assign role</button>
+              <button type="button" onClick={() => void assignRole()} disabled={!canMutate || !userId.trim()} title={!canMutate ? 'Requires admin role' : 'Assign role'}>Assign role</button>
             </div>
             <div className="table-scroll-wrap">
               <table className="simple-table"><thead><tr><th>User</th><th>Role</th><th>Scope</th><th>Assigned by</th><th>At</th><th>Actions</th></tr></thead><tbody>
                 {assignments.slice(0, 30).map((row) => (
                   <tr key={`${row.user_id}:${row.role}:${row.scope}:${row.scope_id}:${row.assigned_at}`}>
                     <td>{row.user_id}</td><td>{row.role}</td><td>{row.scope}:{row.scope_id}</td><td>{row.assigned_by}</td><td>{formatUtc(row.assigned_at)}</td>
-                    <td><button type="button" disabled={!canMutate} onClick={() => { void revoke({ user_id: row.user_id, role: row.role, scope: row.scope, scope_id: row.scope_id }).then(() => setMessage(`Revoked ${row.role} from ${row.user_id}.`)).catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Revoke failed')); }}>Revoke</button></td>
+                    <td><button type="button" disabled={!canMutate} title={!canMutate ? 'Requires admin role' : 'Revoke role'} onClick={() => { void revoke({ user_id: row.user_id, role: row.role, scope: row.scope, scope_id: row.scope_id }).then(() => setMessage(`Revoked ${row.role} from ${row.user_id}.`)).catch((err: unknown) => setMessage(err instanceof Error ? err.message : 'Revoke failed')); }}>Revoke</button></td>
                   </tr>
                 ))}
               </tbody></table>
