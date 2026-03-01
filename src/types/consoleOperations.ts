@@ -41,6 +41,11 @@ export interface AuditDecisionRecord {
   policy_version?: string | null;
   trace_generated?: boolean;
   evidence_available?: boolean;
+  escalation_level?: string | null;
+  config_version?: number | null;
+  trace_status?: 'complete' | 'incomplete' | 'unknown';
+  signature_verification_status?: 'verified' | 'failed' | 'not_verified';
+  missing_segments?: string[] | null;
   raw_trace?: Record<string, unknown>;
   contributing_primitives: string[];
 }

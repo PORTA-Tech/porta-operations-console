@@ -1718,6 +1718,43 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   padding-bottom: 4px;
 }
 
+.trace-segment-list {
+  display: grid;
+  gap: 8px;
+  max-height: 620px;
+  overflow: auto;
+}
+
+.trace-segment-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px;
+}
+
+.trace-segment-head {
+  margin: 0 0 6px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.trace-segment-card p {
+  margin: 4px 0;
+}
+
+.trace-segment-card pre {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fffdf7;
+  padding: 8px;
+  font-size: 0.78rem;
+}
+
 @media (max-width: 900px) {
   .shell-main { grid-template-columns: 1fr; }
   .sidebar {
