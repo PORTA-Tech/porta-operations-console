@@ -12,16 +12,18 @@ export interface AuthSessionUser {
 export interface AuthAccessHelp {
   signup_enabled: boolean;
   admin_signup_enabled: boolean;
-  users: Array<{
-    user_id: string;
-    role: AuthSessionUser['role'];
-    display_name: string;
-  }>;
-  default_credentials: Array<{
-    user_id: string;
-    role: AuthSessionUser['role'];
-    password: string;
-  }>;
+  user_id_rules: {
+    pattern: string;
+    min_length: number;
+    max_length: number;
+    example: string;
+  };
+  password_rules: {
+    min_length: number;
+    requires_upper: boolean;
+    requires_lower: boolean;
+    requires_number: boolean;
+  };
 }
 
 interface LoginResponse {

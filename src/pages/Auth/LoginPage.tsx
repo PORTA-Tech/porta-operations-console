@@ -16,6 +16,26 @@ const signupRoles: Array<{ value: AuthSessionUser['role']; label: string }> = [
   { value: 'admin', label: 'admin' }
 ];
 
+function passwordRuleText(help: AuthAccessHelp | null): string {
+  const rules = help?.password_rules;
+  if (!rules) return 'Use a strong password.';
+  const pieces = [`min ${rules.min_length} chars`];
+  if (rules.requires_upper) pieces.push('1 uppercase');
+  if (rules.requires_lower) pieces.push('1 lowercase');
+  if (rules.requires_number) pieces.push('1 number');
+  return pieces.join(', ');
+}
+
+function isPasswordValid(password: string, help: AuthAccessHelp | null): boolean {
+  const rules = help?.password_rules;
+  if (!rules) return password.length >= 8;
+  if (password.length < rules.min_length) return false;
+  if (rules.requires_upper && !/[A-Z]/.test(password)) return false;
+  if (rules.requires_lower && !/[a-z]/.test(password)) return false;
+  if (rules.requires_number && !/[0-9]/.test(password)) return false;
+  return true;
+}
+
 export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
   const [userId, setUserId] = useState('');
   const [password, setPassword] = useState('');
@@ -54,6 +74,18 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
     return signupRoles.filter((row) => row.value !== 'admin' || help?.admin_signup_enabled);
   }, [help?.admin_signup_enabled]);
 
+  const registerUserIdPattern = help?.user_id_rules.pattern ?? '^[a-z][a-z0-9._-]{2,31}$';
+  const registerUserMin = help?.user_id_rules.min_length ?? 3;
+  const registerUserMax = help?.user_id_rules.max_length ?? 32;
+  const registerPasswordMin = help?.password_rules.min_length ?? 8;
+
+  const registerUserIdValid = new RegExp(registerUserIdPattern).test(registerUserId.trim());
+  const registerPasswordValid = isPasswordValid(registerPassword, help);
+  const canRegister = registerUserIdValid
+    && registerDisplayName.trim().length > 0
+    && registerPasswordValid
+    && !registerLoading;
+
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!userId.trim() || !password) {
@@ -64,8 +96,8 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
 
   const register = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!registerUserId.trim() || !registerDisplayName.trim() || registerPassword.length < 6) {
-      setRegisterMessage('Enter user id, display name, and a password with at least 6 characters.');
+    if (!canRegister) {
+      setRegisterMessage('Please fix the validation errors before creating the account.');
       return;
     }
     setRegisterLoading(true);
@@ -80,7 +112,6 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
       if (result.ok) {
         setRegisterMessage(`Account created for ${result.user.user_id}. You can sign in now.`);
         setUserId(result.user.user_id);
-        setPassword(registerPassword);
         setRegisterPassword('');
       }
     } catch (err) {
@@ -104,7 +135,7 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
               autoComplete="username"
               value={userId}
               onChange={(event) => setUserId(event.target.value)}
-              placeholder="admin"
+              placeholder="your user id"
             />
           </label>
           <label>
@@ -114,7 +145,7 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
               autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder="********"
+              placeholder="your password"
             />
           </label>
           <button type="submit" disabled={loading || !userId.trim() || !password}>
@@ -125,62 +156,63 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
 
         <section className="login-access-panel">
           <h4>Need access?</h4>
-          {helpLoading ? <p className="muted-line">Loading access hints...</p> : null}
+          {helpLoading ? <p className="muted-line">Loading access rules...</p> : null}
 
           {help ? (
-            <>
-              <p className="muted-line">
-                Available accounts: {help.users.length > 0 ? help.users.map((row) => `${row.user_id} (${row.role})`).join(', ') : 'none'}
-              </p>
+            help.signup_enabled ? (
+              <form className="login-register-form" onSubmit={(event) => void register(event)}>
+                <label>
+                  New user ID
+                  <input
+                    value={registerUserId}
+                    onChange={(event) => setRegisterUserId(event.target.value)}
+                    placeholder={help.user_id_rules.example}
+                    pattern={registerUserIdPattern}
+                    minLength={registerUserMin}
+                    maxLength={registerUserMax}
+                    required
+                  />
+                </label>
+                <p className="muted-line">Use lowercase letters, numbers, dot, dash, underscore ({registerUserMin}-{registerUserMax} chars).</p>
 
-              {help.default_credentials.length > 0 ? (
-                <details>
-                  <summary>Show bootstrap credentials</summary>
-                  <ul className="login-credential-list">
-                    {help.default_credentials.map((row) => (
-                      <li key={row.user_id}>
-                        <strong>{row.user_id}</strong> / <code>{row.password}</code>
-                      </li>
+                <label>
+                  Display name
+                  <input
+                    value={registerDisplayName}
+                    onChange={(event) => setRegisterDisplayName(event.target.value)}
+                    placeholder="Your display name"
+                    required
+                  />
+                </label>
+
+                <label>
+                  Role
+                  <select value={registerRole} onChange={(event) => setRegisterRole(event.target.value as AuthSessionUser['role'])}>
+                    {visibleSignupRoles.map((row) => (
+                      <option key={row.value} value={row.value}>{row.label}</option>
                     ))}
-                  </ul>
-                </details>
-              ) : null}
+                  </select>
+                </label>
 
-              {help.signup_enabled ? (
-                <form className="login-register-form" onSubmit={(event) => void register(event)}>
-                  <label>
-                    New user ID
-                    <input value={registerUserId} onChange={(event) => setRegisterUserId(event.target.value)} placeholder="my-user" />
-                  </label>
-                  <label>
-                    Display name
-                    <input value={registerDisplayName} onChange={(event) => setRegisterDisplayName(event.target.value)} placeholder="My Name" />
-                  </label>
-                  <label>
-                    Role
-                    <select value={registerRole} onChange={(event) => setRegisterRole(event.target.value as AuthSessionUser['role'])}>
-                      {visibleSignupRoles.map((row) => (
-                        <option key={row.value} value={row.value}>{row.label}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Password
-                    <input
-                      type="password"
-                      value={registerPassword}
-                      onChange={(event) => setRegisterPassword(event.target.value)}
-                      placeholder="At least 6 characters"
-                    />
-                  </label>
-                  <button type="submit" disabled={registerLoading}>
-                    {registerLoading ? 'Creating account...' : 'Create account'}
-                  </button>
-                </form>
-              ) : (
-                <p className="muted-line">Self registration is disabled. Contact your platform admin.</p>
-              )}
-            </>
+                <label>
+                  Password
+                  <input
+                    type="password"
+                    value={registerPassword}
+                    onChange={(event) => setRegisterPassword(event.target.value)}
+                    minLength={registerPasswordMin}
+                    required
+                  />
+                </label>
+                <p className="muted-line">Password policy: {passwordRuleText(help)}.</p>
+
+                <button type="submit" disabled={!canRegister}>
+                  {registerLoading ? 'Creating account...' : 'Create account'}
+                </button>
+              </form>
+            ) : (
+              <p className="muted-line">Self registration is disabled. Contact your platform admin.</p>
+            )
           ) : (
             <p className="muted-line">Access helper is unavailable. Contact your platform admin.</p>
           )}
