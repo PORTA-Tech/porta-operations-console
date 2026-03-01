@@ -154,7 +154,7 @@ export async function registerAuthUser(input: {
   display_name: string;
   role: AuthSessionUser['role'];
   password: string;
-  signup_code: string;
+  signup_code?: string;
 }): Promise<{ ok: boolean; user: { user_id: string; role: AuthSessionUser['role']; display_name: string } }> {
   return apiRequestRaw<{ ok: boolean; user: { user_id: string; role: AuthSessionUser['role']; display_name: string } }>({
     path: '/auth/register',

@@ -98,13 +98,15 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
 
   const registerUserIdPattern = help?.user_id_rules.pattern ?? '^[a-zA-Z0-9][a-zA-Z0-9._@-]{2,63}$';
   const registerUserMin = help?.user_id_rules.min_length ?? 3;
-  const registerUserMax = help?.user_id_rules.max_length ?? 64;
+  const registerUserMax = help?.user_id_rules.max_length ?? 128;
   const registerPasswordMin = help?.password_rules.min_length ?? 8;
   const signupCodeLength = help?.signup_code_length ?? 6;
+  const signupCodeRequired = Boolean(help?.signup_code_required);
 
   const registerUserIdValid = new RegExp(registerUserIdPattern).test(registerUserId.trim());
   const registerPasswordValid = isPasswordValid(registerPassword, help);
-  const signupCodeValid = new RegExp(`^\\d{${signupCodeLength}}$`).test(registerSignupCode.trim());
+  const signupCodeValid = !signupCodeRequired
+    || new RegExp(`^\\d{${signupCodeLength}}$`).test(registerSignupCode.trim());
   const canRegister = registerUserIdValid
     && registerDisplayName.trim().length > 0
     && signupCodeValid
@@ -198,12 +200,12 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
 
         <form className="login-form" onSubmit={(event) => void submit(event)}>
           <label>
-            User ID
+            Email
             <input
               autoComplete="username"
               value={userId}
               onChange={(event) => setUserId(event.target.value)}
-              placeholder="email or user ID"
+              placeholder="name@company.com"
             />
           </label>
           <label>
@@ -242,11 +244,11 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
           <form className="login-register-form" onSubmit={(event) => void resetForgot(event)}>
             <p className="muted-line">Ask an admin for a 6-digit password reset code, then set a new password.</p>
             <label>
-              User ID
+              Email
               <input
                 value={forgotUserId}
                 onChange={(event) => setForgotUserId(event.target.value)}
-                placeholder="email or user ID"
+                placeholder="name@company.com"
                 required
               />
             </label>
@@ -306,7 +308,7 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
               help.signup_enabled ? (
                 <form className="login-register-form" onSubmit={(event) => void register(event)}>
                   <label>
-                    New user ID
+                    Email
                     <input
                       value={registerUserId}
                       onChange={(event) => setRegisterUserId(event.target.value)}
@@ -317,7 +319,7 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
                       required
                     />
                   </label>
-                  <p className="muted-line">Use letters, numbers, dot, dash, underscore, or @ ({registerUserMin}-{registerUserMax} chars).</p>
+                  <p className="muted-line">Use a valid email address ({registerUserMin}-{registerUserMax} chars).</p>
 
                   <label>
                     Display name
@@ -338,18 +340,22 @@ export function LoginPage({ loading, error, onSubmit }: LoginPageProps) {
                     </select>
                   </label>
 
-                  <label>
-                    Admin access code
-                    <input
-                      value={registerSignupCode}
-                      onChange={(event) => setRegisterSignupCode(event.target.value)}
-                      inputMode="numeric"
-                      pattern={`\\d{${signupCodeLength}}`}
-                      placeholder={`${signupCodeLength}-digit code`}
-                      required
-                    />
-                  </label>
-                  <p className="muted-line">Account creation requires an admin-issued {signupCodeLength}-digit code.</p>
+                  {signupCodeRequired ? (
+                    <>
+                      <label>
+                        Admin access code
+                        <input
+                          value={registerSignupCode}
+                          onChange={(event) => setRegisterSignupCode(event.target.value)}
+                          inputMode="numeric"
+                          pattern={`\\d{${signupCodeLength}}`}
+                          placeholder={`${signupCodeLength}-digit code`}
+                          required
+                        />
+                      </label>
+                      <p className="muted-line">Account creation requires an admin-issued {signupCodeLength}-digit code.</p>
+                    </>
+                  ) : null}
 
                   <label>
                     Password
