@@ -575,7 +575,6 @@ export function PoliciesPage() {
     () => new Set(decisionRowsBase.map((entry) => entry.machine)).size,
     [decisionRowsBase]
   );
-  const disableConfidence = telemetryStatus !== 'ON_WITH_DATA' || decisionBaseSampleSize === 0;
   const disableReplayOnly = telemetryStatus !== 'ON_WITH_DATA' || decisionBaseSampleSize === 0;
 
   useEffect(() => {
@@ -1080,7 +1079,7 @@ export function PoliciesPage() {
             </label>
             <label>
               Confidence &gt;=
-              <input type="range" min={0} max={1} step={0.05} value={confidenceMin} onChange={(event) => setConfidenceMin(Number(event.target.value))} disabled={disableConfidence} />
+              <input type="range" min={0} max={1} step={0.05} value={confidenceMin} onChange={(event) => setConfidenceMin(Number(event.target.value))} />
               <span>{confidenceMin.toFixed(2)}</span>
             </label>
             <label>
