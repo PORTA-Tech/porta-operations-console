@@ -742,6 +742,13 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   margin-bottom: 12px;
 }
 
+.operations-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
 .operations-list-toolbar label {
   display: grid;
   gap: 4px;
@@ -749,12 +756,17 @@ button.danger { border-color: #d39f9f; color: #7d1818; }
   font-size: 0.88rem;
 }
 
-.operations-list-toolbar input {
+.operations-list-toolbar input,
+.operations-list-toolbar select {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
   background: #fff;
   color: var(--ink);
+}
+
+.operations-page-context {
+  margin-bottom: 2px;
 }
 
 .operations-machine-list {

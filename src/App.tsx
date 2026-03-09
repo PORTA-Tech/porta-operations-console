@@ -4,7 +4,12 @@ import { AppShell } from './components/Layout/AppShell';
 import { useFleetState } from './hooks/useFleetState';
 import { useAuthSession } from './hooks/useAuthSession';
 import { LoginPage } from './pages/Auth/LoginPage';
-import { OperationsConsolePage } from './pages/Operations/OperationsConsolePage';
+import { SystemHealthPage } from './pages/SystemHealth/SystemHealthPage';
+import { UserActivityPage } from './pages/UserActivity/UserActivityPage';
+import { TrustLevelPage } from './pages/TrustLevel/TrustLevelPage';
+import { ActionsPage } from './pages/Actions/ActionsPage';
+
+const DEFAULT_ROUTE = '/system-health';
 
 function ProtectedConsoleApp(props: {
   authUser: {
@@ -29,23 +34,26 @@ function ProtectedConsoleApp(props: {
       {loading ? <p>Connecting to control plane...</p> : null}
       {error && error.status !== 403 ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <Routes>
-        <Route path="/" element={<OperationsConsolePage />} />
-        <Route path="/operations" element={<Navigate to="/" replace />} />
-        <Route path="/alerts" element={<Navigate to="/" replace />} />
-        <Route path="/cohorts" element={<Navigate to="/" replace />} />
-        <Route path="/machines" element={<Navigate to="/" replace />} />
-        <Route path="/experiments" element={<Navigate to="/" replace />} />
-        <Route path="/rollouts" element={<Navigate to="/" replace />} />
-        <Route path="/policies" element={<Navigate to="/" replace />} />
-        <Route path="/audit-traces" element={<Navigate to="/" replace />} />
-        <Route path="/config" element={<Navigate to="/" replace />} />
-        <Route path="/security-access" element={<Navigate to="/" replace />} />
-        <Route path="/system-health" element={<Navigate to="/" replace />} />
-        <Route path="/console" element={<Navigate to="/" replace />} />
-        <Route path="/nodes" element={<Navigate to="/" replace />} />
-        <Route path="/rollout" element={<Navigate to="/" replace />} />
-        <Route path="/login" element={<Navigate to="/" replace />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/system-health" element={<SystemHealthPage />} />
+        <Route path="/user-activity" element={<UserActivityPage />} />
+        <Route path="/trust-level" element={<TrustLevelPage />} />
+        <Route path="/actions" element={<ActionsPage />} />
+        <Route path="/operations" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/alerts" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/cohorts" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/machines" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/experiments" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/rollouts" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/policies" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/audit-traces" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/config" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/security-access" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/console" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/nodes" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/rollout" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/login" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="*" element={<Navigate to={DEFAULT_ROUTE} replace />} />
       </Routes>
     </AppShell>
   );
@@ -72,7 +80,7 @@ export default function App() {
         path="/login"
         element={
           auth.authenticated ? (
-            <Navigate to="/" replace />
+            <Navigate to={DEFAULT_ROUTE} replace />
           ) : (
             <LoginPage
               loading={loginInFlight}

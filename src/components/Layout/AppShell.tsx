@@ -16,7 +16,10 @@ interface AppShellProps {
 }
 
 const navItems = [
-  { to: '/', label: 'Operations Console' }
+  { to: '/system-health', label: 'System Health' },
+  { to: '/user-activity', label: 'User Activity' },
+  { to: '/trust-level', label: 'Trust Level' },
+  { to: '/actions', label: 'Actions' }
 ];
 
 function initialsFromName(name: string): string {
@@ -25,6 +28,7 @@ function initialsFromName(name: string): string {
     .map((part) => part.trim())
     .filter(Boolean)
     .slice(0, 2);
+
   if (parts.length === 0) return 'U';
   return parts.map((part) => part[0]?.toUpperCase() ?? '').join('');
 }
@@ -57,9 +61,7 @@ export function AppShell({
     setBusy(true);
     setAccountMessage(null);
     try {
-      const ok = await onUpdateProfile({
-        display_name: displayName.trim()
-      });
+      const ok = await onUpdateProfile({ display_name: displayName.trim() });
       setAccountMessage(ok ? 'Profile updated.' : 'Profile update failed.');
     } finally {
       setBusy(false);
@@ -72,6 +74,7 @@ export function AppShell({
       setAccountMessage('New password and confirmation do not match.');
       return;
     }
+
     setBusy(true);
     setAccountMessage(null);
     try {
@@ -91,7 +94,7 @@ export function AppShell({
   return (
     <div className="app-shell">
       <header className="topbar">
-        <Link to="/" className="brand">PORTA Operations Console</Link>
+        <Link to="/system-health" className="brand">PORTA Operations Console</Link>
         <span className="topbar-pill">Internal R&amp;D Edition</span>
         {authUser ? (
           <div className="topbar-auth">
@@ -103,6 +106,7 @@ export function AppShell({
               )}
               <span>{authUser.display_name}</span>
             </button>
+
             {accountOpen ? (
               <section className="account-menu">
                 <h4>Account</h4>
@@ -115,7 +119,9 @@ export function AppShell({
                     Display name
                     <input value={displayName} onChange={(event) => setDisplayName(event.target.value)} />
                   </label>
-                  <button type="button" onClick={() => void saveProfile()} disabled={busy || !displayName.trim()}>Save profile</button>
+                  <button type="button" onClick={() => void saveProfile()} disabled={busy || !displayName.trim()}>
+                    Save profile
+                  </button>
                 </div>
 
                 <div className="account-section">
@@ -129,26 +135,52 @@ export function AppShell({
                       <label>
                         Current password
                         <div className="account-password-row">
-                          <input type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
-                          <button type="button" onClick={() => setShowCurrentPassword((value) => !value)}>{showCurrentPassword ? 'Hide' : 'Show'}</button>
+                          <input
+                            type={showCurrentPassword ? 'text' : 'password'}
+                            value={currentPassword}
+                            onChange={(event) => setCurrentPassword(event.target.value)}
+                          />
+                          <button type="button" onClick={() => setShowCurrentPassword((value) => !value)}>
+                            {showCurrentPassword ? 'Hide' : 'Show'}
+                          </button>
                         </div>
                       </label>
+
                       <label>
                         New password
                         <div className="account-password-row">
-                          <input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="At least 8 chars, uppercase, lowercase, number" />
-                          <button type="button" onClick={() => setShowNewPassword((value) => !value)}>{showNewPassword ? 'Hide' : 'Show'}</button>
+                          <input
+                            type={showNewPassword ? 'text' : 'password'}
+                            value={newPassword}
+                            onChange={(event) => setNewPassword(event.target.value)}
+                            placeholder="At least 8 chars, uppercase, lowercase, number"
+                          />
+                          <button type="button" onClick={() => setShowNewPassword((value) => !value)}>
+                            {showNewPassword ? 'Hide' : 'Show'}
+                          </button>
                         </div>
                       </label>
+
                       <label>
                         Confirm new password
                         <div className="account-password-row">
-                          <input type={showConfirmPassword ? 'text' : 'password'} value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} />
-                          <button type="button" onClick={() => setShowConfirmPassword((value) => !value)}>{showConfirmPassword ? 'Hide' : 'Show'}</button>
+                          <input
+                            type={showConfirmPassword ? 'text' : 'password'}
+                            value={confirmNewPassword}
+                            onChange={(event) => setConfirmNewPassword(event.target.value)}
+                          />
+                          <button type="button" onClick={() => setShowConfirmPassword((value) => !value)}>
+                            {showConfirmPassword ? 'Hide' : 'Show'}
+                          </button>
                         </div>
                       </label>
+
                       <div className="button-row">
-                        <button type="button" onClick={() => void savePassword()} disabled={busy || !currentPassword || !newPassword || !confirmNewPassword}>
+                        <button
+                          type="button"
+                          onClick={() => void savePassword()}
+                          disabled={busy || !currentPassword || !newPassword || !confirmNewPassword}
+                        >
                           Update password
                         </button>
                         <button
@@ -168,7 +200,9 @@ export function AppShell({
                   )}
                 </div>
 
-                <button type="button" onClick={onLogout} className="danger" disabled={busy || !onLogout}>Log out</button>
+                <button type="button" onClick={onLogout} className="danger" disabled={busy || !onLogout}>
+                  Log out
+                </button>
                 {accountMessage ? <p className="muted-line">{accountMessage}</p> : null}
               </section>
             ) : null}
