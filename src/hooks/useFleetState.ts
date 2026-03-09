@@ -1,31 +1,31 @@
-import { toApiError, type ApiError } from '../api/client';
 import { useEffect, useState } from 'react';
-import { getFleetState } from '../api/fleet';
-import { getCohortSnapshots } from '../api/cohorts';
+import { toApiError, type ApiError } from '../api/client';
+import { getNodeSnapshot } from '../api/nodes';
 import { useFleetSlice } from '../store/fleetSlice';
 
 export function useFleetState(): { loading: boolean; error: ApiError | undefined } {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();
-  const setRollout = useFleetSlice((s) => s.setRollout);
-  const setCohorts = useFleetSlice((s) => s.setCohorts);
-  const setConnectivity = useFleetSlice((s) => s.setConnectivity);
+  const setRefreshState = useFleetSlice((state) => state.setRefreshState);
 
   useEffect(() => {
     let mounted = true;
 
     const refresh = async (): Promise<void> => {
       try {
-        const [state, cohorts] = await Promise.all([getFleetState(), getCohortSnapshots()]);
+        await getNodeSnapshot();
         if (!mounted) return;
-        setRollout(state);
-        setCohorts(cohorts);
-        setConnectivity(true);
+        setRefreshState({
+          liveConnected: true,
+          lastUpdatedUtc: new Date().toISOString()
+        });
         setError(undefined);
-      } catch (err) {
+      } catch (nextError) {
         if (!mounted) return;
-        setConnectivity(false);
-        setError(toApiError(err));
+        setRefreshState({
+          liveConnected: false
+        });
+        setError(toApiError(nextError));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -34,12 +34,13 @@ export function useFleetState(): { loading: boolean; error: ApiError | undefined
     void refresh();
     const timer = window.setInterval(() => {
       void refresh();
-    }, 5000);
+    }, 5_000);
+
     return () => {
       mounted = false;
       window.clearInterval(timer);
     };
-  }, [setRollout, setCohorts, setConnectivity]);
+  }, [setRefreshState]);
 
   return { loading, error };
 }
