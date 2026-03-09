@@ -10,7 +10,7 @@ import type {
   OperationsRiskLabel,
   OperationsTruthLabel
 } from '../../types/operationsConsole';
-import { formatRelativeFromNow, formatUtc } from '../../utils/date';
+import { formatUtc } from '../../utils/date';
 
 function toneBadgeClass(tone: OperationsMachineHealth): string {
   if (tone === 'critical') return 'status-badge critical';
@@ -76,7 +76,7 @@ function SectionField(props: {
   );
 }
 
-function ActionTable(props: {
+function ActionsTable(props: {
   actions: OperationsActionItem[];
 }) {
   if (props.actions.length === 0) {
@@ -115,8 +115,19 @@ function ActionTable(props: {
   );
 }
 
+function EmptyLayerState(props: {
+  title: string;
+  message: string;
+}) {
+  return (
+    <Panel title={props.title}>
+      <p className="muted-line">{props.message}</p>
+    </Panel>
+  );
+}
+
 export function OperationsConsolePage() {
-  const { records, loading, error, lastRefreshUtc, streamConnected } = useOperationsConsole();
+  const { records, loading, error } = useOperationsConsole();
   const [params, setParams] = useSearchParams();
   const [search, setSearch] = useState(params.get('search') ?? '');
   const selectedMachineId = params.get('machine') ?? '';
@@ -130,19 +141,22 @@ export function OperationsConsolePage() {
     [records, search]
   );
 
-  const selectedRecord = useMemo(
-    () => filteredRecords.find((record) => record.machineId === selectedMachineId)
-      ?? records.find((record) => record.machineId === selectedMachineId)
-      ?? filteredRecords[0]
-      ?? records[0]
-      ?? null,
-    [filteredRecords, records, selectedMachineId]
-  );
+  const selectedRecord = useMemo(() => {
+    if (filteredRecords.length === 0) return null;
+    return filteredRecords.find((record) => record.machineId === selectedMachineId) ?? filteredRecords[0];
+  }, [filteredRecords, selectedMachineId]);
 
   useEffect(() => {
-    if (!selectedRecord) return;
-    if (selectedMachineId === selectedRecord.machineId) return;
     const next = new URLSearchParams(params);
+
+    if (!selectedRecord) {
+      if (!next.has('machine')) return;
+      next.delete('machine');
+      setParams(next, { replace: true });
+      return;
+    }
+
+    if (selectedMachineId === selectedRecord.machineId) return;
     next.set('machine', selectedRecord.machineId);
     setParams(next, { replace: true });
   }, [params, selectedMachineId, selectedRecord, setParams]);
@@ -159,143 +173,107 @@ export function OperationsConsolePage() {
 
   return (
     <div className="stack">
-      <Panel title="Operations Console">
-        {loading ? <p className="muted-line">Loading live operations truth...</p> : null}
-        {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
-        <p className="muted-line">
-          This screen uses only current node snapshots, audit traces, alerts, and the live websocket stream available in this repo.
-          Fields that are not exposed by the current backend contracts remain `Unknown`.
-        </p>
-        <div className="operations-summary-bar">
-          <span><strong>Machines</strong> {records.length}</span>
-          <span><strong>Realtime</strong> {streamConnected ? 'Connected' : 'Unavailable'}</span>
-          <span><strong>Last refresh</strong> {formatRelativeFromNow(lastRefreshUtc)} ({formatUtc(lastRefreshUtc)})</span>
-        </div>
-      </Panel>
-
-      <div className="operations-shell">
-        <Panel title="Machines">
-          <div className="operations-list-toolbar">
-            <label>
-              Search
-              <input
-                value={search}
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  setSearch(nextValue);
-                  updateParam('search', nextValue);
-                }}
-                placeholder="Machine, user, issue, state..."
-              />
-            </label>
-          </div>
-
-          {filteredRecords.length === 0 ? (
-            <p className="muted-line">No current machines match this filter.</p>
-          ) : (
-            <div className="operations-machine-list">
-              {filteredRecords.map((record) => {
-                const selected = selectedRecord?.machineId === record.machineId;
-                return (
-                  <button
-                    type="button"
-                    key={record.machineId}
-                    className={selected ? 'operations-machine-card selected' : 'operations-machine-card'}
-                    onClick={() => updateParam('machine', record.machineId)}
-                  >
-                    <div className="operations-machine-card-head">
-                      <strong>{record.machineName}</strong>
-                      <span className={toneBadgeClass(record.healthTone)}>
-                        {record.healthTone === 'critical' ? 'Critical' : record.healthTone === 'warning' ? 'Warning' : 'Healthy'}
-                      </span>
-                    </div>
-                    <p className="muted-line">{record.userName}</p>
-                    <p className="operations-machine-meta">
-                      Last seen {formatRelativeFromNow(record.layer1.lastSeenAtUtc ?? undefined)} | Actions {record.actions.length}
-                    </p>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </Panel>
-
-        <div className="stack">
-          {selectedRecord ? (
-            <>
-              <Panel title={`${selectedRecord.machineName} | ${selectedRecord.userName}`}>
-                <div className="operations-summary-bar">
-                  <span><strong>Machine ID</strong> {selectedRecord.machineId}</span>
-                  <span><strong>Snapshot</strong> {selectedRecord.sources.snapshot ? 'Yes' : 'No'}</span>
-                  <span><strong>Realtime state</strong> {selectedRecord.sources.stream ? 'Fresh' : 'Unavailable'}</span>
-                  <span><strong>Traces</strong> {selectedRecord.sources.traces}</span>
-                  <span><strong>Alerts</strong> {selectedRecord.sources.alerts}</span>
-                </div>
-                {selectedRecord.reliabilityBlocked ? (
-                  <div className="operations-warning-banner">
-                    System Health is unhealthy for this machine. Treat User Activity, Trust Level, and Actions as unreliable until Layer 1 recovers.
-                  </div>
-                ) : null}
-              </Panel>
-
-              <Panel title="Layer 1 | System Health">
-                <div className="operations-layer-grid">
-                  <SectionField label="Machine name" value={selectedRecord.layer1.machineName} />
-                  <SectionField label="User name" value={selectedRecord.layer1.userName} />
-                  <SectionField
-                    label="Last seen time"
-                    value={`${formatUtc(selectedRecord.layer1.lastSeenAtUtc ?? undefined)} (${formatRelativeFromNow(selectedRecord.layer1.lastSeenAtUtc ?? undefined)})`}
-                  />
-                  <SectionField label="Agent running" value={selectedRecord.layer1.agentRunning} className={truthToneClass(selectedRecord.layer1.agentRunning)} />
-                  <SectionField label="User session connected" value={selectedRecord.layer1.userSessionConnected} className={truthToneClass(selectedRecord.layer1.userSessionConnected)} />
-                  <SectionField label="Activity detected" value={selectedRecord.layer1.activityDetected} className={truthToneClass(selectedRecord.layer1.activityDetected)} />
-                  <SectionField
-                    label="Last activity time"
-                    value={`${formatUtc(selectedRecord.layer1.lastActivityAtUtc ?? undefined)} (${formatRelativeFromNow(selectedRecord.layer1.lastActivityAtUtc ?? undefined)})`}
-                  />
-                  <SectionField label="Error message" value={selectedRecord.layer1.errorMessage ?? 'None'} />
-                </div>
-              </Panel>
-
-              <div className={selectedRecord.reliabilityBlocked ? 'operations-dimmed stack' : 'stack'}>
-                <Panel title="Layer 2 | User Activity">
-                  <div className="operations-layer-grid compact">
-                    <SectionField label="Focus level" value={selectedRecord.layer2.focusLevel} className={riskToneClass(selectedRecord.layer2.focusLevel)} />
-                    <SectionField
-                      label="Deep work"
-                      value={selectedRecord.layer2.deepWork}
-                      className={selectedRecord.layer2.deepWork === 'Active' ? 'status-badge ok' : 'status-badge warn'}
-                    />
-                    <SectionField label="Overload risk" value={selectedRecord.layer2.overloadRisk} className={riskToneClass(selectedRecord.layer2.overloadRisk)} />
-                    <SectionField label="Focus duration" value={formatDuration(selectedRecord.layer2.focusDurationSec)} />
-                    <SectionField label="Break needed" value={selectedRecord.layer2.breakNeeded} className={truthToneClass(selectedRecord.layer2.breakNeeded)} />
-                  </div>
-                </Panel>
-
-                <Panel title="Layer 3 | Trust Level">
-                  <div className="operations-layer-grid compact">
-                    <SectionField
-                      label="Learning stage"
-                      value={selectedRecord.layer3.learningStage}
-                      className={selectedRecord.layer3.learningStage === 'Ready' ? 'status-badge ok' : 'status-badge warn'}
-                    />
-                    <SectionField label="Confidence" value={selectedRecord.layer3.confidence} className={riskToneClass(selectedRecord.layer3.confidence)} />
-                    <SectionField label="Data quality" value={selectedRecord.layer3.dataQuality} className={qualityToneClass(selectedRecord.layer3.dataQuality)} />
-                  </div>
-                </Panel>
-
-                <Panel title="Layer 4 | Actions">
-                  <ActionTable actions={selectedRecord.actions} />
-                </Panel>
-              </div>
-            </>
-          ) : (
-            <Panel title="Operations Details">
-              <p className="muted-line">No current machine snapshot is available.</p>
-            </Panel>
-          )}
-        </div>
+      <div className="operations-list-toolbar">
+        <label>
+          Search
+          <input
+            value={search}
+            onChange={(event) => {
+              const nextValue = event.target.value;
+              setSearch(nextValue);
+              updateParam('search', nextValue);
+            }}
+            placeholder="Machine, user, issue, state..."
+          />
+        </label>
+        {filteredRecords.length > 0 ? (
+          <label>
+            Machine
+            <select
+              value={selectedRecord?.machineId ?? ''}
+              onChange={(event) => updateParam('machine', event.target.value)}
+            >
+              {filteredRecords.map((record) => (
+                <option key={record.machineId} value={record.machineId}>
+                  {record.layer1.machineName} | {record.layer1.userName}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
+
+      {loading ? <p className="muted-line">Loading live operations truth...</p> : null}
+      {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
+      {!loading && filteredRecords.length === 0 ? (
+        <p className="muted-line">No current machines match this filter.</p>
+      ) : null}
+
+      {selectedRecord ? (
+        <>
+          <Panel title="Layer 1 | System Health">
+            <div className="operations-layer-grid">
+              <SectionField label="Machine name" value={selectedRecord.layer1.machineName} />
+              <SectionField label="User name" value={selectedRecord.layer1.userName} />
+              <SectionField label="Last seen time" value={formatUtc(selectedRecord.layer1.lastSeenAtUtc ?? undefined)} />
+              <SectionField label="Agent running" value={selectedRecord.layer1.agentRunning} className={truthToneClass(selectedRecord.layer1.agentRunning)} />
+              <SectionField label="User session connected" value={selectedRecord.layer1.userSessionConnected} className={truthToneClass(selectedRecord.layer1.userSessionConnected)} />
+              <SectionField label="Activity detected" value={selectedRecord.layer1.activityDetected} className={truthToneClass(selectedRecord.layer1.activityDetected)} />
+              <SectionField label="Last activity time" value={formatUtc(selectedRecord.layer1.lastActivityAtUtc ?? undefined)} />
+              <SectionField label="Error message" value={selectedRecord.layer1.errorMessage ?? 'None'} />
+            </div>
+            <div className="operations-summary-bar">
+              <span className={toneBadgeClass(selectedRecord.healthTone)}>
+                {selectedRecord.healthTone === 'critical' ? 'Layer 1 critical' : selectedRecord.healthTone === 'warning' ? 'Layer 1 warning' : 'Layer 1 healthy'}
+              </span>
+            </div>
+            {selectedRecord.reliabilityBlocked ? (
+              <div className="operations-warning-banner">
+                System Health is unhealthy for this machine. Treat User Activity, Trust Level, and Actions as unreliable until Layer 1 recovers.
+              </div>
+            ) : null}
+          </Panel>
+
+          <div className={selectedRecord.reliabilityBlocked ? 'operations-dimmed stack' : 'stack'}>
+            <Panel title="Layer 2 | User Activity">
+              <div className="operations-layer-grid compact">
+                <SectionField label="Focus level" value={selectedRecord.layer2.focusLevel} className={riskToneClass(selectedRecord.layer2.focusLevel)} />
+                <SectionField
+                  label="Deep work"
+                  value={selectedRecord.layer2.deepWork}
+                  className={selectedRecord.layer2.deepWork === 'Active' ? 'status-badge ok' : 'status-badge warn'}
+                />
+                <SectionField label="Overload risk" value={selectedRecord.layer2.overloadRisk} className={riskToneClass(selectedRecord.layer2.overloadRisk)} />
+                <SectionField label="Focus duration" value={formatDuration(selectedRecord.layer2.focusDurationSec)} />
+                <SectionField label="Break needed" value={selectedRecord.layer2.breakNeeded} className={truthToneClass(selectedRecord.layer2.breakNeeded)} />
+              </div>
+            </Panel>
+
+            <Panel title="Layer 3 | Trust Level">
+              <div className="operations-layer-grid compact">
+                <SectionField
+                  label="Learning stage"
+                  value={selectedRecord.layer3.learningStage}
+                  className={selectedRecord.layer3.learningStage === 'Ready' ? 'status-badge ok' : 'status-badge warn'}
+                />
+                <SectionField label="Confidence" value={selectedRecord.layer3.confidence} className={riskToneClass(selectedRecord.layer3.confidence)} />
+                <SectionField label="Data quality" value={selectedRecord.layer3.dataQuality} className={qualityToneClass(selectedRecord.layer3.dataQuality)} />
+              </div>
+            </Panel>
+
+            <Panel title="Layer 4 | Actions">
+              <ActionsTable actions={selectedRecord.actions} />
+            </Panel>
+          </div>
+        </>
+      ) : (
+        <>
+          <EmptyLayerState title="Layer 1 | System Health" message="No current machine snapshot is available." />
+          <EmptyLayerState title="Layer 2 | User Activity" message="Unavailable until System Health is reporting." />
+          <EmptyLayerState title="Layer 3 | Trust Level" message="Unavailable until System Health is reporting." />
+          <EmptyLayerState title="Layer 4 | Actions" message="No meaningful actions reported." />
+        </>
+      )}
     </div>
   );
 }

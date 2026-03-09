@@ -1,74 +1,10 @@
 import { useState } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/Layout/AppShell';
-import { FleetOverview } from './pages/Dashboard/FleetOverview';
-import { CohortOverview } from './pages/Dashboard/CohortOverview';
-import { RolloutControl } from './pages/RolloutCenter/RolloutControl';
-import { BlastRadiusPreview } from './pages/RolloutCenter/BlastRadiusPreview';
-import { DryRunSimulation } from './pages/RolloutCenter/DryRunSimulation';
-import { AdapterActivationControls } from './pages/RolloutCenter/AdapterActivationControls';
-import { AdapterObservabilityPanel } from './pages/RolloutCenter/AdapterObservabilityPanel';
-import { AdapterPromotionPathPanel } from './pages/RolloutCenter/AdapterPromotionPathPanel';
-import { RolloutVerdictPanel } from './pages/RolloutCenter/RolloutVerdictPanel';
-import { NodeList } from './pages/NodeDrilldown/NodeList';
-import { NodeDetails } from './pages/NodeDrilldown/NodeDetails';
-import { ConfigIntegrityPage } from './pages/ConfigIntegrity/ConfigIntegrityPage';
-import { ConsoleFoundationPage } from './pages/ConsoleFoundation/ConsoleFoundationPage';
 import { useFleetState } from './hooks/useFleetState';
-import { useNodeDrilldown } from './hooks/useNodeDrilldown';
-import { useRolloutEvaluation } from './hooks/useRolloutEvaluation';
-import { AlertsPage } from './pages/Alerts/AlertsPage';
-import { ExperimentsPage } from './pages/Experiments/ExperimentsPage';
-import { PoliciesPage } from './pages/Policies/PoliciesPage';
-import { AuditTracesPage } from './pages/Audit/AuditTracesPage';
-import { SecurityAccessPage } from './pages/Security/SecurityAccessPage';
 import { useAuthSession } from './hooks/useAuthSession';
 import { LoginPage } from './pages/Auth/LoginPage';
 import { OperationsConsolePage } from './pages/Operations/OperationsConsolePage';
-
-function DashboardPage() {
-  return <FleetOverview />;
-}
-
-function RolloutPage() {
-  const evaluation = useRolloutEvaluation();
-
-  return (
-    <div className="stack">
-      <section className="rollout-zone">
-        <h2 className="rollout-zone-title">Decision</h2>
-        <RolloutVerdictPanel {...evaluation} />
-      </section>
-      <section className="rollout-zone">
-        <h2 className="rollout-zone-title">What Will Happen</h2>
-        <BlastRadiusPreview {...evaluation} />
-        <DryRunSimulation {...evaluation} />
-      </section>
-      <section className="rollout-zone">
-        <h2 className="rollout-zone-title">Controls and Observability</h2>
-        <RolloutControl evaluation={evaluation.data} />
-        <AdapterActivationControls />
-        <AdapterPromotionPathPanel />
-        <AdapterObservabilityPanel evaluation={evaluation.data} />
-      </section>
-    </div>
-  );
-}
-
-function NodePage() {
-  const nodeSnapshot = useNodeDrilldown();
-
-  return (
-    <div className="stack">
-      <NodeList {...nodeSnapshot} />
-      <NodeDetails {...nodeSnapshot} />
-    </div>
-  );
-}
-
-function ConfigPage() {
-  return <ConfigIntegrityPage />;
-}
 
 function ProtectedConsoleApp(props: {
   authUser: {
@@ -93,21 +29,21 @@ function ProtectedConsoleApp(props: {
       {loading ? <p>Connecting to control plane...</p> : null}
       {error && error.status !== 403 ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <Routes>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/alerts" element={<AlertsPage />} />
-        <Route path="/cohorts" element={<CohortOverview />} />
-        <Route path="/machines" element={<NodePage />} />
-        <Route path="/experiments" element={<ExperimentsPage />} />
-        <Route path="/rollouts" element={<RolloutPage />} />
-        <Route path="/policies" element={<PoliciesPage />} />
-        <Route path="/operations" element={<OperationsConsolePage />} />
-        <Route path="/audit-traces" element={<AuditTracesPage />} />
-        <Route path="/config" element={<ConfigPage />} />
-        <Route path="/security-access" element={<SecurityAccessPage />} />
-        <Route path="/system-health" element={<ConsoleFoundationPage />} />
-        <Route path="/console" element={<Navigate to="/system-health" replace />} />
-        <Route path="/nodes" element={<Navigate to="/machines" replace />} />
-        <Route path="/rollout" element={<Navigate to="/rollouts" replace />} />
+        <Route path="/" element={<OperationsConsolePage />} />
+        <Route path="/operations" element={<Navigate to="/" replace />} />
+        <Route path="/alerts" element={<Navigate to="/" replace />} />
+        <Route path="/cohorts" element={<Navigate to="/" replace />} />
+        <Route path="/machines" element={<Navigate to="/" replace />} />
+        <Route path="/experiments" element={<Navigate to="/" replace />} />
+        <Route path="/rollouts" element={<Navigate to="/" replace />} />
+        <Route path="/policies" element={<Navigate to="/" replace />} />
+        <Route path="/audit-traces" element={<Navigate to="/" replace />} />
+        <Route path="/config" element={<Navigate to="/" replace />} />
+        <Route path="/security-access" element={<Navigate to="/" replace />} />
+        <Route path="/system-health" element={<Navigate to="/" replace />} />
+        <Route path="/console" element={<Navigate to="/" replace />} />
+        <Route path="/nodes" element={<Navigate to="/" replace />} />
+        <Route path="/rollout" element={<Navigate to="/" replace />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

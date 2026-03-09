@@ -1,7 +1,5 @@
-﻿import { useEffect, useState, type ReactNode } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
-import { getGlossaryTerms } from '../../data/glossary';
-import { GlossaryDrawer } from './GlossaryDrawer';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link, NavLink } from 'react-router-dom';
 import { ViewContextBar } from './ViewContextBar';
 
 interface AppShellProps {
@@ -18,18 +16,7 @@ interface AppShellProps {
 }
 
 const navItems = [
-  { to: '/', label: 'Fleet Overview' },
-  { to: '/alerts', label: 'Alerts' },
-  { to: '/cohorts', label: 'Cohorts' },
-  { to: '/machines', label: 'Machines' },
-  { to: '/operations', label: 'Operations' },
-  { to: '/experiments', label: 'Experiments' },
-  { to: '/rollouts', label: 'Rollouts' },
-  { to: '/policies', label: 'Policies' },
-  { to: '/audit-traces', label: 'Audit & Traces' },
-  { to: '/config', label: 'Config Integrity' },
-  { to: '/security-access', label: 'Security & Access' },
-  { to: '/system-health', label: 'System Health' }
+  { to: '/', label: 'Operations Console' }
 ];
 
 function initialsFromName(name: string): string {
@@ -49,11 +36,7 @@ export function AppShell({
   onUpdateProfile,
   onChangePassword
 }: AppShellProps) {
-  const location = useLocation();
-  const [glossaryOpen, setGlossaryOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const glossaryTerms = getGlossaryTerms(location.pathname);
-
   const [displayName, setDisplayName] = useState(authUser?.display_name ?? '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -62,7 +45,6 @@ export function AppShell({
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordEditorOpen, setPasswordEditorOpen] = useState(false);
-
   const [busy, setBusy] = useState(false);
   const [accountMessage, setAccountMessage] = useState<string | null>(null);
 
@@ -110,7 +92,7 @@ export function AppShell({
     <div className="app-shell">
       <header className="topbar">
         <Link to="/" className="brand">PORTA Operations Console</Link>
-        <span className="topbar-pill">Internal R&D Edition</span>
+        <span className="topbar-pill">Internal R&amp;D Edition</span>
         {authUser ? (
           <div className="topbar-auth">
             <button type="button" className="account-trigger" onClick={() => setAccountOpen((value) => !value)}>
@@ -148,21 +130,21 @@ export function AppShell({
                         Current password
                         <div className="account-password-row">
                           <input type={showCurrentPassword ? 'text' : 'password'} value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} />
-                          <button type="button" onClick={() => setShowCurrentPassword((v) => !v)}>{showCurrentPassword ? 'Hide' : 'Show'}</button>
+                          <button type="button" onClick={() => setShowCurrentPassword((value) => !value)}>{showCurrentPassword ? 'Hide' : 'Show'}</button>
                         </div>
                       </label>
                       <label>
                         New password
                         <div className="account-password-row">
                           <input type={showNewPassword ? 'text' : 'password'} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} placeholder="At least 8 chars, uppercase, lowercase, number" />
-                          <button type="button" onClick={() => setShowNewPassword((v) => !v)}>{showNewPassword ? 'Hide' : 'Show'}</button>
+                          <button type="button" onClick={() => setShowNewPassword((value) => !value)}>{showNewPassword ? 'Hide' : 'Show'}</button>
                         </div>
                       </label>
                       <label>
                         Confirm new password
                         <div className="account-password-row">
                           <input type={showConfirmPassword ? 'text' : 'password'} value={confirmNewPassword} onChange={(event) => setConfirmNewPassword(event.target.value)} />
-                          <button type="button" onClick={() => setShowConfirmPassword((v) => !v)}>{showConfirmPassword ? 'Hide' : 'Show'}</button>
+                          <button type="button" onClick={() => setShowConfirmPassword((value) => !value)}>{showConfirmPassword ? 'Hide' : 'Show'}</button>
                         </div>
                       </label>
                       <div className="button-row">
@@ -193,6 +175,7 @@ export function AppShell({
           </div>
         ) : null}
       </header>
+
       <div className="shell-main">
         <nav className="sidebar">
           {navItems.map((item) => (
@@ -202,11 +185,10 @@ export function AppShell({
           ))}
         </nav>
         <main className="content">
-          <ViewContextBar onOpenGlossary={() => setGlossaryOpen(true)} />
+          <ViewContextBar />
           {children}
         </main>
       </div>
-      <GlossaryDrawer open={glossaryOpen} terms={glossaryTerms} onClose={() => setGlossaryOpen(false)} />
     </div>
   );
 }
