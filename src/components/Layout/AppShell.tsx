@@ -22,6 +22,7 @@ const navItems = [
   { to: '/alerts', label: 'Alerts' },
   { to: '/cohorts', label: 'Cohorts' },
   { to: '/machines', label: 'Machines' },
+  { to: '/operations', label: 'Operations' },
   { to: '/experiments', label: 'Experiments' },
   { to: '/rollouts', label: 'Rollouts' },
   { to: '/policies', label: 'Policies' },

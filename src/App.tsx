@@ -24,6 +24,7 @@ import { AuditTracesPage } from './pages/Audit/AuditTracesPage';
 import { SecurityAccessPage } from './pages/Security/SecurityAccessPage';
 import { useAuthSession } from './hooks/useAuthSession';
 import { LoginPage } from './pages/Auth/LoginPage';
+import { OperationsConsolePage } from './pages/Operations/OperationsConsolePage';
 
 function DashboardPage() {
   return <FleetOverview />;
@@ -99,12 +100,12 @@ function ProtectedConsoleApp(props: {
         <Route path="/experiments" element={<ExperimentsPage />} />
         <Route path="/rollouts" element={<RolloutPage />} />
         <Route path="/policies" element={<PoliciesPage />} />
+        <Route path="/operations" element={<OperationsConsolePage />} />
         <Route path="/audit-traces" element={<AuditTracesPage />} />
         <Route path="/config" element={<ConfigPage />} />
         <Route path="/security-access" element={<SecurityAccessPage />} />
         <Route path="/system-health" element={<ConsoleFoundationPage />} />
         <Route path="/console" element={<Navigate to="/system-health" replace />} />
-        <Route path="/operations" element={<Navigate to="/audit-traces" replace />} />
         <Route path="/nodes" element={<Navigate to="/machines" replace />} />
         <Route path="/rollout" element={<Navigate to="/rollouts" replace />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
