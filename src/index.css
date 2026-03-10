@@ -413,6 +413,28 @@ select {
   font-size: 0.84rem;
 }
 
+.trust-level-row[data-tone="unavailable"] {
+  background: rgba(246, 225, 225, 0.42);
+}
+
+.trust-level-row[data-tone="limited"] {
+  background: rgba(247, 236, 214, 0.38);
+}
+
+.trust-level-context {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.trust-level-user,
+.trust-level-note {
+  color: var(--muted);
+}
+
+.trust-level-note {
+  font-size: 0.84rem;
+}
+
 .system-health-time {
   color: var(--ink);
 }
