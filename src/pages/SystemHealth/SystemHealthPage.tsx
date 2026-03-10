@@ -20,15 +20,22 @@ function timeCell(valueUtc: string | null, label: string, stale: boolean) {
 }
 
 export function SystemHealthPage() {
-  const { records, loading, error } = useSystemHealthLayer();
+  const { records, loading, error, notices } = useSystemHealthLayer();
 
   return (
     <div className="stack">
       {loading ? <p className="muted-line">Loading system health truth...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
+      {notices.map((notice) => (
+        <div key={notice} className="operations-warning-banner">
+          {notice}
+        </div>
+      ))}
       <Panel title="System Health">
         {records.length === 0 ? (
-          <p className="muted-line">No current machine health is available.</p>
+          <p className="muted-line">
+            No live machine rows are available. System Health cannot render operational truth until the control plane receives machine snapshot data.
+          </p>
         ) : (
           <div className="table-scroll-wrap">
             <table className="simple-table system-health-table">

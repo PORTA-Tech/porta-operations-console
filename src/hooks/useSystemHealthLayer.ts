@@ -355,6 +355,7 @@ export function useSystemHealthLayer(): {
   loading: boolean;
   error: ApiError | undefined;
   lastRefreshUtc: string | undefined;
+  notices: string[];
 } {
   const [snapshotRows, setSnapshotRows] = useState<NodeSnapshotRow[]>([]);
   const [auditRows, setAuditRows] = useState<AuditDecisionRecord[]>([]);
@@ -363,6 +364,7 @@ export function useSystemHealthLayer(): {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<ApiError | undefined>();
   const [lastRefreshUtc, setLastRefreshUtc] = useState<string | undefined>(undefined);
+  const [notices, setNotices] = useState<string[]>([]);
   const wsBase = import.meta.env.VITE_WS_BASE_URL?.trim();
 
   useEffect(() => {
@@ -374,19 +376,36 @@ export function useSystemHealthLayer(): {
         fetchAuditDecisions({ throwOnError: true }),
         fetchAlerts(true, { throwOnError: true })
       ]);
+      const nextNotices: string[] = [];
 
       if (!mounted) return;
 
       if (snapshotResult.status === 'fulfilled') {
         setSnapshotRows(snapshotResult.value);
         setError(undefined);
+        if (snapshotResult.value.length === 0) {
+          nextNotices.push('The control plane returned zero machine rows from the node snapshot feed.');
+        }
       } else {
         setSnapshotRows([]);
         setError(toApiError(snapshotResult.reason));
       }
 
-      setAuditRows(auditResult.status === 'fulfilled' ? auditResult.value : []);
-      setAlertRows(alertResult.status === 'fulfilled' ? alertResult.value.filter(relevantHealthAlert) : []);
+      if (auditResult.status === 'fulfilled') {
+        setAuditRows(auditResult.value);
+      } else {
+        setAuditRows([]);
+        nextNotices.push(`Decision trace feed unavailable: ${toApiError(auditResult.reason).message}`);
+      }
+
+      if (alertResult.status === 'fulfilled') {
+        setAlertRows(alertResult.value.filter(relevantHealthAlert));
+      } else {
+        setAlertRows([]);
+        nextNotices.push(`Health alert feed unavailable: ${toApiError(alertResult.reason).message}`);
+      }
+
+      setNotices(nextNotices);
       setLastRefreshUtc(new Date().toISOString());
       setLoading(false);
     };
@@ -594,8 +613,9 @@ export function useSystemHealthLayer(): {
       records,
       loading,
       error,
-      lastRefreshUtc
+      lastRefreshUtc,
+      notices
     }),
-    [error, lastRefreshUtc, loading, records]
+    [error, lastRefreshUtc, loading, notices, records]
   );
 }
