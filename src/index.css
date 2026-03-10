@@ -435,6 +435,10 @@ select {
   font-size: 0.84rem;
 }
 
+.actions-row[data-result="Failed"] {
+  background: rgba(246, 225, 225, 0.42);
+}
+
 .system-health-time {
   color: var(--ink);
 }
