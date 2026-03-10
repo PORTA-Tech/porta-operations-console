@@ -383,6 +383,22 @@ select {
   border-bottom: 0;
 }
 
+.system-health-row[data-tone="critical"] {
+  background: rgba(246, 225, 225, 0.42);
+}
+
+.system-health-row[data-tone="warning"] {
+  background: rgba(247, 236, 214, 0.38);
+}
+
+.system-health-time {
+  color: var(--ink);
+}
+
+.system-health-time.stale {
+  color: var(--warn);
+}
+
 @media (max-width: 960px) {
   .shell-main {
     grid-template-columns: 1fr;

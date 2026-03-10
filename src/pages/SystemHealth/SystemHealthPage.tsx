@@ -1,33 +1,73 @@
 import { Panel } from '../../components/Layout/Panel';
-import {
-  healthToneClass,
-  healthToneLabel,
-  OperationsPageLayout,
-  StatusField,
-  truthToneClass
-} from '../../components/Operations/OperationsPageSupport';
+import { useSystemHealthLayer } from '../../hooks/useSystemHealthLayer';
+import type { SystemHealthStatus } from '../../types/systemHealth';
+import { formatUtc } from '../../utils/date';
+
+function statusClass(value: SystemHealthStatus): string {
+  if (value === 'Yes') return 'status-badge ok';
+  if (value === 'No') return 'status-badge critical';
+  return 'status-badge warn';
+}
+
+function timeCell(valueUtc: string | null, label: string, stale: boolean) {
+  const title = valueUtc ? formatUtc(valueUtc) : label;
+  const className = stale ? 'system-health-time stale' : 'system-health-time';
+  return (
+    <span className={className} title={title}>
+      {label}
+    </span>
+  );
+}
 
 export function SystemHealthPage() {
+  const { records, loading, error } = useSystemHealthLayer();
+
   return (
-    <OperationsPageLayout
-      pageTitle="System Health"
-      emptyMessage="No current machine snapshot is available."
-    >
-      {(record) => (
-        <Panel title="System Health">
-          <div className="operations-layer-grid">
-            <StatusField label="Status" value={healthToneLabel(record.healthTone)} className={healthToneClass(record.healthTone)} />
-            <StatusField label="Machine name" value={record.layer1.machineName} />
-            <StatusField label="User name" value={record.layer1.userName} />
-            <StatusField label="Last seen time" value={record.layer1.lastSeenAtUtc ? new Date(record.layer1.lastSeenAtUtc).toLocaleString() : 'No recent data'} />
-            <StatusField label="Agent running" value={record.layer1.agentRunning} className={truthToneClass(record.layer1.agentRunning)} />
-            <StatusField label="User session connected" value={record.layer1.userSessionConnected} className={truthToneClass(record.layer1.userSessionConnected)} />
-            <StatusField label="Activity detected" value={record.layer1.activityDetected} className={truthToneClass(record.layer1.activityDetected)} />
-            <StatusField label="Last activity time" value={record.layer1.lastActivityAtUtc ? new Date(record.layer1.lastActivityAtUtc).toLocaleString() : 'No recent data'} />
-            <StatusField label="Error message" value={record.layer1.errorMessage ?? 'None'} />
+    <div className="stack">
+      {loading ? <p className="muted-line">Loading system health truth...</p> : null}
+      {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
+      <Panel title="System Health">
+        {records.length === 0 ? (
+          <p className="muted-line">No current machine health is available.</p>
+        ) : (
+          <div className="table-scroll-wrap">
+            <table className="simple-table system-health-table">
+              <thead>
+                <tr>
+                  <th>Machine name</th>
+                  <th>User name</th>
+                  <th>Last seen time</th>
+                  <th>Agent running</th>
+                  <th>User session connected</th>
+                  <th>Activity detected</th>
+                  <th>Last activity time</th>
+                  <th>Error message</th>
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((record) => (
+                  <tr key={record.machineId} className="system-health-row" data-tone={record.tone}>
+                    <td title={record.machineId}>{record.machineName}</td>
+                    <td>{record.userName}</td>
+                    <td>{timeCell(record.lastSeenUtc, record.lastSeenLabel, record.lastSeenStale)}</td>
+                    <td>
+                      <span className={statusClass(record.agentRunning)}>{record.agentRunning}</span>
+                    </td>
+                    <td>
+                      <span className={statusClass(record.userSessionConnected)}>{record.userSessionConnected}</span>
+                    </td>
+                    <td>
+                      <span className={statusClass(record.activityDetected)}>{record.activityDetected}</span>
+                    </td>
+                    <td>{timeCell(record.lastActivityUtc, record.lastActivityLabel, record.lastActivityStale)}</td>
+                    <td>{record.errorMessage ?? ''}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </Panel>
-      )}
-    </OperationsPageLayout>
+        )}
+      </Panel>
+    </div>
   );
 }

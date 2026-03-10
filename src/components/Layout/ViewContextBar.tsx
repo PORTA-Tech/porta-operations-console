@@ -7,7 +7,7 @@ import { formatRelativeFromNow, formatUtc } from '../../utils/date';
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   '/system-health': {
     title: 'System Health',
-    subtitle: 'Machine and session liveliness'
+    subtitle: 'Runtime, session, and activity ingest truth'
   },
   '/user-activity': {
     title: 'User Activity',
@@ -31,7 +31,7 @@ export function ViewContextBar() {
   const wsStatus = useWsConnectionStatus();
   const meta = pageMeta[location.pathname] ?? pageMeta['/system-health'] ?? {
     title: 'System Health',
-    subtitle: 'Machine and session liveliness'
+    subtitle: 'Runtime, session, and activity ingest truth'
   };
 
   const copyLink = async () => {

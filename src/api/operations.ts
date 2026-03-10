@@ -65,7 +65,7 @@ function normalizeSignatureVerification(
   return 'not_verified';
 }
 
-export async function fetchAuditDecisions(): Promise<AuditDecisionRecord[]> {
+export async function fetchAuditDecisions(options?: { throwOnError?: boolean }): Promise<AuditDecisionRecord[]> {
   try {
     const traces = await apiRequestRaw<Array<Record<string, unknown>>>({
       path: '/v1/audit/decision-traces?limit=1000',
@@ -121,18 +121,20 @@ export async function fetchAuditDecisions(): Promise<AuditDecisionRecord[]> {
         contributing_primitives: Object.keys((trace.metrics_snapshot ?? trace.primitives ?? {}) as Record<string, unknown>)
       };
     });
-  } catch {
+  } catch (error) {
+    if (options?.throwOnError) throw error;
     return [];
   }
 }
 
-export async function fetchAlerts(includeHistory = false): Promise<AlertRecord[]> {
+export async function fetchAlerts(includeHistory = false, options?: { throwOnError?: boolean }): Promise<AlertRecord[]> {
   try {
     return await apiRequestRaw<AlertRecord[]>({
       path: `/v1/audit/alerts?limit=1000&include_history=${includeHistory ? 'true' : 'false'}`,
       method: 'get'
     });
-  } catch {
+  } catch (error) {
+    if (options?.throwOnError) throw error;
     return [];
   }
 }
