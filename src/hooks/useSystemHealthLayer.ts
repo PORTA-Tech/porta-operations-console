@@ -8,6 +8,7 @@ import { formatRelativeFromNow } from '../utils/date';
 
 const HEARTBEAT_FRESH_MS = 45_000;
 const STATE_FRESH_MS = 2 * 60_000;
+const SESSION_FRESH_MS = 2 * 60_000;
 const ACTIVITY_FRESH_MS = 2 * 60_000;
 const HEALTH_ALERT_TYPES = new Set(['agent_offline', 'backend_disconnected']);
 
@@ -21,7 +22,17 @@ interface StreamHealthState {
   sessionConnected: boolean | null;
   activityDetected: boolean | null;
   lastActivityUtc: string | null;
-  errorMessage: string | null;
+  userAgentHeartbeatUtc: string | null;
+  userAgentSessionId: string | null;
+  captureContext: string | null;
+  keyboardSignalActive: boolean | null;
+  mouseSignalActive: boolean | null;
+  backendConnected: boolean | null;
+  localApiAuthReady: boolean | null;
+  dbMigrationFailed: boolean | null;
+  captureFailureReason: string | null;
+  ownershipWarning: string | null;
+  lastError: string | null;
 }
 
 interface TraceHealthState {
@@ -32,7 +43,17 @@ interface TraceHealthState {
   sessionConnected: boolean | null;
   activityDetected: boolean | null;
   lastActivityUtc: string | null;
-  errorMessage: string | null;
+  userAgentHeartbeatUtc: string | null;
+  userAgentSessionId: string | null;
+  captureContext: string | null;
+  keyboardSignalActive: boolean | null;
+  mouseSignalActive: boolean | null;
+  backendConnected: boolean | null;
+  localApiAuthReady: boolean | null;
+  dbMigrationFailed: boolean | null;
+  captureFailureReason: string | null;
+  ownershipWarning: string | null;
+  lastError: string | null;
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
@@ -60,6 +81,22 @@ function pickString(record: Record<string, unknown>, keys: string[]): string | n
 function pickBoolean(record: Record<string, unknown>, keys: string[]): boolean | null {
   for (const key of keys) {
     const value = parseBoolean(record[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function pickStringFromRecords(records: Array<Record<string, unknown>>, keys: string[]): string | null {
+  for (const record of records) {
+    const value = pickString(record, keys);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function pickBooleanFromRecords(records: Array<Record<string, unknown>>, keys: string[]): boolean | null {
+  for (const record of records) {
+    const value = pickBoolean(record, keys);
     if (value !== null) return value;
   }
   return null;
@@ -117,6 +154,93 @@ function normalizeErrorMessage(value: string | null): string | null {
   return firstLine.length > 180 ? `${firstLine.slice(0, 177)}...` : firstLine;
 }
 
+function normalizeCaptureContext(value: string | null): string | null {
+  if (!value) return null;
+  return value.replace(/[\s_-]+/g, '').toLowerCase();
+}
+
+function isUserSessionContext(value: string | null): boolean {
+  return normalizeCaptureContext(value) === 'usersession';
+}
+
+function isNonUserSessionContext(value: string | null): boolean {
+  const normalized = normalizeCaptureContext(value);
+  return normalized !== null && normalized !== 'usersession';
+}
+
+function describeCaptureFailureReason(value: string | null): string | null {
+  if (!value) return null;
+  return value.trim() === 'CAPTURE_CONTEXT_SERVICE_SESSION'
+    ? 'capture is running in a service session'
+    : value.trim() === 'CAPTURE_CONTEXT_UNKNOWN'
+      ? 'user-session capture is not available'
+      : null;
+}
+
+function describeOwnershipWarning(input: { ownershipWarning: string | null; userAgentSessionId: string | null }): string | null {
+  if (!input.ownershipWarning) return null;
+
+  return input.ownershipWarning.trim() === 'USER_AGENT_HEARTBEAT_MISSING'
+    ? 'last input owner has no fresh user-agent heartbeat'
+    : input.ownershipWarning.trim() === 'USER_AGENT_INSTANCE_MISMATCH'
+      ? 'heartbeat owner does not match the last input owner'
+      : input.ownershipWarning.trim() === 'USER_AGENT_SESSION_MISMATCH'
+        ? `heartbeat session ${input.userAgentSessionId ?? 'unknown'} does not match the last input session`
+        : null;
+}
+
+function operationalErrorText(value: string | null): string | null {
+  const normalized = normalizeErrorMessage(value);
+  if (!normalized) return null;
+
+  const keywordMatch = /(capture|session|heartbeat|input|keyboard|mouse|signal|backend|auth|token|migration|local api|ownership|disconnect|stale)/i;
+  return keywordMatch.test(normalized) ? normalized : null;
+}
+
+function deriveStructuredOperationalError(input: {
+  dbMigrationFailed: boolean | null;
+  localApiAuthReady: boolean | null;
+  backendConnected: boolean | null;
+  captureFailureReason: string | null;
+  ownershipWarning: string | null;
+  userAgentSessionId: string | null;
+  captureContext: string | null;
+  lastError: string | null;
+}): string | null {
+  if (input.dbMigrationFailed === true) return 'Database migration failed';
+  if (input.localApiAuthReady === false) return 'Local API auth not ready';
+  if (input.backendConnected === false) return 'Backend disconnected';
+
+  const ownershipDetail = describeOwnershipWarning({
+    ownershipWarning: input.ownershipWarning,
+    userAgentSessionId: input.userAgentSessionId
+  });
+  if (ownershipDetail) return `Ownership mismatch: ${ownershipDetail}`;
+
+  const captureFailureDetail = describeCaptureFailureReason(input.captureFailureReason);
+  if (captureFailureDetail) return `Not collecting: ${captureFailureDetail}`;
+
+  if (isNonUserSessionContext(input.captureContext)) {
+    return 'PORTA is not attached to the active user session';
+  }
+
+  return operationalErrorText(input.lastError);
+}
+
+function captureHealthDegraded(input: {
+  localApiAuthReady: boolean | null;
+  dbMigrationFailed: boolean | null;
+  captureFailureReason: string | null;
+  ownershipWarning: string | null;
+  lastError: string | null;
+}): boolean {
+  if (input.localApiAuthReady === false || input.dbMigrationFailed === true) return true;
+  if (input.captureFailureReason !== null || input.ownershipWarning !== null) return true;
+
+  const normalized = operationalErrorText(input.lastError);
+  return normalized !== null && /(capture|session|input|keyboard|mouse|signal|auth|migration|ownership)/i.test(normalized);
+}
+
 function machineNameLabel(value: string | null): string {
   return value ?? 'Unknown machine';
 }
@@ -129,24 +253,6 @@ function timeLabel(value: string | null, fallback: 'Unknown' | 'Never'): string 
   return value ? formatRelativeFromNow(value) : fallback;
 }
 
-function userSessionError(value: string | null): boolean {
-  const normalized = value?.toLowerCase() ?? '';
-  return normalized.includes('service session')
-    || normalized.includes('no user session')
-    || normalized.includes('no active session')
-    || normalized.includes('session not connected');
-}
-
-function captureError(value: string | null): boolean {
-  const normalized = value?.toLowerCase() ?? '';
-  return normalized.includes('capture')
-    || normalized.includes('input')
-    || normalized.includes('keyboard')
-    || normalized.includes('mouse')
-    || normalized.includes('activity packet')
-    || normalized.includes('signal ingest');
-}
-
 function toneRank(value: SystemHealthTone): number {
   if (value === 'critical') return 0;
   if (value === 'warning') return 1;
@@ -157,33 +263,46 @@ function parseStreamHealthState(payload: Record<string, unknown>): StreamHealthS
   const machineId = pickString(payload, ['machine_id', 'machineId', 'agent_id', 'node_id']);
   if (!machineId) return null;
 
-  const signalPayload = toRecord(payload.signal ?? payload.signals ?? payload.signal_snapshot ?? payload.inputs);
+  const statusPayload = readSegmentPayload(payload, ['status', 'runtime', 'runtime_status', 'system', 'system_health', 'health']);
+  const signalPayload = readSegmentPayload(payload, ['signal', 'signals', 'signal_snapshot', 'inputs']);
+  const statePayload = readSegmentPayload(payload, ['state', 'state_snapshot']);
+  const records = [payload, statusPayload, signalPayload, statePayload];
   const timestampUtc = pickString(payload, ['timestamp', 'timestamp_utc', 'at_utc']) ?? new Date().toISOString();
+
   return {
     machineId,
-    machineName: pickString(payload, ['machine_name', 'machineName', 'hostname', 'device_name'])
-      ?? pickString(signalPayload, ['machine_name', 'machineName', 'hostname', 'device_name']),
-    userName: pickString(payload, ['user_name', 'userName', 'username', 'session_user', 'display_name'])
-      ?? pickString(signalPayload, ['user_name', 'userName', 'username', 'session_user', 'display_name']),
+    machineName: pickStringFromRecords(records, ['machine_name', 'machineName', 'hostname', 'device_name']),
+    userName: pickStringFromRecords(records, [
+      'user_name',
+      'userName',
+      'username',
+      'session_user',
+      'session_user_name',
+      'active_user_name',
+      'display_name'
+    ]),
     timestampUtc,
     lastSeenUtc: newestTimestamp([
-      pickString(payload, ['last_seen_utc', 'lastSeenUtc']),
-      pickString(signalPayload, ['last_seen_utc', 'lastSeenUtc']),
+      pickStringFromRecords(records, ['last_seen_utc', 'lastSeenUtc', 'last_heartbeat', 'lastHeartbeatUtc', 'last_updated_utc', 'lastUpdatedUtc']),
       timestampUtc
     ]),
-    agentRunning: pickBoolean(payload, ['agent_running', 'agentRunning']),
-    sessionConnected: pickBoolean(payload, ['user_session_connected', 'session_connected', 'sessionConnected'])
-      ?? pickBoolean(signalPayload, ['user_session_connected', 'session_connected', 'sessionConnected']),
-    activityDetected: pickBoolean(payload, ['activity_detected', 'activityDetected'])
-      ?? pickBoolean(signalPayload, ['activity_detected', 'activityDetected']),
+    agentRunning: pickBooleanFromRecords(records, ['agent_running', 'agentRunning', 'service_running', 'serviceRunning']),
+    sessionConnected: pickBooleanFromRecords(records, ['user_session_connected', 'session_connected', 'sessionConnected']),
+    activityDetected: pickBooleanFromRecords(records, ['activity_detected', 'activityDetected']),
     lastActivityUtc: newestTimestamp([
-      pickString(payload, ['last_activity_utc', 'lastActivityUtc', 'last_input_event_utc', 'lastInputEventUtc']),
-      pickString(signalPayload, ['last_activity_utc', 'lastActivityUtc', 'last_input_event_utc', 'lastInputEventUtc'])
+      pickStringFromRecords(records, ['last_activity_utc', 'lastActivityUtc', 'last_input_event_utc', 'lastInputEventUtc'])
     ]),
-    errorMessage: normalizeErrorMessage(
-      pickString(payload, ['error', 'error_message', 'last_error', 'failure_reason'])
-        ?? pickString(signalPayload, ['error', 'error_message', 'last_error', 'failure_reason'])
-    )
+    userAgentHeartbeatUtc: pickStringFromRecords(records, ['user_agent_heartbeat_utc', 'userAgentHeartbeatUtc']),
+    userAgentSessionId: pickStringFromRecords(records, ['user_agent_session_id', 'userAgentSessionId']),
+    captureContext: pickStringFromRecords(records, ['capture_context', 'captureContext']),
+    keyboardSignalActive: pickBooleanFromRecords(records, ['keyboard_signal_active', 'keyboardSignalActive']),
+    mouseSignalActive: pickBooleanFromRecords(records, ['mouse_signal_active', 'mouseSignalActive']),
+    backendConnected: pickBooleanFromRecords(records, ['backend_connected', 'backendConnected']),
+    localApiAuthReady: pickBooleanFromRecords(records, ['local_api_auth_ready', 'localApiAuthReady']),
+    dbMigrationFailed: pickBooleanFromRecords(records, ['db_migration_failed', 'dbMigrationFailed']),
+    captureFailureReason: pickStringFromRecords(records, ['capture_failure_reason', 'captureFailureReason']),
+    ownershipWarning: pickStringFromRecords(records, ['ownership_warning', 'ownershipWarning']),
+    lastError: pickStringFromRecords(records, ['last_error', 'lastError', 'error_message', 'error', 'failure_reason'])
   };
 }
 
@@ -199,34 +318,43 @@ function traceHealthState(row: AuditDecisionRecord): TraceHealthState | null {
   if (!machineId) return null;
 
   const raw = toRecord(row.raw_trace);
+  const statusPayload = readSegmentPayload(raw, ['status', 'runtime', 'runtime_status', 'system', 'system_health', 'health']);
   const statePayload = readSegmentPayload(raw, ['state', 'state_snapshot']);
   const signalPayload = readSegmentPayload(raw, ['signal', 'signals', 'signal_snapshot', 'inputs']);
-  const actionPayload = readSegmentPayload(raw, ['action_execution', 'action']);
-  const resultPayload = readSegmentPayload(raw, ['result', 'outcome']);
+  const records = [statusPayload, signalPayload, statePayload, raw];
 
   return {
     machineId,
-    machineName: pickString(signalPayload, ['machine_name', 'machineName', 'hostname', 'device_name'])
-      ?? pickString(statePayload, ['machine_name', 'machineName', 'hostname', 'device_name']),
-    userName: pickString(signalPayload, ['user_name', 'userName', 'username', 'session_user', 'display_name'])
-      ?? pickString(statePayload, ['user_name', 'userName', 'username', 'session_user', 'display_name']),
+    machineName: pickStringFromRecords(records, ['machine_name', 'machineName', 'hostname', 'device_name']),
+    userName: pickStringFromRecords(records, [
+      'user_name',
+      'userName',
+      'username',
+      'session_user',
+      'session_user_name',
+      'active_user_name',
+      'display_name'
+    ]),
     timestampUtc: newestTimestamp([
-      pickString(signalPayload, ['timestamp', 'timestamp_utc', 'occurred_at_utc']),
-      pickString(statePayload, ['timestamp', 'timestamp_utc', 'occurred_at_utc']),
+      pickStringFromRecords(records, ['timestamp', 'timestamp_utc', 'occurred_at_utc', 'last_updated_utc', 'lastUpdatedUtc']),
       row.timestamp
     ]),
-    sessionConnected: pickBoolean(signalPayload, ['user_session_connected', 'session_connected', 'sessionConnected']),
-    activityDetected: pickBoolean(signalPayload, ['activity_detected', 'activityDetected']),
+    sessionConnected: pickBooleanFromRecords(records, ['user_session_connected', 'session_connected', 'sessionConnected']),
+    activityDetected: pickBooleanFromRecords(records, ['activity_detected', 'activityDetected']),
     lastActivityUtc: newestTimestamp([
-      pickString(signalPayload, ['last_activity_utc', 'lastActivityUtc', 'last_input_event_utc', 'lastInputEventUtc']),
-      pickString(statePayload, ['last_activity_utc', 'lastActivityUtc', 'last_input_event_utc', 'lastInputEventUtc'])
+      pickStringFromRecords(records, ['last_activity_utc', 'lastActivityUtc', 'last_input_event_utc', 'lastInputEventUtc'])
     ]),
-    errorMessage: normalizeErrorMessage(
-      pickString(resultPayload, ['error', 'error_message', 'failure_reason', 'last_error'])
-        ?? pickString(actionPayload, ['error', 'error_message', 'failure_reason', 'last_error'])
-        ?? pickString(signalPayload, ['error', 'error_message', 'failure_reason', 'last_error'])
-        ?? pickString(statePayload, ['error', 'error_message', 'failure_reason', 'last_error'])
-    )
+    userAgentHeartbeatUtc: pickStringFromRecords(records, ['user_agent_heartbeat_utc', 'userAgentHeartbeatUtc']),
+    userAgentSessionId: pickStringFromRecords(records, ['user_agent_session_id', 'userAgentSessionId']),
+    captureContext: pickStringFromRecords(records, ['capture_context', 'captureContext']),
+    keyboardSignalActive: pickBooleanFromRecords(records, ['keyboard_signal_active', 'keyboardSignalActive']),
+    mouseSignalActive: pickBooleanFromRecords(records, ['mouse_signal_active', 'mouseSignalActive']),
+    backendConnected: pickBooleanFromRecords(records, ['backend_connected', 'backendConnected']),
+    localApiAuthReady: pickBooleanFromRecords(records, ['local_api_auth_ready', 'localApiAuthReady']),
+    dbMigrationFailed: pickBooleanFromRecords(records, ['db_migration_failed', 'dbMigrationFailed']),
+    captureFailureReason: pickStringFromRecords(records, ['capture_failure_reason', 'captureFailureReason']),
+    ownershipWarning: pickStringFromRecords(records, ['ownership_warning', 'ownershipWarning']),
+    lastError: pickStringFromRecords(records, ['last_error', 'lastError', 'error_message', 'error', 'failure_reason'])
   };
 }
 
@@ -290,12 +418,20 @@ function deriveAgentRunning(input: {
 function deriveUserSessionConnected(input: {
   agentRunning: SystemHealthStatus;
   explicitSessionConnected: boolean | null;
-  explicitError: string | null;
+  captureContext: string | null;
+  userAgentHeartbeatUtc: string | null;
+  userAgentSessionId: string | null;
 }): SystemHealthStatus {
   if (input.agentRunning !== 'Yes') return 'No';
   if (input.explicitSessionConnected === true) return 'Yes';
   if (input.explicitSessionConnected === false) return 'No';
-  if (userSessionError(input.explicitError)) return 'No';
+  if (isNonUserSessionContext(input.captureContext)) return 'No';
+  if (
+    isUserSessionContext(input.captureContext)
+    && (isFresh(input.userAgentHeartbeatUtc, SESSION_FRESH_MS) || input.userAgentSessionId !== null)
+  ) {
+    return 'Yes';
+  }
   return 'Unavailable';
 }
 
@@ -304,25 +440,32 @@ function deriveActivityDetected(input: {
   userSessionConnected: SystemHealthStatus;
   explicitActivityDetected: boolean | null;
   lastActivityUtc: string | null;
-  explicitError: string | null;
+  keyboardSignalActive: boolean | null;
+  mouseSignalActive: boolean | null;
+  captureDegraded: boolean;
 }): SystemHealthStatus {
   if (input.agentRunning !== 'Yes') return 'No';
   if (input.userSessionConnected === 'No') return 'No';
   if (input.explicitActivityDetected === true) return 'Yes';
   if (input.explicitActivityDetected === false) return 'No';
+  if (input.captureDegraded) return 'No';
+  if (input.keyboardSignalActive === true || input.mouseSignalActive === true) return 'Yes';
   if (isFresh(input.lastActivityUtc, ACTIVITY_FRESH_MS)) return 'Yes';
   if (input.lastActivityUtc) return 'No';
-  if (captureError(input.explicitError)) return 'No';
+  if (input.keyboardSignalActive === false && input.mouseSignalActive === false) return 'No';
   return 'Unavailable';
 }
 
 function deriveErrorMessage(input: {
-  explicitError: string | null;
+  structuredError: string | null;
   alerts: AlertRecord[];
   agentRunning: SystemHealthStatus;
   lastSeenUtc: string | null;
+  userSessionConnected: SystemHealthStatus;
+  captureContext: string | null;
+  userAgentHeartbeatUtc: string | null;
 }): string | null {
-  if (input.explicitError) return input.explicitError;
+  if (input.structuredError) return input.structuredError;
 
   const alertMessage = alertErrorMessage(input.alerts);
   if (alertMessage) return alertMessage;
@@ -332,6 +475,14 @@ function deriveErrorMessage(input: {
       return 'Heartbeat stale';
     }
     return 'No recent agent heartbeat';
+  }
+
+  if (
+    input.userSessionConnected === 'No'
+    && isUserSessionContext(input.captureContext)
+    && !isFresh(input.userAgentHeartbeatUtc, SESSION_FRESH_MS)
+  ) {
+    return 'No recent user-agent heartbeat from the interactive session';
   }
 
   return null;
@@ -520,8 +671,7 @@ export function useSystemHealthLayer(): {
         const lastSeenUtc = newestTimestamp([
           snapshot?.last_heartbeat,
           streamState?.lastSeenUtc,
-          streamState?.timestampUtc,
-          ...alerts.map((alert) => alert.last_seen_at)
+          streamState?.timestampUtc
         ]);
         const lastActivityUtc = newestTimestamp([
           streamState?.lastActivityUtc,
@@ -541,11 +691,30 @@ export function useSystemHealthLayer(): {
           : isFresh(traceState?.timestampUtc, STATE_FRESH_MS)
             ? traceState?.activityDetected ?? null
             : null;
-        const explicitError = normalizeErrorMessage(
-          (isFresh(streamState?.timestampUtc, STATE_FRESH_MS) ? streamState?.errorMessage : null)
-            ?? (isFresh(traceState?.timestampUtc, STATE_FRESH_MS) ? traceState?.errorMessage : null)
-            ?? null
-        );
+        const freshStreamState = isFresh(streamState?.timestampUtc, STATE_FRESH_MS) ? streamState : null;
+        const freshTraceState = isFresh(traceState?.timestampUtc, STATE_FRESH_MS) ? traceState : null;
+        const captureContext = freshStreamState?.captureContext ?? freshTraceState?.captureContext ?? null;
+        const userAgentHeartbeatUtc = freshStreamState?.userAgentHeartbeatUtc ?? freshTraceState?.userAgentHeartbeatUtc ?? null;
+        const userAgentSessionId = freshStreamState?.userAgentSessionId ?? freshTraceState?.userAgentSessionId ?? null;
+        const keyboardSignalActive = freshStreamState?.keyboardSignalActive ?? freshTraceState?.keyboardSignalActive ?? null;
+        const mouseSignalActive = freshStreamState?.mouseSignalActive ?? freshTraceState?.mouseSignalActive ?? null;
+        const structuredError = deriveStructuredOperationalError({
+          dbMigrationFailed: freshStreamState?.dbMigrationFailed ?? freshTraceState?.dbMigrationFailed ?? null,
+          localApiAuthReady: freshStreamState?.localApiAuthReady ?? freshTraceState?.localApiAuthReady ?? null,
+          backendConnected: freshStreamState?.backendConnected ?? freshTraceState?.backendConnected ?? null,
+          captureFailureReason: freshStreamState?.captureFailureReason ?? freshTraceState?.captureFailureReason ?? null,
+          ownershipWarning: freshStreamState?.ownershipWarning ?? freshTraceState?.ownershipWarning ?? null,
+          userAgentSessionId,
+          captureContext,
+          lastError: freshStreamState?.lastError ?? freshTraceState?.lastError ?? null
+        });
+        const captureDegraded = captureHealthDegraded({
+          localApiAuthReady: freshStreamState?.localApiAuthReady ?? freshTraceState?.localApiAuthReady ?? null,
+          dbMigrationFailed: freshStreamState?.dbMigrationFailed ?? freshTraceState?.dbMigrationFailed ?? null,
+          captureFailureReason: freshStreamState?.captureFailureReason ?? freshTraceState?.captureFailureReason ?? null,
+          ownershipWarning: freshStreamState?.ownershipWarning ?? freshTraceState?.ownershipWarning ?? null,
+          lastError: freshStreamState?.lastError ?? freshTraceState?.lastError ?? null
+        });
 
         const agentRunning = deriveAgentRunning({
           explicitAgentRunning,
@@ -555,20 +724,27 @@ export function useSystemHealthLayer(): {
         const userSessionConnected = deriveUserSessionConnected({
           agentRunning,
           explicitSessionConnected,
-          explicitError
+          captureContext,
+          userAgentHeartbeatUtc,
+          userAgentSessionId
         });
         const activityDetected = deriveActivityDetected({
           agentRunning,
           userSessionConnected,
           explicitActivityDetected,
           lastActivityUtc,
-          explicitError
+          keyboardSignalActive,
+          mouseSignalActive,
+          captureDegraded
         });
         const errorMessage = deriveErrorMessage({
-          explicitError,
+          structuredError,
           alerts,
           agentRunning,
-          lastSeenUtc
+          lastSeenUtc,
+          userSessionConnected,
+          captureContext,
+          userAgentHeartbeatUtc
         });
         const tone = deriveTone({
           agentRunning,
@@ -581,13 +757,13 @@ export function useSystemHealthLayer(): {
           machineId,
           machineName: machineNameLabel(streamState?.machineName ?? traceState?.machineName ?? null),
           userName: userNameLabel(
-            (isFresh(streamState?.timestampUtc, STATE_FRESH_MS) ? streamState?.userName : null)
-              ?? (isFresh(traceState?.timestampUtc, STATE_FRESH_MS) ? traceState?.userName : null)
+            freshStreamState?.userName
+              ?? freshTraceState?.userName
               ?? null
           ),
           lastSeenUtc,
           lastSeenLabel: timeLabel(lastSeenUtc, 'Unknown'),
-          lastSeenStale: !isFresh(lastSeenUtc, HEARTBEAT_FRESH_MS),
+          lastSeenStale: lastSeenUtc !== null && !isFresh(lastSeenUtc, HEARTBEAT_FRESH_MS),
           agentRunning,
           userSessionConnected,
           activityDetected,

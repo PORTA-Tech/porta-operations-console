@@ -34,7 +34,7 @@ export function SystemHealthPage() {
       <Panel title="System Health">
         {records.length === 0 ? (
           <p className="muted-line">
-            No live machine rows are available. System Health cannot render operational truth until the control plane receives machine snapshot data.
+            No machine health rows are available. System Health cannot render operational truth until the backend supplies machine, session, and activity health data to the console.
           </p>
         ) : (
           <div className="table-scroll-wrap">
