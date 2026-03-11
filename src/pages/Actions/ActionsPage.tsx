@@ -5,7 +5,7 @@ import type { ActionsActionType, ActionsResult } from '../../types/actionsLayer'
 import { formatRelativeFromNow, formatUtc } from '../../utils/date';
 
 function actionTypeBadgeClass(value: ActionsActionType): string {
-  return value === 'Automatic change' ? 'status-badge critical' : 'status-badge warn';
+  return value === 'Automatic change' ? 'status-badge focus' : 'status-badge neutral';
 }
 
 function resultBadgeClass(value: ActionsResult): string {

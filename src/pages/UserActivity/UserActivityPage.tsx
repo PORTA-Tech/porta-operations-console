@@ -9,16 +9,16 @@ import type {
 } from '../../types/userActivity';
 
 function focusBadgeClass(value: UserActivityFocusLevel): string {
-  if (value === 'High') return 'status-badge critical';
-  if (value === 'Medium') return 'status-badge warn';
-  if (value === 'Low') return 'status-badge ok';
-  return 'status-badge warn';
+  if (value === 'High') return 'status-badge focus';
+  if (value === 'Medium') return 'status-badge ok';
+  if (value === 'Low') return 'status-badge neutral';
+  return 'status-badge neutral';
 }
 
 function deepWorkBadgeClass(value: UserActivityDeepWork): string {
-  if (value === 'Active') return 'status-badge ok';
-  if (value === 'Not active') return 'status-badge warn';
-  return 'status-badge warn';
+  if (value === 'Active') return 'status-badge focus';
+  if (value === 'Not active') return 'status-badge neutral';
+  return 'status-badge neutral';
 }
 
 function overloadBadgeClass(value: UserActivityOverloadRisk): string {
@@ -29,7 +29,7 @@ function overloadBadgeClass(value: UserActivityOverloadRisk): string {
 }
 
 function breakNeededBadgeClass(value: UserActivityBreakNeeded): string {
-  if (value === 'Yes') return 'status-badge critical';
+  if (value === 'Yes') return 'status-badge warn';
   if (value === 'No') return 'status-badge ok';
   return 'status-badge warn';
 }

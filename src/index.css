@@ -604,6 +604,12 @@ select {
   color: var(--critical);
 }
 
+.status-badge.neutral {
+  border-color: rgba(64, 51, 40, 0.12);
+  background: rgba(255, 255, 255, 0.72);
+  color: var(--ink);
+}
+
 .table-scroll-wrap {
   overflow-x: auto;
   border: 1px solid var(--line);
