@@ -7,19 +7,19 @@ import { formatRelativeFromNow, formatUtc } from '../../utils/date';
 const pageMeta: Record<string, { title: string; subtitle: string }> = {
   '/system-health': {
     title: 'System Health',
-    subtitle: 'Runtime, session, and activity ingest truth'
+    subtitle: 'Is PORTA running and collecting activity correctly?'
   },
   '/user-activity': {
     title: 'User Activity',
-    subtitle: 'Current interpreted user state'
+    subtitle: 'What does PORTA think the user is doing right now?'
   },
   '/trust-level': {
     title: 'Trust Level',
-    subtitle: 'Readiness and data reliability'
+    subtitle: 'Can PORTA be trusted for this user yet?'
   },
   '/actions': {
     title: 'Actions',
-    subtitle: 'Meaningful suggestions and automatic changes'
+    subtitle: 'What did PORTA decide, apply, or fail to change?'
   }
 };
 
@@ -49,25 +49,36 @@ export function ViewContextBar() {
   return (
     <section className="view-context-bar">
       <div className="view-context-head">
-        <div>
-          <p className="view-title">{meta.title}</p>
+        <div className="view-context-copy">
+          <p className="view-title">Operational view</p>
+          <h1 className="view-heading">{meta.title}</h1>
           <p className="view-subtitle">{meta.subtitle}</p>
         </div>
         <div className="context-actions">
-          <button type="button" onClick={copyLink}>
+          <button type="button" className="context-action-button" onClick={copyLink}>
             {copyState === 'copied' ? 'Link Copied' : copyState === 'error' ? 'Copy Failed' : 'Copy Link'}
           </button>
-          <p className="freshness-pill">
-            Data Stream: <strong>{liveConnected ? 'Connected' : 'Delayed'}</strong>
-            {' | '}
-            <span className={`freshness-state ${wsStatus.tone}`} title={wsStatus.detail}>
-              Realtime Channel: <strong>{wsStatus.statusLabel}</strong>
-            </span>
-            {' | '}
-            <span title={formatUtc(lastUpdatedUtc)}>
-              Last update: <strong>{formatRelativeFromNow(lastUpdatedUtc)}</strong>
-            </span>
-          </p>
+        </div>
+      </div>
+
+      <div className="context-status-strip">
+        <div className="context-status-card">
+          <span className="context-status-label">Control plane</span>
+          <strong className={`context-status-value ${liveConnected ? 'ok' : 'warn'}`}>
+            {liveConnected ? 'Connected' : 'Delayed'}
+          </strong>
+        </div>
+        <div className="context-status-card" title={wsStatus.detail}>
+          <span className="context-status-label">Realtime channel</span>
+          <strong className={`context-status-value ${wsStatus.tone}`}>
+            {wsStatus.statusLabel}
+          </strong>
+        </div>
+        <div className="context-status-card" title={formatUtc(lastUpdatedUtc)}>
+          <span className="context-status-label">Last update</span>
+          <strong className="context-status-value neutral">
+            {formatRelativeFromNow(lastUpdatedUtc)}
+          </strong>
         </div>
       </div>
     </section>

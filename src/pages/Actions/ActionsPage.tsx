@@ -1,7 +1,8 @@
 import { Panel } from '../../components/Layout/Panel';
+import { SummaryBand } from '../../components/Layout/SummaryBand';
 import { useActionsLayer } from '../../hooks/useActionsLayer';
 import type { ActionsActionType, ActionsResult } from '../../types/actionsLayer';
-import { formatUtc } from '../../utils/date';
+import { formatRelativeFromNow, formatUtc } from '../../utils/date';
 
 function actionTypeBadgeClass(value: ActionsActionType): string {
   return value === 'Automatic change' ? 'status-badge critical' : 'status-badge warn';
@@ -13,6 +14,10 @@ function resultBadgeClass(value: ActionsResult): string {
 
 export function ActionsPage() {
   const { records, loading, error, notices } = useActionsLayer();
+  const suggestionCount = records.filter((record) => record.actionType === 'Suggestion' && record.result === 'Done').length;
+  const automaticChangeCount = records.filter((record) => record.actionType === 'Automatic change' && record.result === 'Done').length;
+  const failedCount = records.filter((record) => record.result === 'Failed').length;
+  const latestActionUtc = records[0]?.timeUtc ?? null;
 
   return (
     <div className="stack">
@@ -23,6 +28,36 @@ export function ActionsPage() {
           {notice}
         </div>
       ))}
+      <SummaryBand
+        title="Regulation activity"
+        subtitle="Recent operator-visible suggestions and automatic changes with authoritative outcome truth."
+        items={[
+          {
+            label: 'Suggestions shown',
+            value: String(suggestionCount),
+            meta: suggestionCount === 1 ? 'Suggestion reached the user session' : 'Suggestions reached the user session',
+            tone: suggestionCount > 0 ? 'focus' : 'neutral'
+          },
+          {
+            label: 'Automatic changes',
+            value: String(automaticChangeCount),
+            meta: automaticChangeCount === 1 ? 'Change applied successfully' : 'Changes applied successfully',
+            tone: automaticChangeCount > 0 ? 'ok' : 'neutral'
+          },
+          {
+            label: 'Failures',
+            value: String(failedCount),
+            meta: failedCount === 1 ? 'Action needs operator attention' : 'Actions need operator attention',
+            tone: failedCount > 0 ? 'critical' : 'neutral'
+          },
+          {
+            label: 'Latest action',
+            value: latestActionUtc ? formatRelativeFromNow(latestActionUtc) : 'No actions',
+            meta: latestActionUtc ? formatUtc(latestActionUtc) : 'No recent action truth',
+            tone: 'neutral'
+          }
+        ]}
+      />
       <Panel title="Actions">
         {records.length === 0 ? (
           <p className="muted-line">

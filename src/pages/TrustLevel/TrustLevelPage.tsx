@@ -1,4 +1,5 @@
 import { Panel } from '../../components/Layout/Panel';
+import { SummaryBand } from '../../components/Layout/SummaryBand';
 import { useTrustLevelLayer } from '../../hooks/useTrustLevelLayer';
 import type { TrustConfidence, TrustDataQuality, TrustLearningStage } from '../../types/trustLevel';
 
@@ -20,6 +21,10 @@ function dataQualityBadgeClass(value: TrustDataQuality): string {
 
 export function TrustLevelPage() {
   const { records, loading, error, notices } = useTrustLevelLayer();
+  const readyCount = records.filter((record) => record.learningStage === 'Ready').length;
+  const learningCount = records.filter((record) => record.learningStage === 'Learning').length;
+  const confidenceHighCount = records.filter((record) => record.confidence === 'High').length;
+  const limitedQualityCount = records.filter((record) => record.dataQuality !== 'Good').length;
 
   return (
     <div className="stack">
@@ -30,6 +35,36 @@ export function TrustLevelPage() {
           {notice}
         </div>
       ))}
+      <SummaryBand
+        title="Trust readiness"
+        subtitle="How quickly the fleet is becoming safe enough for regulation and how reliable that trust is."
+        items={[
+          {
+            label: 'Ready',
+            value: String(readyCount),
+            meta: readyCount === 1 ? 'Machine fully calibrated' : 'Machines fully calibrated',
+            tone: readyCount > 0 ? 'ok' : 'neutral'
+          },
+          {
+            label: 'Learning',
+            value: String(learningCount),
+            meta: learningCount === 1 ? 'Machine still calibrating' : 'Machines still calibrating',
+            tone: learningCount > 0 ? 'warn' : 'neutral'
+          },
+          {
+            label: 'Confidence high',
+            value: String(confidenceHighCount),
+            meta: confidenceHighCount === 1 ? 'Machine above high-confidence threshold' : 'Machines above high-confidence threshold',
+            tone: confidenceHighCount > 0 ? 'ok' : 'neutral'
+          },
+          {
+            label: 'Quality limited',
+            value: String(limitedQualityCount),
+            meta: limitedQualityCount === 1 ? 'Machine with partial or poor quality' : 'Machines with partial or poor quality',
+            tone: limitedQualityCount > 0 ? 'warn' : 'neutral'
+          }
+        ]}
+      />
       <Panel title="Trust Level">
         {records.length === 0 ? (
           <p className="muted-line">

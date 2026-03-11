@@ -1,4 +1,5 @@
 import { Panel } from '../../components/Layout/Panel';
+import { SummaryBand } from '../../components/Layout/SummaryBand';
 import { useSystemHealthLayer } from '../../hooks/useSystemHealthLayer';
 import type { SystemHealthStatus } from '../../types/systemHealth';
 import { formatUtc } from '../../utils/date';
@@ -21,6 +22,12 @@ function timeCell(valueUtc: string | null, label: string, stale: boolean) {
 
 export function SystemHealthPage() {
   const { records, loading, error, notices } = useSystemHealthLayer();
+  const healthyCount = records.filter((record) => record.tone === 'healthy').length;
+  const degradedCount = records.filter((record) => record.tone === 'warning').length;
+  const disconnectedCount = records.filter((record) => record.agentRunning === 'No').length;
+  const noActivityCount = records.filter(
+    (record) => record.agentRunning === 'Yes' && record.userSessionConnected === 'Yes' && record.activityDetected !== 'Yes'
+  ).length;
 
   return (
     <div className="stack">
@@ -31,6 +38,36 @@ export function SystemHealthPage() {
           {notice}
         </div>
       ))}
+      <SummaryBand
+        title="Fleet health"
+        subtitle="Immediate operational truth for runtime, session, and activity ingest health."
+        items={[
+          {
+            label: 'Healthy machines',
+            value: String(healthyCount),
+            meta: healthyCount === 1 ? 'Machine fully reporting' : 'Machines fully reporting',
+            tone: 'ok'
+          },
+          {
+            label: 'Degraded capture',
+            value: String(degradedCount),
+            meta: degradedCount === 1 ? 'Machine needs attention' : 'Machines need attention',
+            tone: degradedCount > 0 ? 'warn' : 'neutral'
+          },
+          {
+            label: 'Disconnected agents',
+            value: String(disconnectedCount),
+            meta: disconnectedCount === 1 ? 'Agent offline' : 'Agents offline',
+            tone: disconnectedCount > 0 ? 'critical' : 'neutral'
+          },
+          {
+            label: 'No live activity',
+            value: String(noActivityCount),
+            meta: noActivityCount === 1 ? 'Session quiet or stalled' : 'Sessions quiet or stalled',
+            tone: noActivityCount > 0 ? 'warn' : 'neutral'
+          }
+        ]}
+      />
       <Panel title="System Health">
         {records.length === 0 ? (
           <p className="muted-line">

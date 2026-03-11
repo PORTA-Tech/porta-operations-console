@@ -1,4 +1,5 @@
 import { Panel } from '../../components/Layout/Panel';
+import { SummaryBand } from '../../components/Layout/SummaryBand';
 import { useUserActivityLayer } from '../../hooks/useUserActivityLayer';
 import type {
   UserActivityBreakNeeded,
@@ -35,6 +36,10 @@ function breakNeededBadgeClass(value: UserActivityBreakNeeded): string {
 
 export function UserActivityPage() {
   const { records, loading, error, notices } = useUserActivityLayer();
+  const focusHighCount = records.filter((record) => record.focusLevel === 'High').length;
+  const deepWorkCount = records.filter((record) => record.deepWork === 'Active').length;
+  const breakNeededCount = records.filter((record) => record.breakNeeded === 'Yes').length;
+  const overloadHighCount = records.filter((record) => record.overloadRisk === 'High').length;
 
   return (
     <div className="stack">
@@ -45,6 +50,36 @@ export function UserActivityPage() {
           {notice}
         </div>
       ))}
+      <SummaryBand
+        title="Current activity"
+        subtitle="A simplified operational view of what PORTA thinks users are doing right now."
+        items={[
+          {
+            label: 'Focus high',
+            value: String(focusHighCount),
+            meta: focusHighCount === 1 ? 'Machine in strong continuity' : 'Machines in strong continuity',
+            tone: focusHighCount > 0 ? 'focus' : 'neutral'
+          },
+          {
+            label: 'Deep work active',
+            value: String(deepWorkCount),
+            meta: deepWorkCount === 1 ? 'Protected focused session' : 'Protected focused sessions',
+            tone: deepWorkCount > 0 ? 'focus' : 'neutral'
+          },
+          {
+            label: 'Break needed',
+            value: String(breakNeededCount),
+            meta: breakNeededCount === 1 ? 'Machine ready for a break nudge' : 'Machines ready for break nudges',
+            tone: breakNeededCount > 0 ? 'warn' : 'neutral'
+          },
+          {
+            label: 'Overload high',
+            value: String(overloadHighCount),
+            meta: overloadHighCount === 1 ? 'Machine in elevated strain' : 'Machines in elevated strain',
+            tone: overloadHighCount > 0 ? 'critical' : 'neutral'
+          }
+        ]}
+      />
       <Panel title="User Activity">
         {records.length === 0 ? (
           <p className="muted-line">
