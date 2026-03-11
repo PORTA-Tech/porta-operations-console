@@ -1,6 +1,7 @@
 import { Panel } from '../../components/Layout/Panel';
 import { SummaryBand } from '../../components/Layout/SummaryBand';
 import { useUserActivityLayer } from '../../hooks/useUserActivityLayer';
+import { formatRelativeFromNow } from '../../utils/date';
 import type {
   UserActivityBreakNeeded,
   UserActivityDeepWork,
@@ -40,6 +41,15 @@ export function UserActivityPage() {
   const deepWorkCount = records.filter((record) => record.deepWork === 'Active').length;
   const breakNeededCount = records.filter((record) => record.breakNeeded === 'Yes').length;
   const overloadHighCount = records.filter((record) => record.overloadRisk === 'High').length;
+  const strongestFocus = records
+    .filter((record) => record.focusDurationSec !== null)
+    .sort((left, right) => (right.focusDurationSec ?? 0) - (left.focusDurationSec ?? 0))[0];
+  const latestBreakReady = records
+    .filter((record) => record.breakNeeded === 'Yes' && record.stateTimestampUtc)
+    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
+  const latestOverload = records
+    .filter((record) => record.overloadRisk === 'High' && record.stateTimestampUtc)
+    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
 
   return (
     <div className="stack">
@@ -57,34 +67,39 @@ export function UserActivityPage() {
           {
             label: 'Focus high',
             value: String(focusHighCount),
-            meta: focusHighCount === 1 ? 'Machine in strong continuity' : 'Machines in strong continuity',
+            meta: strongestFocus ? `Longest focus ${strongestFocus.focusDurationLabel}` : (focusHighCount === 1 ? 'Machine in strong continuity' : 'Machines in strong continuity'),
             tone: focusHighCount > 0 ? 'focus' : 'neutral'
           },
           {
             label: 'Deep work active',
             value: String(deepWorkCount),
-            meta: deepWorkCount === 1 ? 'Protected focused session' : 'Protected focused sessions',
+            meta: strongestFocus && deepWorkCount > 0 ? `Active for up to ${strongestFocus.focusDurationLabel}` : (deepWorkCount === 1 ? 'Protected focused session' : 'Protected focused sessions'),
             tone: deepWorkCount > 0 ? 'focus' : 'neutral'
           },
           {
             label: 'Break needed',
             value: String(breakNeededCount),
-            meta: breakNeededCount === 1 ? 'Machine ready for a break nudge' : 'Machines ready for break nudges',
+            meta: latestBreakReady?.stateTimestampUtc ? `Break ready ${formatRelativeFromNow(latestBreakReady.stateTimestampUtc)}` : (breakNeededCount === 1 ? 'Machine ready for a break nudge' : 'Machines ready for break nudges'),
             tone: breakNeededCount > 0 ? 'warn' : 'neutral'
           },
           {
             label: 'Overload high',
             value: String(overloadHighCount),
-            meta: overloadHighCount === 1 ? 'Machine in elevated strain' : 'Machines in elevated strain',
+            meta: latestOverload?.stateTimestampUtc ? `Observed ${formatRelativeFromNow(latestOverload.stateTimestampUtc)}` : (overloadHighCount === 1 ? 'Machine in elevated strain' : 'Machines in elevated strain'),
             tone: overloadHighCount > 0 ? 'critical' : 'neutral'
           }
         ]}
       />
-      <Panel title="User Activity">
+      <Panel
+        title="Behavior detail"
+        subtitle="Supporting machine-level activity truth beneath the live continuity and regulation summary."
+      >
         {records.length === 0 ? (
-          <p className="muted-line">
-            No user-activity rows are available. User Activity cannot render current behavioral truth until the backend supplies live continuity, deep-work, overload, and break-readiness state.
-          </p>
+          <div className="empty-state">
+            <p className="muted-line">
+              No user-activity rows are available. User Activity cannot render current behavioral truth until the backend supplies live continuity, deep-work, overload, and break-readiness state.
+            </p>
+          </div>
         ) : (
           <div className="table-scroll-wrap">
             <table className="simple-table user-activity-table">
@@ -105,6 +120,9 @@ export function UserActivityPage() {
                       <div className="user-activity-context">
                         <strong>{record.machineName}</strong>
                         <span className="user-activity-user">{record.userName}</span>
+                        <span className="user-activity-note">
+                          {record.stateTimestampUtc ? `Updated ${formatRelativeFromNow(record.stateTimestampUtc)}` : 'Update time unavailable'}
+                        </span>
                       </div>
                     </td>
                     <td>
@@ -117,9 +135,16 @@ export function UserActivityPage() {
                       <span className={overloadBadgeClass(record.overloadRisk)}>{record.overloadRisk}</span>
                     </td>
                     <td>
-                      <span className={record.stateStale ? 'system-health-time stale' : 'system-health-time'}>
-                        {record.focusDurationLabel}
-                      </span>
+                      <div className="user-activity-context">
+                        <span className={record.stateStale ? 'system-health-time stale' : 'system-health-time'}>
+                          {record.focusDurationLabel}
+                        </span>
+                        {record.stateTimestampUtc ? (
+                          <span className="user-activity-note">
+                            State {formatRelativeFromNow(record.stateTimestampUtc)}
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td>
                       <span className={breakNeededBadgeClass(record.breakNeeded)}>{record.breakNeeded}</span>

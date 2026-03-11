@@ -1,6 +1,7 @@
 import { Panel } from '../../components/Layout/Panel';
 import { SummaryBand } from '../../components/Layout/SummaryBand';
 import { useTrustLevelLayer } from '../../hooks/useTrustLevelLayer';
+import { formatRelativeFromNow } from '../../utils/date';
 import type { TrustConfidence, TrustDataQuality, TrustLearningStage } from '../../types/trustLevel';
 
 function learningStageBadgeClass(value: TrustLearningStage): string {
@@ -25,6 +26,18 @@ export function TrustLevelPage() {
   const learningCount = records.filter((record) => record.learningStage === 'Learning').length;
   const confidenceHighCount = records.filter((record) => record.confidence === 'High').length;
   const limitedQualityCount = records.filter((record) => record.dataQuality !== 'Good').length;
+  const latestReady = records
+    .filter((record) => record.learningStage === 'Ready' && record.stateTimestampUtc)
+    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
+  const latestLearning = records
+    .filter((record) => record.learningStage === 'Learning' && record.stateTimestampUtc)
+    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
+  const latestHighConfidence = records
+    .filter((record) => record.confidence === 'High' && record.stateTimestampUtc)
+    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
+  const latestLimitedQuality = records
+    .filter((record) => record.dataQuality !== 'Good' && record.stateTimestampUtc)
+    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
 
   return (
     <div className="stack">
@@ -42,34 +55,39 @@ export function TrustLevelPage() {
           {
             label: 'Ready',
             value: String(readyCount),
-            meta: readyCount === 1 ? 'Machine fully calibrated' : 'Machines fully calibrated',
+            meta: latestReady?.stateTimestampUtc ? `Updated ${formatRelativeFromNow(latestReady.stateTimestampUtc)}` : (readyCount === 1 ? 'Machine fully calibrated' : 'Machines fully calibrated'),
             tone: readyCount > 0 ? 'ok' : 'neutral'
           },
           {
             label: 'Learning',
             value: String(learningCount),
-            meta: learningCount === 1 ? 'Machine still calibrating' : 'Machines still calibrating',
+            meta: latestLearning?.stateTimestampUtc ? `Updated ${formatRelativeFromNow(latestLearning.stateTimestampUtc)}` : (learningCount === 1 ? 'Machine still calibrating' : 'Machines still calibrating'),
             tone: learningCount > 0 ? 'warn' : 'neutral'
           },
           {
             label: 'Confidence high',
             value: String(confidenceHighCount),
-            meta: confidenceHighCount === 1 ? 'Machine above high-confidence threshold' : 'Machines above high-confidence threshold',
+            meta: latestHighConfidence?.stateTimestampUtc ? `Seen ${formatRelativeFromNow(latestHighConfidence.stateTimestampUtc)}` : (confidenceHighCount === 1 ? 'Machine above high-confidence threshold' : 'Machines above high-confidence threshold'),
             tone: confidenceHighCount > 0 ? 'ok' : 'neutral'
           },
           {
             label: 'Quality limited',
             value: String(limitedQualityCount),
-            meta: limitedQualityCount === 1 ? 'Machine with partial or poor quality' : 'Machines with partial or poor quality',
+            meta: latestLimitedQuality?.stateTimestampUtc ? `Seen ${formatRelativeFromNow(latestLimitedQuality.stateTimestampUtc)}` : (limitedQualityCount === 1 ? 'Machine with partial or poor quality' : 'Machines with partial or poor quality'),
             tone: limitedQualityCount > 0 ? 'warn' : 'neutral'
           }
         ]}
       />
-      <Panel title="Trust Level">
+      <Panel
+        title="Trust detail"
+        subtitle="Supporting calibration, confidence, and data-quality rows beneath the live trust summary."
+      >
         {records.length === 0 ? (
-          <p className="muted-line">
-            No trust rows are available. Trust Level cannot render calibration, confidence, or data-quality truth until the backend supplies current trust state.
-          </p>
+          <div className="empty-state">
+            <p className="muted-line">
+              No trust rows are available. Trust Level cannot render calibration, confidence, or data-quality truth until the backend supplies current trust state.
+            </p>
+          </div>
         ) : (
           <div className="table-scroll-wrap">
             <table className="simple-table trust-level-table">
@@ -88,6 +106,9 @@ export function TrustLevelPage() {
                       <div className="trust-level-context">
                         <strong>{record.machineName}</strong>
                         <span className="trust-level-user">{record.userName}</span>
+                        <span className="trust-level-note">
+                          {record.stateTimestampUtc ? `Updated ${formatRelativeFromNow(record.stateTimestampUtc)}` : 'Update time unavailable'}
+                        </span>
                       </div>
                     </td>
                     <td>

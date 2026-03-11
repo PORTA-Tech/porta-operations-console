@@ -2,7 +2,7 @@ import { Panel } from '../../components/Layout/Panel';
 import { SummaryBand } from '../../components/Layout/SummaryBand';
 import { useSystemHealthLayer } from '../../hooks/useSystemHealthLayer';
 import type { SystemHealthStatus } from '../../types/systemHealth';
-import { formatUtc } from '../../utils/date';
+import { formatRelativeFromNow, formatUtc } from '../../utils/date';
 
 function statusClass(value: SystemHealthStatus): string {
   if (value === 'Yes') return 'status-badge ok';
@@ -28,6 +28,10 @@ export function SystemHealthPage() {
   const noActivityCount = records.filter(
     (record) => record.agentRunning === 'Yes' && record.userSessionConnected === 'Yes' && record.activityDetected !== 'Yes'
   ).length;
+  const latestSeenUtc = records[0]?.lastSeenUtc ?? null;
+  const latestActivityUtc = records
+    .filter((record) => record.lastActivityUtc)
+    .sort((left, right) => Date.parse(right.lastActivityUtc ?? '') - Date.parse(left.lastActivityUtc ?? ''))[0]?.lastActivityUtc ?? null;
 
   return (
     <div className="stack">
@@ -45,7 +49,7 @@ export function SystemHealthPage() {
           {
             label: 'Healthy machines',
             value: String(healthyCount),
-            meta: healthyCount === 1 ? 'Machine fully reporting' : 'Machines fully reporting',
+            meta: latestSeenUtc ? `Last seen ${formatRelativeFromNow(latestSeenUtc)}` : (healthyCount === 1 ? 'Machine fully reporting' : 'Machines fully reporting'),
             tone: 'ok'
           },
           {
@@ -63,16 +67,21 @@ export function SystemHealthPage() {
           {
             label: 'No live activity',
             value: String(noActivityCount),
-            meta: noActivityCount === 1 ? 'Session quiet or stalled' : 'Sessions quiet or stalled',
+            meta: latestActivityUtc ? `Last activity ${formatRelativeFromNow(latestActivityUtc)}` : (noActivityCount === 1 ? 'Session quiet or stalled' : 'Sessions quiet or stalled'),
             tone: noActivityCount > 0 ? 'warn' : 'neutral'
           }
         ]}
       />
-      <Panel title="System Health">
+      <Panel
+        title="Machine detail"
+        subtitle="Supporting runtime, session, and activity rows beneath the live fleet health summary."
+      >
         {records.length === 0 ? (
-          <p className="muted-line">
-            No machine health rows are available. System Health cannot render operational truth until the backend supplies machine, session, and activity health data to the console.
-          </p>
+          <div className="empty-state">
+            <p className="muted-line">
+              No machine health rows are available. System Health cannot render operational truth until the backend supplies machine, session, and activity health data to the console.
+            </p>
+          </div>
         ) : (
           <div className="table-scroll-wrap">
             <table className="simple-table system-health-table">
