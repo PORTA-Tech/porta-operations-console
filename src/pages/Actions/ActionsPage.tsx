@@ -12,24 +12,13 @@ function resultBadgeClass(value: ActionsResult): string {
   return value === 'Done' ? 'status-badge ok' : 'status-badge critical';
 }
 
-function actionTimeCell(valueUtc: string | null) {
-  return (
-    <div className="actions-time">
-      <span className="system-health-time" title={formatUtc(valueUtc ?? undefined)}>
-        {formatRelativeFromNow(valueUtc ?? undefined)}
-      </span>
-      <span className="actions-time-absolute">{formatUtc(valueUtc ?? undefined)}</span>
-    </div>
-  );
-}
-
 export function ActionsPage() {
   const { records, loading, error, notices } = useActionsLayer();
   const suggestionCount = records.filter((record) => record.actionType === 'Suggestion' && record.result === 'Done').length;
   const automaticChangeCount = records.filter((record) => record.actionType === 'Automatic change' && record.result === 'Done').length;
   const failedCount = records.filter((record) => record.result === 'Failed').length;
   const latestActionUtc = records[0]?.timeUtc ?? null;
-  const feedRecords = records.slice(0, 6);
+  const feedRecords = records.slice(0, 12);
 
   return (
     <div className="stack">
@@ -72,7 +61,7 @@ export function ActionsPage() {
       />
       <Panel
         title="Action feed"
-        subtitle="Recent regulation events shown in sequence first, with the supporting table below."
+        subtitle="Recent regulation events shown as one authoritative feed, without repeating the same rows below."
       >
         {records.length === 0 ? (
           <div className="empty-state">
@@ -107,44 +96,6 @@ export function ActionsPage() {
                   </div>
                 </article>
               ))}
-            </div>
-
-            <div className="detail-section-header">
-              <span className="detail-section-kicker">Supporting detail</span>
-              <p className="detail-section-copy">Full machine-by-machine action history remains available below the live feed.</p>
-            </div>
-
-            <div className="table-scroll-wrap table-scroll-wrap-secondary">
-              <table className="simple-table actions-table">
-                <thead>
-                  <tr>
-                    <th>Machine</th>
-                    <th>User</th>
-                    <th>Action name</th>
-                    <th>Action type</th>
-                    <th>Result</th>
-                    <th>Time</th>
-                    <th>Error</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {records.map((record) => (
-                    <tr key={record.id} className="actions-row" data-result={record.result}>
-                      <td>{record.machineName}</td>
-                      <td>{record.userName}</td>
-                      <td>{record.actionName}</td>
-                      <td>
-                        <span className={actionTypeBadgeClass(record.actionType)}>{record.actionType}</span>
-                      </td>
-                      <td>
-                        <span className={resultBadgeClass(record.result)}>{record.result}</span>
-                      </td>
-                      <td>{actionTimeCell(record.timeUtc)}</td>
-                      <td>{record.result === 'Failed' ? (record.errorMessage ?? '') : ''}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </>
         )}
