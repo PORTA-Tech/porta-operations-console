@@ -73,6 +73,17 @@ button:hover {
   box-shadow: 0 8px 20px rgba(17, 35, 40, 0.08);
 }
 
+button:disabled {
+  cursor: default;
+  opacity: 0.58;
+  box-shadow: none;
+}
+
+button:disabled:hover {
+  border-color: var(--line);
+  box-shadow: none;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -431,6 +442,12 @@ select {
 .context-action-button {
   min-height: 2.45rem;
   background: rgba(255, 255, 255, 0.92);
+}
+
+.context-action-button.danger {
+  border-color: rgba(160, 68, 60, 0.24);
+  background: rgba(245, 224, 220, 0.82);
+  color: var(--critical);
 }
 
 .context-status-strip {
@@ -838,6 +855,36 @@ select {
   color: var(--ink);
 }
 
+.device-admin-note {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.device-success-line {
+  margin: 0;
+  color: var(--ok);
+}
+
+.device-management-summary {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(260px, 1.2fr) auto;
+  gap: 1rem;
+  align-items: start;
+}
+
+.device-management-meta {
+  display: grid;
+  gap: 0.45rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.device-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
 .system-health-time.stale {
   color: var(--warn);
 }
@@ -889,7 +936,8 @@ select {
   .summary-band-grid,
   .context-status-strip,
   .operations-layer-grid,
-  .operations-layer-grid.compact {
+  .operations-layer-grid.compact,
+  .device-management-summary {
     grid-template-columns: 1fr;
   }
 

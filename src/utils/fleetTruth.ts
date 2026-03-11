@@ -45,7 +45,7 @@ export function orgRoleLabel(orgName: string | null | undefined, role: string | 
   const trimmedRole = role?.trim();
 
   if (trimmedOrg && trimmedRole) {
-    return `${trimmedOrg} • ${capitalize(trimmedRole)}`;
+    return `${trimmedOrg} / ${capitalize(trimmedRole)}`;
   }
 
   if (trimmedOrg) {

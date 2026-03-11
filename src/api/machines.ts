@@ -9,6 +9,8 @@ export interface MachineSummaryReport {
   deviceId?: string;
   accountId?: string | null;
   orgId?: string | null;
+  deviceStatus?: string | null;
+  deviceRevokedAt?: string | null;
   machineId: string;
   machineName: string;
   userName: string;

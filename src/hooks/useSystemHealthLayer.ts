@@ -62,11 +62,15 @@ export function useSystemHealthLayer(): {
         const errorMessage = deriveSystemError(summary, lastSeenStale);
 
         return {
+          accountId: summary.accountId ?? null,
+          deviceId: summary.deviceId ?? null,
           machineId: summary.machineId,
           machineName: machineNameLabel(summary.machineName),
           userName: identityPrimaryLabel(summary.displayName, summary.userName),
           userDetail: identitySecondaryLabel(summary.displayName, summary.primaryEmail, summary.userName),
           orgRole: orgRoleLabel(summary.orgName, summary.role),
+          deviceStatus: summary.deviceStatus ?? null,
+          deviceRevokedAt: summary.deviceRevokedAt ?? null,
           lastSeenUtc: summary.reportedAtUtc,
           lastSeenLabel: formatRelativeFromNow(summary.reportedAtUtc),
           lastSeenStale,
