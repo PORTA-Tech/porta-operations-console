@@ -44,11 +44,24 @@ export interface MachineSummaryReport {
   missingMajorChannels: string[];
 }
 
+interface CollectionResponse<T> {
+  value?: T[] | null;
+  Value?: T[] | null;
+  count?: number;
+  Count?: number;
+}
+
 export async function fetchMachineSummaries(): Promise<MachineSummaryReport[]> {
-  return apiRequestRaw<MachineSummaryReport[]>({
+  const response = await apiRequestRaw<MachineSummaryReport[] | CollectionResponse<MachineSummaryReport>>({
     path: '/v1/machines/summary',
     method: 'get'
   });
+
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  return response.value ?? response.Value ?? [];
 }
 
 export async function fetchMachineSummary(machineId: string): Promise<MachineSummaryReport> {

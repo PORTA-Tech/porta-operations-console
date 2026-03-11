@@ -39,16 +39,35 @@ export interface MachineActionEvent {
   howToUndo?: string | null;
 }
 
+interface CollectionResponse<T> {
+  value?: T[] | null;
+  Value?: T[] | null;
+  count?: number;
+  Count?: number;
+}
+
 export async function fetchRecentMachineActions(limit = 100): Promise<MachineActionEvent[]> {
-  return apiRequestRaw<MachineActionEvent[]>({
+  const response = await apiRequestRaw<MachineActionEvent[] | CollectionResponse<MachineActionEvent>>({
     path: `/v1/actions/recent?limit=${Math.max(1, Math.min(limit, 1000))}`,
     method: 'get'
   });
+
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  return response.value ?? response.Value ?? [];
 }
 
 export async function fetchMachineActions(machineId: string, limit = 100): Promise<MachineActionEvent[]> {
-  return apiRequestRaw<MachineActionEvent[]>({
+  const response = await apiRequestRaw<MachineActionEvent[] | CollectionResponse<MachineActionEvent>>({
     path: `/v1/machines/${encodeURIComponent(machineId)}/actions?limit=${Math.max(1, Math.min(limit, 1000))}`,
     method: 'get'
   });
+
+  if (Array.isArray(response)) {
+    return response;
+  }
+
+  return response.value ?? response.Value ?? [];
 }
