@@ -1,246 +1,114 @@
-import { useEffect, useMemo, useState } from 'react';
-import { toApiError, type ApiError } from '../api/client';
-import { fetchAuditDecisions } from '../api/operations';
+import { useMemo } from 'react';
 import type { ActionsRecord } from '../types/actionsLayer';
-import type { AuditDecisionRecord } from '../types/consoleOperations';
-import { describeActionError, resolveCatalogAction, resolveTerminalResult } from '../utils/actionCatalog';
+import { type MachineActionEvent } from '../api/actions';
+import { describeActionError, resolveCatalogAction } from '../utils/actionCatalog';
+import { machineNameLabel } from '../utils/fleetTruth';
+import { useMachineActionFeed } from './useMachineActionFeed';
+import { useMachineSummaryFeed } from './useMachineSummaryFeed';
 
-interface ActionPayloadBundle {
-  root: Record<string, unknown>;
-  statePayload: Record<string, unknown>;
-  signalPayload: Record<string, unknown>;
-  actionPayload: Record<string, unknown>;
-  resultPayload: Record<string, unknown>;
+function toRecordId(event: MachineActionEvent): string {
+  return [
+    event.machineId,
+    event.interventionId,
+    event.timestampUtc,
+    event.action,
+    event.executionState,
+    event.verifiedState
+  ].join(':');
 }
 
-function toRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === 'object' && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : {};
+function toActionType(value: MachineActionEvent['actionCategory']): ActionsRecord['actionType'] | null {
+  if (value === 'suggestion') return 'Suggestion';
+  if (value === 'automatic_change') return 'Automatic change';
+  return null;
 }
 
-function parseString(value: unknown): string | null {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
-
-function pickString(record: Record<string, unknown>, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = parseString(record[key]);
-    if (value !== null) return value;
+function toResult(event: MachineActionEvent): ActionsRecord['result'] | null {
+  if (event.executionState === 'failed') return 'Failed';
+  if (event.actionCategory === 'suggestion') {
+    return event.executionState === 'applied' || event.executionState === 'verified' ? 'Done' : null;
+  }
+  if (event.actionCategory === 'automatic_change') {
+    if (event.executionState === 'verified' || event.verifiedState === 'verified') return 'Done';
+    if (event.executionState === 'applied' && event.verifiedState === 'not_applicable') return 'Done';
   }
   return null;
 }
 
-function pickStringFromRecords(records: Array<Record<string, unknown>>, keys: string[]): string | null {
-  for (const record of records) {
-    const value = pickString(record, keys);
-    if (value !== null) return value;
-  }
-  return null;
-}
-
-function readSegmentPayload(raw: Record<string, unknown>, keys: string[]): Record<string, unknown> {
-  for (const key of keys) {
-    const candidate = toRecord(raw[key]);
-    if (Object.keys(candidate).length > 0) return candidate;
-  }
-  return {};
-}
-
-function parseTimestamp(value: string | null | undefined): number | null {
-  if (!value) return null;
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function newestTimestamp(values: Array<string | null | undefined>): string | null {
-  let newest: string | null = null;
-  let newestMs = Number.NEGATIVE_INFINITY;
-
-  for (const value of values) {
-    const parsed = parseTimestamp(value ?? null);
-    if (parsed === null || parsed <= newestMs) continue;
-    newestMs = parsed;
-    newest = value ?? null;
-  }
-
-  return newest;
-}
-
-function machineIdFromTrace(row: AuditDecisionRecord): string | null {
-  const machineId = (row.machine_id ?? '').trim();
-  if (machineId.length > 0) return machineId;
-  const agentId = row.agent_id.trim();
-  return agentId.length > 0 ? agentId : null;
-}
-
-function buildPayloadBundle(row: AuditDecisionRecord): ActionPayloadBundle {
-  const root = toRecord(row.raw_trace);
-  return {
-    root,
-    statePayload: readSegmentPayload(root, ['state', 'state_snapshot']),
-    signalPayload: readSegmentPayload(root, ['signal', 'signals', 'signal_snapshot', 'inputs']),
-    actionPayload: readSegmentPayload(root, ['action_execution', 'action', 'intervention', 'command']),
-    resultPayload: readSegmentPayload(root, ['result', 'outcome', 'execution', 'execution_result', 'ack'])
-  };
-}
-
-function machineNameFromBundle(bundle: ActionPayloadBundle, machineId: string | null): string {
-  const records = [bundle.root, bundle.signalPayload, bundle.statePayload, bundle.actionPayload, bundle.resultPayload];
-  const machineName = pickStringFromRecords(records, ['machine_name', 'machineName', 'hostname', 'device_name']);
-  return machineName ?? machineId ?? 'Unknown machine';
-}
-
-function userNameFromBundle(bundle: ActionPayloadBundle): string {
-  const records = [bundle.resultPayload, bundle.actionPayload, bundle.signalPayload, bundle.statePayload, bundle.root];
-  const userName = pickStringFromRecords(records, [
-    'user_name',
-    'userName',
-    'username',
-    'session_user',
-    'session_user_name',
-    'active_user_name',
-    'display_name'
-  ]);
-  return userName ?? 'Unknown user';
-}
-
-function actionIdentityFromBundle(bundle: ActionPayloadBundle): { actionCode: string | null; commandType: string | null } {
-  const records = [bundle.resultPayload, bundle.actionPayload, bundle.root];
-  return {
-    actionCode: pickStringFromRecords(records, ['action', 'action_name', 'action_code', 'intervention', 'kind']),
-    commandType: pickStringFromRecords(records, ['command_type', 'commandType'])
-  };
-}
-
-function terminalStateFromBundle(bundle: ActionPayloadBundle): { result: 'Done' | 'Failed'; timeUtc: string | null; errorMessage: string | null } | null {
-  const records = [bundle.resultPayload, bundle.actionPayload, bundle.root];
-  const explicitState = pickStringFromRecords(records, ['execution_state', 'executionState', 'result', 'outcome', 'status']);
-  const terminal = resolveTerminalResult(explicitState);
-
-  if (!terminal) {
-    return null;
-  }
-
-  const appliedAtUtc = pickStringFromRecords(records, ['applied_at_utc', 'appliedAtUtc']);
-  const ackedAtUtc = pickStringFromRecords(records, ['acked_at_utc', 'ackedAtUtc']);
-  const timestampUtc = newestTimestamp([
-    pickStringFromRecords(records, ['timestamp', 'timestamp_utc', 'occurred_at_utc']),
-    bundle.root ? pickString(bundle.root, ['timestamp', 'timestamp_utc', 'occurred_at_utc']) : null
-  ]);
-  const timeUtc = terminal.timePreference === 'applied'
-    ? newestTimestamp([appliedAtUtc, ackedAtUtc, timestampUtc])
-    : newestTimestamp([ackedAtUtc, appliedAtUtc, timestampUtc]);
-  const rawError = pickStringFromRecords(records, [
-    'execution_error_code',
-    'executionErrorCode',
-    'error_code',
-    'errorCode',
-    'error',
-    'error_message',
-    'failure_reason',
-    'last_error'
-  ]);
-
-  return {
-    result: terminal.result,
-    timeUtc,
-    errorMessage: terminal.result === 'Failed' ? describeActionError(rawError) : null
-  };
-}
-
-function recordFromTrace(row: AuditDecisionRecord): ActionsRecord | null {
-  const bundle = buildPayloadBundle(row);
-  const identity = actionIdentityFromBundle(bundle);
-  const action = resolveCatalogAction(identity);
-  if (!action) return null;
-
-  const terminal = terminalStateFromBundle(bundle);
-  if (!terminal) return null;
-
-  const machineId = machineIdFromTrace(row);
-  return {
-    id: row.trace_id,
-    machineName: machineNameFromBundle(bundle, machineId),
-    userName: userNameFromBundle(bundle),
-    actionName: action.actionName,
-    actionType: action.actionType,
-    result: terminal.result,
-    timeUtc: terminal.timeUtc ?? row.timestamp,
-    errorMessage: terminal.errorMessage
-  } satisfies ActionsRecord;
+function actionName(event: MachineActionEvent): string | null {
+  const mapped = resolveCatalogAction({
+    actionCode: event.action,
+    commandType: null
+  });
+  return mapped?.actionName ?? null;
 }
 
 export function useActionsLayer(): {
   records: ActionsRecord[];
   loading: boolean;
-  error: ApiError | undefined;
+  error: import('../api/client').ApiError | undefined;
   lastRefreshUtc: string | undefined;
   notices: string[];
 } {
-  const [auditRows, setAuditRows] = useState<AuditDecisionRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<ApiError | undefined>();
-  const [lastRefreshUtc, setLastRefreshUtc] = useState<string | undefined>(undefined);
-  const [notices, setNotices] = useState<string[]>([]);
+  const actionsFeed = useMachineActionFeed(250);
+  const summaryFeed = useMachineSummaryFeed();
 
-  useEffect(() => {
-    let mounted = true;
+  const records = useMemo<ActionsRecord[]>(() => {
+    const machineNameById = new Map(
+      summaryFeed.rows.map((row) => [row.machineId, machineNameLabel(row.machineName)])
+    );
 
-    const refresh = async () => {
-      try {
-        const traces = await fetchAuditDecisions({ throwOnError: true });
-        if (!mounted) return;
-        setAuditRows(traces);
-        setError(undefined);
-        setNotices([]);
-      } catch (nextError) {
-        if (!mounted) return;
-        setAuditRows([]);
-        setError(toApiError(nextError));
-        setNotices([`Action trace feed unavailable: ${toApiError(nextError).message}`]);
-      } finally {
-        if (!mounted) return;
-        setLastRefreshUtc(new Date().toISOString());
-        setLoading(false);
-      }
-    };
+    const mappedRows: Array<ActionsRecord | null> = actionsFeed.rows.map((event) => {
+        const actionType = toActionType(event.actionCategory);
+        const result = toResult(event);
+        const resolvedActionName = actionName(event);
 
-    void refresh();
-    const timer = window.setInterval(() => {
-      void refresh();
-    }, 5_000);
+        if (!actionType || !result || !resolvedActionName) return null;
 
-    return () => {
-      mounted = false;
-      window.clearInterval(timer);
-    };
-  }, []);
+        return {
+          id: toRecordId(event),
+          machineName: machineNameById.get(event.machineId) ?? event.machineId,
+          userName: event.userName || 'Unknown user',
+          actionName: resolvedActionName,
+          actionType,
+          result,
+          timeUtc: result === 'Done'
+            ? (event.appliedAtUtc ?? event.timestampUtc)
+            : event.timestampUtc,
+          errorMessage: result === 'Failed' ? describeActionError(event.errorCode ?? null) : null
+        } satisfies ActionsRecord;
+      });
 
-  const records = useMemo(() => (
-    auditRows
-      .map(recordFromTrace)
+    return mappedRows
       .filter((row): row is ActionsRecord => row !== null)
-      .sort((left, right) => (parseTimestamp(right.timeUtc) ?? 0) - (parseTimestamp(left.timeUtc) ?? 0))
-  ), [auditRows]);
+      .sort((left, right) => Date.parse(right.timeUtc ?? '') - Date.parse(left.timeUtc ?? ''));
+  }, [actionsFeed.rows, summaryFeed.rows]);
 
-  const mergedNotices = useMemo(() => {
-    if (notices.length > 0) return notices;
-    if (loading) return [];
-    if (auditRows.length > 0 && records.length === 0) {
-      return ['No verified terminal action outcomes were found. Layer 4 omits decision-only records until execution completion or failure is authoritative.'];
+  const notices = useMemo(() => {
+    if (actionsFeed.loading || actionsFeed.error) return [];
+    if (actionsFeed.rows.length > 0 && records.length === 0) {
+      return ['No terminal meaningful actions were found. Layer 4 only shows suggestion and automatic-change actions with authoritative completion or failure truth.'];
     }
     return [];
-  }, [auditRows.length, loading, notices, records.length]);
+  }, [actionsFeed.error, actionsFeed.loading, actionsFeed.rows.length, records.length]);
 
   return useMemo(
     () => ({
       records,
-      loading,
-      error,
-      lastRefreshUtc,
-      notices: mergedNotices
+      loading: actionsFeed.loading || summaryFeed.loading,
+      error: actionsFeed.error ?? summaryFeed.error,
+      lastRefreshUtc: actionsFeed.lastRefreshUtc ?? summaryFeed.lastRefreshUtc,
+      notices
     }),
-    [error, lastRefreshUtc, loading, mergedNotices, records]
+    [
+      actionsFeed.error,
+      actionsFeed.lastRefreshUtc,
+      actionsFeed.loading,
+      notices,
+      records,
+      summaryFeed.error,
+      summaryFeed.lastRefreshUtc,
+      summaryFeed.loading
+    ]
   );
 }

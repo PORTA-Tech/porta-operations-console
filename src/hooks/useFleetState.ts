@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { toApiError, type ApiError } from '../api/client';
-import { getNodeSnapshot } from '../api/nodes';
+import { fetchMachineSummaries } from '../api/machines';
 import { useFleetSlice } from '../store/fleetSlice';
 
 export function useFleetState(): { loading: boolean; error: ApiError | undefined } {
@@ -13,7 +13,7 @@ export function useFleetState(): { loading: boolean; error: ApiError | undefined
 
     const refresh = async (): Promise<void> => {
       try {
-        await getNodeSnapshot();
+        await fetchMachineSummaries();
         if (!mounted) return;
         setRefreshState({
           liveConnected: true,
