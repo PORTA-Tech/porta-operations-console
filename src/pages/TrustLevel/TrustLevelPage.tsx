@@ -1,7 +1,6 @@
 import { Panel } from '../../components/Layout/Panel';
 import { useTrustLevelLayer } from '../../hooks/useTrustLevelLayer';
 import type { TrustConfidence, TrustDataQuality, TrustLearningStage } from '../../types/trustLevel';
-import { formatUtc } from '../../utils/date';
 
 function learningStageBadgeClass(value: TrustLearningStage): string {
   return value === 'Ready' ? 'status-badge ok' : 'status-badge warn';
@@ -54,11 +53,6 @@ export function TrustLevelPage() {
                       <div className="trust-level-context">
                         <strong>{record.machineName}</strong>
                         <span className="trust-level-user">{record.userName}</span>
-                        {record.note ? (
-                          <span className="trust-level-note" title={record.stateTimestampUtc ? formatUtc(record.stateTimestampUtc) : record.note}>
-                            {record.note}
-                          </span>
-                        ) : null}
                       </div>
                     </td>
                     <td>

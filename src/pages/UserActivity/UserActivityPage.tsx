@@ -6,7 +6,6 @@ import type {
   UserActivityFocusLevel,
   UserActivityOverloadRisk
 } from '../../types/userActivity';
-import { formatUtc } from '../../utils/date';
 
 function focusBadgeClass(value: UserActivityFocusLevel): string {
   if (value === 'High') return 'status-badge critical';
@@ -71,11 +70,6 @@ export function UserActivityPage() {
                       <div className="user-activity-context">
                         <strong>{record.machineName}</strong>
                         <span className="user-activity-user">{record.userName}</span>
-                        {record.note ? (
-                          <span className="user-activity-note" title={record.stateTimestampUtc ? formatUtc(record.stateTimestampUtc) : record.note}>
-                            {record.note}
-                          </span>
-                        ) : null}
                       </div>
                     </td>
                     <td>
