@@ -1,7 +1,14 @@
 import { useMemo } from 'react';
 import type { SystemHealthRecord, SystemHealthStatus, SystemHealthTone } from '../types/systemHealth';
 import { formatRelativeFromNow } from '../utils/date';
-import { deriveSystemError, isFresh, machineNameLabel, userNameLabel } from '../utils/fleetTruth';
+import {
+  deriveSystemError,
+  identityPrimaryLabel,
+  identitySecondaryLabel,
+  isFresh,
+  machineNameLabel,
+  orgRoleLabel
+} from '../utils/fleetTruth';
 import { useMachineSummaryFeed } from './useMachineSummaryFeed';
 
 const HEARTBEAT_FRESH_MS = 45_000;
@@ -57,7 +64,9 @@ export function useSystemHealthLayer(): {
         return {
           machineId: summary.machineId,
           machineName: machineNameLabel(summary.machineName),
-          userName: userNameLabel(summary.userName),
+          userName: identityPrimaryLabel(summary.displayName, summary.userName),
+          userDetail: identitySecondaryLabel(summary.displayName, summary.primaryEmail, summary.userName),
+          orgRole: orgRoleLabel(summary.orgName, summary.role),
           lastSeenUtc: summary.reportedAtUtc,
           lastSeenLabel: formatRelativeFromNow(summary.reportedAtUtc),
           lastSeenStale,

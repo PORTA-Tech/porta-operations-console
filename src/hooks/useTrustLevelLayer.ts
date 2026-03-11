@@ -7,7 +7,14 @@ import type {
   TrustLevelTone
 } from '../types/trustLevel';
 import { type MachineSummaryReport } from '../api/machines';
-import { formatMissingChannels, isFresh, machineNameLabel, userNameLabel } from '../utils/fleetTruth';
+import {
+  formatMissingChannels,
+  identityPrimaryLabel,
+  identitySecondaryLabel,
+  isFresh,
+  machineNameLabel,
+  orgRoleLabel
+} from '../utils/fleetTruth';
 import { useMachineSummaryFeed } from './useMachineSummaryFeed';
 
 const STATE_FRESH_MS = 2 * 60_000;
@@ -72,7 +79,9 @@ export function useTrustLevelLayer(): {
         return {
           machineId: summary.machineId,
           machineName: machineNameLabel(summary.machineName),
-          userName: userNameLabel(summary.userName),
+          userName: identityPrimaryLabel(summary.displayName, summary.userName),
+          userDetail: identitySecondaryLabel(summary.displayName, summary.primaryEmail, summary.userName),
+          orgRole: orgRoleLabel(summary.orgName, summary.role),
           learningStage: mapLearningStage(summary),
           confidence: mapConfidence(summary),
           dataQuality: mapDataQuality(summary),

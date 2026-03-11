@@ -106,6 +106,8 @@ export function TrustLevelPage() {
                       <div className="trust-level-context">
                         <strong>{record.machineName}</strong>
                         <span className="trust-level-user">{record.userName}</span>
+                        {record.userDetail ? <span className="trust-level-user">{record.userDetail}</span> : null}
+                        {record.orgRole ? <span className="trust-level-note">{record.orgRole}</span> : null}
                         <span className="trust-level-note">
                           {record.stateTimestampUtc ? `Updated ${formatRelativeFromNow(record.stateTimestampUtc)}` : 'Update time unavailable'}
                         </span>

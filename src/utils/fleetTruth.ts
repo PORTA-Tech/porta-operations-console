@@ -19,6 +19,46 @@ export function userNameLabel(value: string | null | undefined): string {
   return value && value.trim().length > 0 ? value.trim() : 'Unknown user';
 }
 
+export function identityPrimaryLabel(displayName: string | null | undefined, fallbackUserName: string | null | undefined): string {
+  return displayName && displayName.trim().length > 0 ? displayName.trim() : userNameLabel(fallbackUserName);
+}
+
+export function identitySecondaryLabel(
+  displayName: string | null | undefined,
+  primaryEmail: string | null | undefined,
+  fallbackUserName: string | null | undefined
+): string | null {
+  if (primaryEmail && primaryEmail.trim().length > 0) {
+    return primaryEmail.trim();
+  }
+
+  const fallback = userNameLabel(fallbackUserName);
+  if (displayName && displayName.trim().length > 0 && displayName.trim() !== fallback) {
+    return fallback;
+  }
+
+  return null;
+}
+
+export function orgRoleLabel(orgName: string | null | undefined, role: string | null | undefined): string | null {
+  const trimmedOrg = orgName?.trim();
+  const trimmedRole = role?.trim();
+
+  if (trimmedOrg && trimmedRole) {
+    return `${trimmedOrg} • ${capitalize(trimmedRole)}`;
+  }
+
+  if (trimmedOrg) {
+    return trimmedOrg;
+  }
+
+  if (trimmedRole) {
+    return capitalize(trimmedRole);
+  }
+
+  return null;
+}
+
 export function formatMissingChannels(channels: string[]): string {
   return channels
     .map((channel) => channel.trim())
@@ -44,6 +84,10 @@ function prettyCode(value: string): string {
     .replace(/[_-]+/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function capitalize(value: string): string {
+  return value.length > 0 ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : value;
 }
 
 export function describeCaptureFailureReason(value: string | null | undefined): string | null {

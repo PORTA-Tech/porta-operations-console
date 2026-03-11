@@ -7,6 +7,8 @@ export interface TrustLevelRecord {
   machineId: string;
   machineName: string;
   userName: string;
+  userDetail: string | null;
+  orgRole: string | null;
   learningStage: TrustLearningStage;
   confidence: TrustConfidence;
   dataQuality: TrustDataQuality;

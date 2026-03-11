@@ -8,6 +8,8 @@ export interface UserActivityRecord {
   machineId: string;
   machineName: string;
   userName: string;
+  userDetail: string | null;
+  orgRole: string | null;
   focusLevel: UserActivityFocusLevel;
   deepWork: UserActivityDeepWork;
   overloadRisk: UserActivityOverloadRisk;

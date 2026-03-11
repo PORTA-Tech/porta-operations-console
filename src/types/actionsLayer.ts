@@ -5,6 +5,8 @@ export interface ActionsRecord {
   id: string;
   machineName: string;
   userName: string;
+  userDetail: string | null;
+  orgRole: string | null;
   actionName: string;
   actionType: ActionsActionType;
   result: ActionsResult;

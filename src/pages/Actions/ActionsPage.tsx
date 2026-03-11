@@ -89,6 +89,8 @@ export function ActionsPage() {
                     <div className="actions-feed-meta">
                       <span>{record.machineName}</span>
                       <span>{record.userName}</span>
+                      {record.userDetail ? <span>{record.userDetail}</span> : null}
+                      {record.orgRole ? <span>{record.orgRole}</span> : null}
                     </div>
                     {record.result === 'Failed' && record.errorMessage ? (
                       <p className="actions-feed-error">{record.errorMessage}</p>

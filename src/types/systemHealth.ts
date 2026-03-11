@@ -5,6 +5,8 @@ export interface SystemHealthRecord {
   machineId: string;
   machineName: string;
   userName: string;
+  userDetail: string | null;
+  orgRole: string | null;
   lastSeenUtc: string | null;
   lastSeenLabel: string;
   lastSeenStale: boolean;

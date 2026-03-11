@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import type { ActionsRecord } from '../types/actionsLayer';
 import { type MachineActionEvent } from '../api/actions';
 import { describeActionError, resolveCatalogAction } from '../utils/actionCatalog';
-import { machineNameLabel } from '../utils/fleetTruth';
+import { identityPrimaryLabel, identitySecondaryLabel, machineNameLabel, orgRoleLabel } from '../utils/fleetTruth';
 import { useMachineActionFeed } from './useMachineActionFeed';
 import { useMachineSummaryFeed } from './useMachineSummaryFeed';
 
@@ -68,7 +68,9 @@ export function useActionsLayer(): {
         return {
           id: toRecordId(event),
           machineName: machineNameById.get(event.machineId) ?? event.machineId,
-          userName: event.userName || 'Unknown user',
+          userName: identityPrimaryLabel(event.displayName, event.userName),
+          userDetail: identitySecondaryLabel(event.displayName, event.primaryEmail, event.userName),
+          orgRole: orgRoleLabel(event.orgName, event.role),
           actionName: resolvedActionName,
           actionType,
           result,

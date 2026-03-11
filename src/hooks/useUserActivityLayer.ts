@@ -8,7 +8,15 @@ import type {
   UserActivityTone
 } from '../types/userActivity';
 import { type MachineSummaryReport } from '../api/machines';
-import { formatMissingChannels, formatMissingChannels as formatChannels, isFresh, machineNameLabel, userNameLabel } from '../utils/fleetTruth';
+import {
+  formatMissingChannels,
+  formatMissingChannels as formatChannels,
+  identityPrimaryLabel,
+  identitySecondaryLabel,
+  isFresh,
+  machineNameLabel,
+  orgRoleLabel
+} from '../utils/fleetTruth';
 import { useMachineSummaryFeed } from './useMachineSummaryFeed';
 
 const STATE_FRESH_MS = 2 * 60_000;
@@ -105,7 +113,9 @@ export function useUserActivityLayer(): {
         return {
           machineId: summary.machineId,
           machineName: machineNameLabel(summary.machineName),
-          userName: userNameLabel(summary.userName),
+          userName: identityPrimaryLabel(summary.displayName, summary.userName),
+          userDetail: identitySecondaryLabel(summary.displayName, summary.primaryEmail, summary.userName),
+          orgRole: orgRoleLabel(summary.orgName, summary.role),
           focusLevel: tone === 'unavailable' ? 'Unavailable' : mapFocusLevel(summary),
           deepWork: tone === 'unavailable' ? 'Unavailable' : mapDeepWork(summary),
           overloadRisk: tone === 'unavailable' ? 'Unavailable' : mapOverloadRisk(summary),

@@ -120,6 +120,8 @@ export function UserActivityPage() {
                       <div className="user-activity-context">
                         <strong>{record.machineName}</strong>
                         <span className="user-activity-user">{record.userName}</span>
+                        {record.userDetail ? <span className="user-activity-user">{record.userDetail}</span> : null}
+                        {record.orgRole ? <span className="user-activity-note">{record.orgRole}</span> : null}
                         <span className="user-activity-note">
                           {record.stateTimestampUtc ? `Updated ${formatRelativeFromNow(record.stateTimestampUtc)}` : 'Update time unavailable'}
                         </span>

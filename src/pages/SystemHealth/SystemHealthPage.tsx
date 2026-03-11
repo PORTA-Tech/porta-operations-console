@@ -101,7 +101,13 @@ export function SystemHealthPage() {
                 {records.map((record) => (
                   <tr key={record.machineId} className="system-health-row" data-tone={record.tone}>
                     <td title={record.machineId}>{record.machineName}</td>
-                    <td>{record.userName}</td>
+                    <td>
+                      <div className="identity-stack">
+                        <strong>{record.userName}</strong>
+                        {record.userDetail ? <span className="identity-subline">{record.userDetail}</span> : null}
+                        {record.orgRole ? <span className="identity-tertiary">{record.orgRole}</span> : null}
+                      </div>
+                    </td>
                     <td>{timeCell(record.lastSeenUtc, record.lastSeenLabel, record.lastSeenStale)}</td>
                     <td>
                       <span className={statusClass(record.agentRunning)}>{record.agentRunning}</span>
