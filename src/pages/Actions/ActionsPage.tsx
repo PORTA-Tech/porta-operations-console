@@ -31,7 +31,7 @@ export function ActionsPage() {
       ))}
       <SummaryBand
         title="Regulation activity"
-        subtitle="Recent operator-visible suggestions and automatic changes with authoritative outcome truth."
+        subtitle="Historical operator-visible suggestions and automatic changes. This feed is not the same as the current Break Needed state."
         items={[
           {
             label: 'Suggestions shown',
@@ -61,7 +61,7 @@ export function ActionsPage() {
       />
       <Panel
         title="Action feed"
-        subtitle="Recent regulation events shown as one authoritative feed, without repeating the same rows below."
+        subtitle="Historical regulation events collapsed to one user-visible row per suggestion or automatic change."
       >
         {records.length === 0 ? (
           <div className="empty-state">

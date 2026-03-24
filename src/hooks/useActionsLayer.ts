@@ -43,6 +43,106 @@ function actionName(event: MachineActionEvent): string | null {
   return mapped?.actionName ?? null;
 }
 
+interface ActionCandidate {
+  event: MachineActionEvent;
+  actionType: ActionsRecord['actionType'];
+  result: ActionsRecord['result'];
+  actionName: string;
+  machineName: string;
+  userName: string;
+  userDetail: string | null;
+  orgRole: string | null;
+}
+
+function suggestionGroupKey(event: MachineActionEvent): string | null {
+  if (event.actionCategory !== 'suggestion') return null;
+  if (!event.interventionId) return null;
+  return [event.machineId, event.interventionId, event.action].join(':');
+}
+
+function compareIsoUtc(left: string | null | undefined, right: string | null | undefined): number {
+  return Date.parse(left ?? '') - Date.parse(right ?? '');
+}
+
+function resolveSuggestionRepresentative(left: ActionCandidate, right: ActionCandidate): ActionCandidate {
+  if (left.result !== right.result) {
+    return left.result === 'Done' ? left : right;
+  }
+
+  if (left.result === 'Done') {
+    return compareIsoUtc(left.event.timestampUtc, right.event.timestampUtc) <= 0 ? left : right;
+  }
+
+  return compareIsoUtc(left.event.timestampUtc, right.event.timestampUtc) >= 0 ? left : right;
+}
+
+export function reduceActionEventsToRecords(
+  events: MachineActionEvent[],
+  machineNameById: Map<string, string>
+): ActionsRecord[] {
+  const candidates: ActionCandidate[] = events.flatMap((event) => {
+    const actionType = toActionType(event.actionCategory);
+    const result = toResult(event);
+    const resolvedActionName = actionName(event);
+
+    if (!actionType || !result || !resolvedActionName) return [];
+
+    return [{
+      event,
+      actionType,
+      result,
+      actionName: resolvedActionName,
+      machineName: machineNameById.get(event.machineId) ?? event.machineId,
+      userName: identityPrimaryLabel(event.displayName, event.userName),
+      userDetail: identitySecondaryLabel(event.displayName, event.primaryEmail, event.userName),
+      orgRole: orgRoleLabel(event.orgName, event.role)
+    }];
+  });
+
+  const collapsed: ActionCandidate[] = [];
+  const suggestionIndexes = new Map<string, number>();
+
+  for (const candidate of candidates) {
+    const key = suggestionGroupKey(candidate.event);
+    if (key === null) {
+      collapsed.push(candidate);
+      continue;
+    }
+
+    const existingIndex = suggestionIndexes.get(key);
+    if (existingIndex === undefined) {
+      suggestionIndexes.set(key, collapsed.length);
+      collapsed.push(candidate);
+      continue;
+    }
+
+    const existing = collapsed[existingIndex];
+    if (!existing) {
+      collapsed[existingIndex] = candidate;
+      continue;
+    }
+
+    collapsed[existingIndex] = resolveSuggestionRepresentative(existing, candidate);
+  }
+
+  return collapsed
+    .map((candidate) => ({
+      id: suggestionGroupKey(candidate.event) ?? toRecordId(candidate.event),
+      machineName: candidate.machineName,
+      userName: candidate.userName,
+      userDetail: candidate.userDetail,
+      orgRole: candidate.orgRole,
+      actionName: candidate.actionName,
+      actionType: candidate.actionType,
+      result: candidate.result,
+      timeUtc: candidate.result === 'Done'
+        ? (candidate.event.appliedAtUtc ?? candidate.event.timestampUtc)
+        : candidate.event.timestampUtc,
+      errorMessage: candidate.result === 'Failed' ? describeActionError(candidate.event.errorCode ?? null) : null
+    } satisfies ActionsRecord))
+    .sort((left, right) => Date.parse(right.timeUtc ?? '') - Date.parse(left.timeUtc ?? ''));
+}
+
 export function useActionsLayer(): {
   records: ActionsRecord[];
   loading: boolean;
@@ -58,32 +158,7 @@ export function useActionsLayer(): {
       summaryFeed.rows.map((row) => [row.machineId, machineNameLabel(row.machineName)])
     );
 
-    const mappedRows: Array<ActionsRecord | null> = actionsFeed.rows.map((event) => {
-        const actionType = toActionType(event.actionCategory);
-        const result = toResult(event);
-        const resolvedActionName = actionName(event);
-
-        if (!actionType || !result || !resolvedActionName) return null;
-
-        return {
-          id: toRecordId(event),
-          machineName: machineNameById.get(event.machineId) ?? event.machineId,
-          userName: identityPrimaryLabel(event.displayName, event.userName),
-          userDetail: identitySecondaryLabel(event.displayName, event.primaryEmail, event.userName),
-          orgRole: orgRoleLabel(event.orgName, event.role),
-          actionName: resolvedActionName,
-          actionType,
-          result,
-          timeUtc: result === 'Done'
-            ? (event.appliedAtUtc ?? event.timestampUtc)
-            : event.timestampUtc,
-          errorMessage: result === 'Failed' ? describeActionError(event.errorCode ?? null) : null
-        } satisfies ActionsRecord;
-      });
-
-    return mappedRows
-      .filter((row): row is ActionsRecord => row !== null)
-      .sort((left, right) => Date.parse(right.timeUtc ?? '') - Date.parse(left.timeUtc ?? ''));
+    return reduceActionEventsToRecords(actionsFeed.rows, machineNameById);
   }, [actionsFeed.rows, summaryFeed.rows]);
 
   const notices = useMemo(() => {
