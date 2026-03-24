@@ -114,6 +114,8 @@ export function deriveSystemError(summary: MachineSummaryReport, lastSeenStale: 
   if (summary.dbMigrationFailed) return 'Database migration failed';
   if (!summary.localApiAuthReady) return 'Local API auth not ready';
   if (!summary.backendConnected) return 'Backend disconnected';
+  if (lastSeenStale) return 'Machine summary stale';
+  if (!summary.agentRunning) return 'Agent is not running';
 
   const ownershipWarning = describeOwnershipWarning(summary.ownershipWarning);
   if (ownershipWarning) return ownershipWarning;
@@ -127,8 +129,5 @@ export function deriveSystemError(summary: MachineSummaryReport, lastSeenStale: 
 
   const normalizedError = normalizeErrorMessage(summary.lastError);
   if (normalizedError) return normalizedError;
-
-  if (lastSeenStale) return 'Machine summary stale';
-  if (!summary.agentRunning) return 'Agent is not running';
   return null;
 }
