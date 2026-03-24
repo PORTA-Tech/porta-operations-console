@@ -27,6 +27,12 @@ export interface MachineSummaryReport {
   activityDetected: boolean;
   lastActivityUtc?: string | null;
   userAgentHeartbeatUtc?: string | null;
+  userAgentHeartbeatAgeSeconds?: number | null;
+  lastAcceptedInputAgeSeconds?: number | null;
+  userAgentStartupSource?: string | null;
+  userAgentStartupState?: string | null;
+  userAgentLastLaunchReason?: string | null;
+  userAgentHeartbeatWriteFailureCount?: number | null;
   captureContext: CaptureContext;
   keyboardSignalActive: boolean;
   mouseSignalActive: boolean;

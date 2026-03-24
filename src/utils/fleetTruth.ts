@@ -96,6 +96,12 @@ export function describeCaptureFailureReason(value: string | null | undefined): 
     ? 'Capture is running in a service session'
     : value.trim() === 'CAPTURE_CONTEXT_UNKNOWN'
       ? 'User-session capture is not available'
+      : value.trim() === 'USER_AGENT_NEVER_STARTED'
+        ? 'User agent never started in the interactive session'
+        : value.trim() === 'USER_AGENT_HEARTBEAT_STALE'
+          ? 'User-agent heartbeat stopped updating'
+          : value.trim() === 'USER_AGENT_SESSION_SWITCHED'
+            ? 'Heartbeat belongs to a different Windows session'
       : prettyCode(value);
 }
 
