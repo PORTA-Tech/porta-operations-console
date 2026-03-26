@@ -20,6 +20,10 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
   '/actions': {
     title: 'Actions',
     subtitle: 'What did PORTA decide, apply, or fail to change?'
+  },
+  '/growth': {
+    title: 'Growth',
+    subtitle: 'How are registrations, activations, retention, and churn evolving from real user facts?'
   }
 };
 

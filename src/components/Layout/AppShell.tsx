@@ -13,7 +13,8 @@ const navItems = [
   { to: '/system-health', label: 'System Health' },
   { to: '/user-activity', label: 'User Activity' },
   { to: '/trust-level', label: 'Trust Level' },
-  { to: '/actions', label: 'Actions' }
+  { to: '/actions', label: 'Actions' },
+  { to: '/growth', label: 'Growth' }
 ];
 
 interface FleetRibbonStat {

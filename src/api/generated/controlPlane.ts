@@ -42,6 +42,126 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/device/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register or refresh a device identity */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeviceRegistrationRequest"];
+                };
+            };
+            responses: {
+                /** @description Device registered */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceLinkResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/link-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link a registered device to an account and organization */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeviceAccountLinkRequest"];
+                };
+            };
+            responses: {
+                /** @description Device linked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceLinkResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/device/unlink-account": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unlink a device from the current account */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeviceAccountUnlinkRequest"];
+                };
+            };
+            responses: {
+                /** @description Device unlinked */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceLinkResult"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/config/submit": {
         parameters: {
             query?: never;
@@ -490,6 +610,159 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/rollout/evaluate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Evaluate rollout guardrails and current promotion verdict */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Rollout evaluation */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RolloutEvaluationView"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rollout/validation-gates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the latest published rollout validation report */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Current rollout validation report */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RolloutValidationReport"];
+                    };
+                };
+                /** @description No validation report has been published yet */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Publish rollout validation gate results */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RolloutValidationReportInput"];
+                };
+            };
+            responses: {
+                /** @description Stored rollout validation report */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RolloutValidationReport"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/rollout/evidence-pack": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the rollout evidence pack */
+        get: {
+            parameters: {
+                query?: {
+                    limit?: number;
+                };
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Rollout evidence pack */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RolloutEvidencePackView"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/slo/evaluate": {
         parameters: {
             query?: never;
@@ -918,6 +1191,182 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/growth/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read growth KPI summary for registered and activated users */
+        get: {
+            parameters: {
+                query?: {
+                    window_days?: number;
+                };
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Growth KPI summary */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GrowthSummary"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/growth/series": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read growth metric series by time bucket */
+        get: {
+            parameters: {
+                query: {
+                    metric: components["schemas"]["GrowthSeriesMetric"];
+                    interval?: components["schemas"]["GrowthSeriesInterval"];
+                    from?: string;
+                    to?: string;
+                };
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Growth series points */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GrowthSeries"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/growth/cohorts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read user retention and churn cohorts */
+        get: {
+            parameters: {
+                query?: {
+                    from?: string;
+                    to?: string;
+                    limit?: number;
+                };
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Growth cohort rows */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GrowthCohorts"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/growth/users/{accountId}/journey": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read lifecycle and activity journey for one user */
+        get: {
+            parameters: {
+                query?: never;
+                header: {
+                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
+                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
+                };
+                path: {
+                    accountId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Growth user journey */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["GrowthUserJourney"];
+                    };
+                };
+                /** @description User journey not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1046,6 +1495,148 @@ export interface components {
             /** Format: date-time */
             generated_at_utc: string;
         };
+        RolloutGuardrailEvidenceView: {
+            correlation_ids: string[];
+            cohorts: components["schemas"]["CohortId"][];
+            trace_refs: string[];
+        };
+        RolloutGuardrailView: {
+            guardrail_id: string;
+            /** @enum {string} */
+            status: "PASS" | "FAIL" | "INCONCLUSIVE" | "NOT_APPLICABLE";
+            value: number | null;
+            value_label: string;
+            threshold: number | null;
+            threshold_label: string;
+            window: string;
+            evidence: components["schemas"]["RolloutGuardrailEvidenceView"];
+            reason_code?: string;
+            reason_details?: {
+                [key: string]: unknown;
+            };
+        };
+        RolloutDataQualityView: {
+            baseline_cohort_id: components["schemas"]["CohortId"];
+            target_cohort_id: components["schemas"]["CohortId"];
+            sample_size_by_cohort: {
+                [key: string]: number;
+            };
+            coverage_pct_by_cohort: {
+                [key: string]: number;
+            };
+            min_sample_machines: number;
+            min_coverage_pct: number;
+            freshness_seconds: number | null;
+            freshness_ok: boolean;
+            ws_stream_ok: boolean;
+            metrics_available: boolean;
+            /** @enum {string} */
+            trust_status: "VALID" | "INVALID" | "UNKNOWN";
+            sample_valid: boolean;
+            coverage_valid: boolean;
+            valid: boolean;
+            messages: string[];
+        };
+        RolloutDecisionView: {
+            /** @enum {string} */
+            promotion_verdict: "ALLOW" | "BLOCK" | "INCONCLUSIVE";
+            trigger_reason_code: string;
+            trigger_reason_details: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            evaluated_at_utc: string;
+        };
+        RolloutBlastRadiusView: {
+            node_count: number | null;
+            impacted_cohorts: components["schemas"]["CohortId"][];
+            /** @enum {string} */
+            confidence: "low" | "medium" | "high" | "unknown";
+            /** Format: date-time */
+            generated_at_utc: string;
+            availability_reason_code?: string;
+        };
+        RolloutDryRunPredictionView: {
+            error_rate_delta_pct: number | null;
+            p99_latency_delta_ms: number | null;
+            degradation_rate_delta_pct: number | null;
+            /** Format: date-time */
+            generated_at_utc: string;
+            availability_reason_code?: string;
+        };
+        RolloutEventView: {
+            event_id: string;
+            type: string;
+            /** Format: date-time */
+            timestamp_utc: string;
+            actor: string;
+            config_version: number;
+            cohorts: components["schemas"]["CohortId"][];
+            correlation_ids: string[];
+            details: string;
+        };
+        RolloutEvaluationView: {
+            rollout_state: components["schemas"]["RolloutState"];
+            halt_status: boolean;
+            /** @enum {string} */
+            current_stage: "CANARY" | "LIMITED" | "MAJORITY" | "FULL";
+            /** @enum {string|null} */
+            next_stage: "CANARY" | "LIMITED" | "MAJORITY" | "FULL" | null;
+            config_version: number;
+            /** Format: date-time */
+            cooldown_until_utc: string | null;
+            /** Format: date-time */
+            evaluated_at_utc: string;
+            data_quality: components["schemas"]["RolloutDataQualityView"];
+            guardrail_eval: components["schemas"]["RolloutGuardrailView"][];
+            decision: components["schemas"]["RolloutDecisionView"];
+            blast_radius: components["schemas"]["RolloutBlastRadiusView"];
+            dry_run_prediction: components["schemas"]["RolloutDryRunPredictionView"];
+            rollout_stage_progression_preview: components["schemas"]["RolloutState"][];
+            events: components["schemas"]["RolloutEventView"][];
+            evidence: {
+                correlation_ids: string[];
+                available: boolean;
+                /** Format: date-time */
+                generated_at_utc: string;
+            };
+        };
+        RolloutEvidencePackView: {
+            /** Format: date-time */
+            generated_at_utc: string;
+            evaluation: components["schemas"]["RolloutEvaluationView"];
+            cohort_snapshot: {
+                [key: string]: unknown;
+            };
+            event_stream: components["schemas"]["RolloutEventView"][];
+            guardrail_eval: components["schemas"]["RolloutGuardrailView"][];
+            correlation_ids: string[];
+        };
+        RolloutValidationGateReport: {
+            gateId: string;
+            name: string;
+            success: boolean;
+            detail: string;
+            /** Format: date-time */
+            checkedAtUtc: string;
+        };
+        RolloutValidationReportInput: {
+            suiteName: string;
+            machineId: string;
+            deviceId?: string | null;
+            accountId?: string | null;
+            orgId?: string | null;
+            /** Format: date-time */
+            generatedAtUtc: string;
+            /** Format: date-time */
+            expiresAtUtc?: string | null;
+            passed?: boolean;
+            gates: components["schemas"]["RolloutValidationGateReport"][];
+        };
+        RolloutValidationReport: components["schemas"]["RolloutValidationReportInput"] & {
+            /** Format: date-time */
+            updatedAtUtc: string;
+        };
         SLOMetrics: {
             /** Format: date-time */
             windowStartUtc: string;
@@ -1077,6 +1668,338 @@ export interface components {
             aggregated: components["schemas"]["AggregatedSLO"];
             rolloutState: components["schemas"]["RolloutState"];
             autoAction?: components["schemas"]["RollbackActionResult"];
+        };
+        /** @enum {string} */
+        CaptureContextValue: "Unknown" | "UserSession" | "ServiceSession";
+        /** @enum {string} */
+        ContinuityStateValue: "keep" | "pause" | "decay" | "reset";
+        /** @enum {string} */
+        CalibrationStageValue: "cold" | "provisional" | "calibrated";
+        /** @enum {string} */
+        TrustTierValue: "low" | "medium" | "high";
+        /** @enum {string} */
+        AccountStatusValue: "active" | "suspended" | "deleted";
+        /** @enum {string} */
+        AuthProviderValue: "local" | "google" | "microsoft" | "sso";
+        /** @enum {string} */
+        MembershipRoleValue: "owner" | "admin" | "member" | "viewer";
+        /** @enum {string} */
+        MembershipStatusValue: "invited" | "active" | "suspended" | "revoked";
+        /** @enum {string} */
+        DeviceStatusValue: "active" | "revoked" | "unlinked";
+        /** @enum {string} */
+        ConsentScopeValue: "account_legal" | "device_capture";
+        /** @enum {string} */
+        ConsentStateValue: "accepted" | "declined" | "revoked";
+        /** @enum {string} */
+        TelemetryLevelValue: "essential" | "enhanced";
+        /** @enum {string} */
+        DeviceLinkStateValue: "linked" | "unlinked";
+        /** @enum {string} */
+        MachineActionCategoryValue: "suggestion" | "automatic_change" | "policy_intent" | "unsupported" | "decision_record";
+        /** @enum {string} */
+        MachineActionDecisionStateValue: "decided";
+        /** @enum {string} */
+        MachineActionExecutionStateValue: "decision_only" | "decided" | "applied" | "verified" | "failed";
+        /** @enum {string} */
+        MachineActionVerifiedStateValue: "not_applicable" | "pending" | "unverified" | "verified";
+        AccountProfile: {
+            /** Format: uuid */
+            account_id: string;
+            display_name: string;
+            /** Format: email */
+            primary_email: string;
+            email_verified: boolean;
+            /** Format: uri */
+            avatar_url?: string | null;
+            status: components["schemas"]["AccountStatusValue"];
+            auth_provider?: components["schemas"]["AuthProviderValue"];
+            /** Format: date-time */
+            last_login_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        OrganizationProfile: {
+            /** Format: uuid */
+            org_id: string;
+            org_name: string;
+            org_slug?: string | null;
+            plan_tier: string;
+            billing_account_id?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        Membership: {
+            /** Format: uuid */
+            membership_id: string;
+            /** Format: uuid */
+            account_id: string;
+            /** Format: uuid */
+            org_id: string;
+            role: components["schemas"]["MembershipRoleValue"];
+            status: components["schemas"]["MembershipStatusValue"];
+            /** Format: date-time */
+            invited_at?: string | null;
+            /** Format: date-time */
+            joined_at?: string | null;
+            /** Format: uuid */
+            invited_by_account_id?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DeviceProfile: {
+            /** Format: uuid */
+            device_id: string;
+            /** Format: uuid */
+            org_id?: string | null;
+            machine_name: string;
+            device_display_name: string;
+            platform: string;
+            agent_version: string;
+            status: components["schemas"]["DeviceStatusValue"];
+            /** Format: date-time */
+            first_seen_at: string;
+            /** Format: date-time */
+            last_seen_at: string;
+            /** Format: uuid */
+            current_account_id?: string | null;
+            /** Format: date-time */
+            revoked_at?: string | null;
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        ConsentRecord: {
+            /** Format: uuid */
+            consent_id: string;
+            scope: components["schemas"]["ConsentScopeValue"];
+            /** Format: uuid */
+            account_id?: string | null;
+            /** Format: uuid */
+            device_id?: string | null;
+            /** Format: uuid */
+            org_id?: string | null;
+            consent_version: string;
+            consent_state: components["schemas"]["ConsentStateValue"];
+            telemetry_level?: components["schemas"]["TelemetryLevelValue"];
+            /** Format: date-time */
+            consented_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        DeviceRegistrationRequest: {
+            /** Format: uuid */
+            device_id: string;
+            machine_name: string;
+            device_display_name?: string | null;
+            platform: string;
+            agent_version: string;
+            /** Format: uuid */
+            account_id?: string | null;
+            /** Format: uuid */
+            org_id?: string | null;
+            device_capture_consent_state?: components["schemas"]["ConsentStateValue"];
+            device_capture_consent_version?: string | null;
+            /** Format: date-time */
+            device_capture_consented_at?: string | null;
+            device_capture_telemetry_level?: components["schemas"]["TelemetryLevelValue"];
+            session_token?: string | null;
+            local_proof_token?: string | null;
+        };
+        DeviceAccountLinkRequest: {
+            /** Format: uuid */
+            device_id: string;
+            /** Format: uuid */
+            account_id: string;
+            /** Format: uuid */
+            org_id: string;
+            session_token?: string | null;
+            local_proof_token?: string | null;
+        };
+        DeviceAccountUnlinkRequest: {
+            /** Format: uuid */
+            device_id: string;
+            /** Format: uuid */
+            account_id?: string | null;
+            /** Format: uuid */
+            org_id?: string | null;
+            session_token?: string | null;
+            local_proof_token?: string | null;
+        };
+        DeviceLinkResult: {
+            ok: boolean;
+            link_state: components["schemas"]["DeviceLinkStateValue"];
+            device: components["schemas"]["DeviceProfile"];
+        };
+        MachineSummaryReport: {
+            /** Format: uuid */
+            device_id: string;
+            machine_id: string;
+            /** Format: uuid */
+            account_id?: string | null;
+            /** Format: uuid */
+            org_id?: string | null;
+            machine_name: string;
+            user_name: string;
+            agent_version: string;
+            schema_version: string;
+            policy_version: string;
+            /** Format: date-time */
+            reported_at_utc: string;
+            agent_running: boolean;
+            user_session_connected: boolean;
+            activity_detected: boolean;
+            /** Format: date-time */
+            last_activity_utc?: string | null;
+            /** Format: date-time */
+            user_agent_heartbeat_utc?: string | null;
+            user_agent_heartbeat_age_seconds?: number | null;
+            last_accepted_input_age_seconds?: number | null;
+            user_agent_startup_source?: string | null;
+            user_agent_startup_state?: string | null;
+            user_agent_last_launch_reason?: string | null;
+            user_agent_heartbeat_write_failure_count?: number | null;
+            capture_context: components["schemas"]["CaptureContextValue"];
+            keyboard_signal_active: boolean;
+            mouse_signal_active: boolean;
+            ownership_warning?: string | null;
+            capture_failure_reason?: string | null;
+            last_error?: string | null;
+            backend_connected: boolean;
+            local_api_auth_ready: boolean;
+            db_migration_failed: boolean;
+            task_continuity_score: number;
+            task_continuity_seconds: number;
+            continuity_state: components["schemas"]["ContinuityStateValue"];
+            deep_work_active: boolean;
+            overload_likelihood: number;
+            overload_active: boolean;
+            break_needed: boolean;
+            break_pending_action?: string | null;
+            break_pending_reason_code?: string | null;
+            calibration_stage: components["schemas"]["CalibrationStageValue"];
+            trust_tier: components["schemas"]["TrustTierValue"];
+            model_confidence: number;
+            signal_quality_score?: number | null;
+            partial_data: boolean;
+            missing_major_channels: string[];
+        };
+        MachineActionEvent: {
+            /** Format: uuid */
+            device_id: string;
+            machine_id: string;
+            /** Format: uuid */
+            account_id?: string | null;
+            /** Format: uuid */
+            org_id?: string | null;
+            user_name: string;
+            intervention_id: string;
+            action: string;
+            action_category: components["schemas"]["MachineActionCategoryValue"];
+            decision_state: components["schemas"]["MachineActionDecisionStateValue"];
+            execution_state: components["schemas"]["MachineActionExecutionStateValue"];
+            verified_state: components["schemas"]["MachineActionVerifiedStateValue"];
+            /** Format: date-time */
+            timestamp_utc: string;
+            /** Format: date-time */
+            applied_at_utc?: string | null;
+            error_code?: string | null;
+            policy_id: string;
+            what_changed?: string | null;
+            how_to_undo?: string | null;
+        };
+        GrowthSummary: {
+            timezone: string;
+            /** Format: date-time */
+            generated_at_utc: string;
+            /** Format: date-time */
+            window_start_utc: string;
+            /** Format: date-time */
+            window_end_utc: string;
+            total_registered_users: number;
+            new_registered_users: number;
+            activated_users: number;
+            activation_rate_pct: number | null;
+            retention_rate_d1_pct: number | null;
+            retention_rate_d7_pct: number | null;
+            retention_rate_d30_pct: number | null;
+            churn_rate_d1_pct: number | null;
+            churn_rate_d7_pct: number | null;
+            churn_rate_d30_pct: number | null;
+        };
+        /** @enum {string} */
+        GrowthSeriesMetric: "registrations" | "activations" | "active_users";
+        /** @enum {string} */
+        GrowthSeriesInterval: "day" | "week" | "month";
+        GrowthSeriesPoint: {
+            /** Format: date-time */
+            bucket_start_utc: string;
+            /** Format: date-time */
+            bucket_end_utc: string;
+            value: number;
+        };
+        GrowthSeries: {
+            metric: components["schemas"]["GrowthSeriesMetric"];
+            interval: components["schemas"]["GrowthSeriesInterval"];
+            timezone: string;
+            points: components["schemas"]["GrowthSeriesPoint"][];
+        };
+        GrowthCohortWindow: {
+            day: number;
+            eligible_users: number;
+            retained_users: number;
+            retention_rate_pct: number | null;
+            churned_users: number;
+            churn_rate_pct: number | null;
+        };
+        GrowthCohortRow: {
+            /** Format: date */
+            cohort_date: string;
+            registered_users: number;
+            activated_users: number;
+            windows: components["schemas"]["GrowthCohortWindow"][];
+        };
+        GrowthCohorts: {
+            timezone: string;
+            rows: components["schemas"]["GrowthCohortRow"][];
+        };
+        /** @enum {string} */
+        GrowthUserSource: "default" | "env" | "custom";
+        /** @enum {string} */
+        GrowthUserJourneyEventType: "account_registered" | "membership_joined" | "device_linked" | "device_capture_consented" | "account_activated" | "account_active_day";
+        GrowthUserJourneyEvent: {
+            event_type: components["schemas"]["GrowthUserJourneyEventType"];
+            /** Format: date-time */
+            occurred_at_utc: string;
+            /** Format: date */
+            activity_date?: string | null;
+            /** Format: uuid */
+            device_id?: string | null;
+            /** Format: uuid */
+            org_id?: string | null;
+            machine_id?: string | null;
+            metadata?: {
+                [key: string]: string | number | boolean | null;
+            };
+        };
+        GrowthUserJourney: {
+            /** Format: uuid */
+            account_id: string;
+            user_id: string;
+            source: components["schemas"]["GrowthUserSource"];
+            /** Format: date-time */
+            registration_at_utc?: string | null;
+            /** Format: date-time */
+            activation_at_utc?: string | null;
+            events: components["schemas"]["GrowthUserJourneyEvent"][];
+            active_days: string[];
         };
         NodeSnapshotView: {
             /** Format: uuid */
