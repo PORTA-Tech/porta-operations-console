@@ -4,6 +4,12 @@ export type CaptureContext = 'Unknown' | 'UserSession' | 'ServiceSession';
 export type ContinuityState = 'keep' | 'pause' | 'decay' | 'reset';
 export type CalibrationStage = 'cold' | 'provisional' | 'calibrated';
 export type TrustTier = 'low' | 'medium' | 'high';
+export type AttentionSegmentKind =
+  | 'focus'
+  | 'context_excursion'
+  | 'off_task_distraction'
+  | 'fragmentation_distraction'
+  | 'away';
 
 export interface MachineSummaryReport {
   deviceId?: string;
@@ -47,6 +53,10 @@ export interface MachineSummaryReport {
   focusEpisodeQuality: number;
   focusEpisodeSeconds: number;
   focusEpisodeState: ContinuityState;
+  attentionSegmentKind: AttentionSegmentKind;
+  attentionSegmentSeconds: number;
+  distractionEpisodeActive: boolean;
+  distractionEpisodeSeconds: number;
   // Legacy compatibility fields mirrored from the shared machine summary DTO.
   // The product target is focus-episode quality and focus-episode duration.
   taskContinuityScore: number;
