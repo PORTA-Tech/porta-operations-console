@@ -44,7 +44,7 @@ describe('reduceActionEventsToRecords', () => {
 
     expect(records).toHaveLength(1);
     const [record] = records;
-    expect(record?.actionName).toBe('Break suggestion');
+    expect(record?.actionName).toBe('Long break');
     expect(record?.result).toBe('Done');
     expect(record?.timeUtc).toBe('2026-03-24T14:42:32.390Z');
   });

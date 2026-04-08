@@ -41,6 +41,9 @@ function formatDuration(seconds: number | null, fallback: 'Unknown' | 'Unavailab
 }
 
 function mapFocusLevel(summary: MachineSummaryReport): UserActivityFocusLevel {
+  // Compatibility mapping:
+  // taskContinuity* still carries the durable focus timer signal until the shared
+  // contract publishes focus-episode-native fields.
   if (summary.deepWorkActive) return 'High';
   if (summary.continuityState === 'keep') {
     if (summary.taskContinuitySeconds >= 900 || summary.taskContinuityScore >= 0.8) return 'High';
@@ -63,12 +66,17 @@ function mapDeepWork(summary: MachineSummaryReport): UserActivityDeepWork {
 }
 
 function mapOverloadRisk(summary: MachineSummaryReport): UserActivityOverloadRisk {
+  // Compatibility mapping:
+  // overloadLikelihood is the legacy visible field that will migrate to Pressure.
   if (summary.overloadActive || summary.overloadLikelihood >= 0.72) return 'High';
   if (summary.overloadLikelihood >= 0.4) return 'Medium';
   return 'Low';
 }
 
 function mapBreakNeeded(summary: MachineSummaryReport): UserActivityBreakNeeded {
+  // Compatibility mapping:
+  // breakPendingAction still carries legacy action IDs such as stretch_break_suggestion
+  // and break_suggestion until the shared contract publishes canonical break fields.
   return summary.breakNeeded || summary.breakPendingAction ? 'Yes' : 'No';
 }
 

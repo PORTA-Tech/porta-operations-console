@@ -67,37 +67,37 @@ export function UserActivityPage() {
           {
             label: 'Focus high',
             value: String(focusHighCount),
-            meta: strongestFocus ? `Longest focus ${strongestFocus.focusDurationLabel}` : (focusHighCount === 1 ? 'Machine in strong continuity' : 'Machines in strong continuity'),
+            meta: strongestFocus ? `Longest focus timer ${strongestFocus.focusDurationLabel}` : (focusHighCount === 1 ? 'Machine in strong focus continuity' : 'Machines in strong focus continuity'),
             tone: focusHighCount > 0 ? 'focus' : 'neutral'
           },
           {
             label: 'Deep work active',
             value: String(deepWorkCount),
-            meta: strongestFocus && deepWorkCount > 0 ? `Active for up to ${strongestFocus.focusDurationLabel}` : (deepWorkCount === 1 ? 'Protected focused session' : 'Protected focused sessions'),
+            meta: strongestFocus && deepWorkCount > 0 ? `Active for up to ${strongestFocus.focusDurationLabel}` : (deepWorkCount === 1 ? 'Protected focus episode' : 'Protected focus episodes'),
             tone: deepWorkCount > 0 ? 'focus' : 'neutral'
           },
           {
-            label: 'Break needed',
+            label: 'Break ready',
             value: String(breakNeededCount),
-            meta: latestBreakReady?.stateTimestampUtc ? `Break ready ${formatRelativeFromNow(latestBreakReady.stateTimestampUtc)}` : (breakNeededCount === 1 ? 'Machine ready for a break nudge' : 'Machines ready for break nudges'),
+            meta: latestBreakReady?.stateTimestampUtc ? `Break ready ${formatRelativeFromNow(latestBreakReady.stateTimestampUtc)}` : (breakNeededCount === 1 ? 'Machine ready for a short or long break' : 'Machines ready for short or long breaks'),
             tone: breakNeededCount > 0 ? 'warn' : 'neutral'
           },
           {
-            label: 'Overload high',
+            label: 'Pressure high',
             value: String(overloadHighCount),
-            meta: latestOverload?.stateTimestampUtc ? `Observed ${formatRelativeFromNow(latestOverload.stateTimestampUtc)}` : (overloadHighCount === 1 ? 'Machine in elevated strain' : 'Machines in elevated strain'),
+            meta: latestOverload?.stateTimestampUtc ? `Observed ${formatRelativeFromNow(latestOverload.stateTimestampUtc)}` : (overloadHighCount === 1 ? 'Machine in elevated pressure' : 'Machines in elevated pressure'),
             tone: overloadHighCount > 0 ? 'critical' : 'neutral'
           }
         ]}
       />
       <Panel
         title="Behavior detail"
-        subtitle="Supporting machine-level activity truth beneath the live continuity and regulation summary."
+        subtitle="Supporting machine-level activity truth beneath the live focus, pressure, and regulation summary."
       >
         {records.length === 0 ? (
           <div className="empty-state">
             <p className="muted-line">
-              No user-activity rows are available. User Activity cannot render current behavioral truth until the backend supplies live continuity, deep-work, overload, and break-readiness state.
+              No user-activity rows are available. User Activity cannot render current behavioral truth until the backend supplies focus-timer, deep-work, pressure, and break-readiness state.
             </p>
           </div>
         ) : (
@@ -108,9 +108,9 @@ export function UserActivityPage() {
                   <th>Machine / User</th>
                   <th>Focus level</th>
                   <th>Deep work</th>
-                  <th>Overload risk</th>
-                  <th>Focus duration</th>
-                  <th>Break needed</th>
+                  <th>Pressure</th>
+                  <th>Focus timer</th>
+                  <th>Break ready</th>
                 </tr>
               </thead>
               <tbody>

@@ -14,13 +14,13 @@ type TerminalResult = {
 
 const ACTION_CATALOG: ActionCatalogEntry[] = [
   {
-    displayName: 'Break suggestion',
+    displayName: 'Long break',
     actionType: 'Suggestion',
     actionCodes: ['break_suggestion'],
     commandTypes: ['show_break_toast']
   },
   {
-    displayName: 'Stretch suggestion',
+    displayName: 'Short break',
     actionType: 'Suggestion',
     actionCodes: ['stretch_break_suggestion'],
     commandTypes: ['show_stretch_break_toast']

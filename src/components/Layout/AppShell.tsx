@@ -46,7 +46,7 @@ export function AppShell({ children }: AppShellProps) {
       { label: 'Healthy', count: healthy, tone: 'ok' },
       { label: 'Learning', count: learning, tone: 'warn' },
       { label: 'Deep Work', count: deepWork, tone: 'focus' },
-      { label: 'Break Needed', count: breakNeeded, tone: breakNeeded > 0 ? 'warn' : 'neutral' }
+      { label: 'Break Ready', count: breakNeeded, tone: breakNeeded > 0 ? 'warn' : 'neutral' }
     ];
   }, [summaryFeed.rows]);
 

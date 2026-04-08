@@ -42,13 +42,19 @@ export interface MachineSummaryReport {
   backendConnected: boolean;
   localApiAuthReady: boolean;
   dbMigrationFailed: boolean;
+  // Legacy compatibility fields mirrored from the shared machine summary DTO.
+  // The product target is focus-episode quality and focus-episode duration.
   taskContinuityScore: number;
   taskContinuitySeconds: number;
   continuityState: ContinuityState;
   deepWorkActive: boolean;
+  // Legacy visible overload field. The product target is Pressure.
   overloadLikelihood: number;
+  // Canonical meaning aligns with overload active.
   overloadActive: boolean;
   breakNeeded: boolean;
+  // Legacy break transport field. It may still carry stretch_break_suggestion
+  // or break_suggestion while short-break and long-break naming migrates.
   breakPendingAction?: string | null;
   breakPendingReasonCode?: string | null;
   calibrationStage: CalibrationStage;
