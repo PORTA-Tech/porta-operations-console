@@ -67,7 +67,7 @@ export function UserActivityPage() {
           {
             label: 'Focus high',
             value: String(focusHighCount),
-            meta: strongestFocus ? `Longest focus timer ${strongestFocus.focusDurationLabel}` : (focusHighCount === 1 ? 'Machine in strong focus continuity' : 'Machines in strong focus continuity'),
+            meta: strongestFocus ? `Longest focus episode ${strongestFocus.focusDurationLabel}` : (focusHighCount === 1 ? 'Machine in strong focus episode' : 'Machines in strong focus episodes'),
             tone: focusHighCount > 0 ? 'focus' : 'neutral'
           },
           {
@@ -97,7 +97,7 @@ export function UserActivityPage() {
         {records.length === 0 ? (
           <div className="empty-state">
             <p className="muted-line">
-              No user-activity rows are available. User Activity cannot render current behavioral truth until the backend supplies focus-timer, deep-work, pressure, and break-readiness state.
+              No user-activity rows are available. User Activity cannot render current behavioral truth until the backend supplies focus-episode, deep-work, pressure, and break-readiness state.
             </p>
           </div>
         ) : (
@@ -109,7 +109,7 @@ export function UserActivityPage() {
                   <th>Focus level</th>
                   <th>Deep work</th>
                   <th>Pressure</th>
-                  <th>Focus timer</th>
+                  <th>Focus episode</th>
                   <th>Break ready</th>
                 </tr>
               </thead>

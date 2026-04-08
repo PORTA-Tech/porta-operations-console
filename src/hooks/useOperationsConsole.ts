@@ -399,6 +399,8 @@ function parseStreamMachineState(payload: Record<string, unknown>): StreamMachin
     deepWorkActive: pickBoolean(payload, ['deep_work_active', 'deepWorkActive'])
       ?? pickBoolean(states, ['deep_work_active', 'deepWorkActive']),
     focusDurationSec: pickNumber(payload, [
+      'focus_episode_seconds',
+      'focusEpisodeSeconds',
       'task_continuity_seconds',
       'taskContinuitySeconds',
       'focus_duration_seconds',
@@ -406,6 +408,8 @@ function parseStreamMachineState(payload: Record<string, unknown>): StreamMachin
       'sustained_attention_duration',
       'sustained_attention_duration_sec'
     ]) ?? pickNumber(states, [
+      'focus_episode_seconds',
+      'focusEpisodeSeconds',
       'task_continuity_seconds',
       'taskContinuitySeconds',
       'focus_duration_seconds',
@@ -485,6 +489,8 @@ function traceStateSource(row: AuditDecisionRecord): {
     overloadScore: pickNumber(statePayload, ['overload_likelihood', 'overload']),
     deepWorkActive: pickBoolean(statePayload, ['deep_work_active', 'deepWorkActive']),
     focusDurationSec: pickNumber(statePayload, [
+      'focus_episode_seconds',
+      'focusEpisodeSeconds',
       'task_continuity_seconds',
       'taskContinuitySeconds',
       'focus_duration_seconds',

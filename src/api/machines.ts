@@ -42,6 +42,11 @@ export interface MachineSummaryReport {
   backendConnected: boolean;
   localApiAuthReady: boolean;
   dbMigrationFailed: boolean;
+  // Canonical durable focus-episode fields. These are the product-facing fields
+  // that operator views should prefer over the legacy continuity aliases.
+  focusEpisodeQuality: number;
+  focusEpisodeSeconds: number;
+  focusEpisodeState: ContinuityState;
   // Legacy compatibility fields mirrored from the shared machine summary DTO.
   // The product target is focus-episode quality and focus-episode duration.
   taskContinuityScore: number;

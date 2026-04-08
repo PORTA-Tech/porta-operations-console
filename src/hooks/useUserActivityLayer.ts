@@ -21,6 +21,22 @@ import { useMachineSummaryFeed } from './useMachineSummaryFeed';
 
 const STATE_FRESH_MS = 2 * 60_000;
 
+function focusEpisodeQuality(summary: MachineSummaryReport): number {
+  return Number.isFinite(summary.focusEpisodeQuality)
+    ? summary.focusEpisodeQuality
+    : summary.taskContinuityScore;
+}
+
+function focusEpisodeSeconds(summary: MachineSummaryReport): number {
+  return Number.isFinite(summary.focusEpisodeSeconds)
+    ? summary.focusEpisodeSeconds
+    : summary.taskContinuitySeconds;
+}
+
+function focusEpisodeState(summary: MachineSummaryReport): MachineSummaryReport['focusEpisodeState'] {
+  return summary.focusEpisodeState ?? summary.continuityState;
+}
+
 function formatDuration(seconds: number | null, fallback: 'Unknown' | 'Unavailable'): string {
   if (seconds === null || !Number.isFinite(seconds) || seconds < 0) return fallback;
 
@@ -41,23 +57,23 @@ function formatDuration(seconds: number | null, fallback: 'Unknown' | 'Unavailab
 }
 
 function mapFocusLevel(summary: MachineSummaryReport): UserActivityFocusLevel {
-  // Compatibility mapping:
-  // taskContinuity* still carries the durable focus timer signal until the shared
-  // contract publishes focus-episode-native fields.
+  const episodeSeconds = focusEpisodeSeconds(summary);
+  const episodeQuality = focusEpisodeQuality(summary);
+  const episodeState = focusEpisodeState(summary);
   if (summary.deepWorkActive) return 'High';
-  if (summary.continuityState === 'keep') {
-    if (summary.taskContinuitySeconds >= 900 || summary.taskContinuityScore >= 0.8) return 'High';
-    if (summary.taskContinuitySeconds >= 120 || summary.taskContinuityScore >= 0.34) return 'Medium';
+  if (episodeState === 'keep') {
+    if (episodeSeconds >= 900 || episodeQuality >= 0.8) return 'High';
+    if (episodeSeconds >= 120 || episodeQuality >= 0.34) return 'Medium';
     return 'Low';
   }
-  if (summary.continuityState === 'pause') {
-    return summary.taskContinuitySeconds >= 300 ? 'Medium' : 'Low';
+  if (episodeState === 'pause') {
+    return episodeSeconds >= 300 ? 'Medium' : 'Low';
   }
-  if (summary.continuityState === 'decay') {
-    return summary.taskContinuitySeconds >= 600 ? 'Medium' : 'Low';
+  if (episodeState === 'decay') {
+    return episodeSeconds >= 600 ? 'Medium' : 'Low';
   }
-  if (summary.taskContinuityScore >= 0.67 && summary.taskContinuitySeconds >= 900) return 'High';
-  if (summary.taskContinuityScore >= 0.34 || summary.taskContinuitySeconds >= 120) return 'Medium';
+  if (episodeQuality >= 0.67 && episodeSeconds >= 900) return 'High';
+  if (episodeQuality >= 0.34 || episodeSeconds >= 120) return 'Medium';
   return 'Low';
 }
 
@@ -116,7 +132,7 @@ export function useUserActivityLayer(): {
         const stateStale = !isFresh(summary.reportedAtUtc, STATE_FRESH_MS);
         const note = deriveNote(summary, stateStale);
         const tone = deriveTone(summary, stateStale, note);
-        const focusDurationSec = summary.taskContinuitySeconds;
+        const focusDurationSec = focusEpisodeSeconds(summary);
 
         return {
           machineId: summary.machineId,
