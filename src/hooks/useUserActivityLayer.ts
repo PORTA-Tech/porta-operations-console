@@ -22,19 +22,15 @@ import { useMachineSummaryFeed } from './useMachineSummaryFeed';
 const STATE_FRESH_MS = 2 * 60_000;
 
 function focusEpisodeQuality(summary: MachineSummaryReport): number {
-  return Number.isFinite(summary.focusEpisodeQuality)
-    ? summary.focusEpisodeQuality
-    : summary.taskContinuityScore;
+  return summary.focusEpisodeQuality;
 }
 
 function focusEpisodeSeconds(summary: MachineSummaryReport): number {
-  return Number.isFinite(summary.focusEpisodeSeconds)
-    ? summary.focusEpisodeSeconds
-    : summary.taskContinuitySeconds;
+  return summary.focusEpisodeSeconds;
 }
 
 function focusEpisodeState(summary: MachineSummaryReport): MachineSummaryReport['focusEpisodeState'] {
-  return summary.focusEpisodeState ?? summary.continuityState;
+  return summary.focusEpisodeState;
 }
 
 function formatDuration(seconds: number | null, fallback: 'Unknown' | 'Unavailable'): string {
@@ -82,9 +78,7 @@ function mapDeepWork(summary: MachineSummaryReport): UserActivityDeepWork {
 }
 
 function pressureLevel(summary: MachineSummaryReport): number {
-  return Number.isFinite(summary.pressureLevel)
-    ? summary.pressureLevel
-    : summary.overloadLikelihood;
+  return summary.pressureLevel;
 }
 
 function mapOverloadRisk(summary: MachineSummaryReport): UserActivityOverloadRisk {
@@ -95,7 +89,7 @@ function mapOverloadRisk(summary: MachineSummaryReport): UserActivityOverloadRis
 }
 
 function mapBreakNeeded(summary: MachineSummaryReport): UserActivityBreakNeeded {
-  return summary.breakNeeded || summary.breakPendingKind || summary.breakPendingAction ? 'Yes' : 'No';
+  return summary.breakNeeded || summary.breakPendingKind ? 'Yes' : 'No';
 }
 
 export function describeActivityReason(summary: MachineSummaryReport, stateStale: boolean): string | null {

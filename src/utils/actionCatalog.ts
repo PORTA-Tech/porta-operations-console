@@ -16,13 +16,13 @@ const ACTION_CATALOG: ActionCatalogEntry[] = [
   {
     displayName: 'Long break',
     actionType: 'Suggestion',
-    actionCodes: ['break_suggestion'],
+    actionCodes: ['break_suggestion', 'long_break'],
     commandTypes: ['show_break_toast']
   },
   {
     displayName: 'Short break',
     actionType: 'Suggestion',
-    actionCodes: ['stretch_break_suggestion'],
+    actionCodes: ['stretch_break_suggestion', 'short_break'],
     commandTypes: ['show_stretch_break_toast']
   },
   {

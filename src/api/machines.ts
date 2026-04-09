@@ -63,8 +63,8 @@ export interface MachineSummaryReport {
   attentionSegmentReasonText?: string | null;
   distractionEpisodeActive: boolean;
   distractionEpisodeSeconds: number;
-  // Legacy compatibility fields mirrored from the shared machine summary DTO.
-  // The product target is focus-episode quality and focus-episode duration.
+  // Legacy compatibility mirrors of the canonical focus-episode fields.
+  // Console surfaces should not treat these as independent product truth.
   taskContinuityScore: number;
   taskContinuitySeconds: number;
   continuityState: ContinuityState;
@@ -73,7 +73,7 @@ export interface MachineSummaryReport {
   pressureLevel: number;
   // Confidence should be shown alongside pressure instead of hiding pressure.
   pressureConfidence: number;
-  // Legacy visible overload field. The product target is Pressure.
+  // Legacy compatibility mirror of pressureLevel in fleet/admin summaries.
   overloadLikelihood: number;
   // Canonical meaning aligns with overload active.
   overloadActive: boolean;
@@ -81,8 +81,9 @@ export interface MachineSummaryReport {
   // Canonical pending-break kind. Product-facing surfaces should prefer this over
   // parsing the legacy action transport field.
   breakPendingKind?: BreakKind | null;
-  // Legacy break transport field. It may still carry stretch_break_suggestion
-  // or break_suggestion while short-break and long-break naming migrates.
+  // Legacy compatibility mirror of breakPendingKind in fleet/admin summaries.
+  // It may still carry stretch_break_suggestion or break_suggestion while
+  // short-break and long-break naming migrates.
   breakPendingAction?: string | null;
   breakPendingReasonCode?: string | null;
   calibrationStage: CalibrationStage;
@@ -100,6 +101,49 @@ interface CollectionResponse<T> {
   Count?: number;
 }
 
+function normalizeBreakKind(value: string | null | undefined): BreakKind | null {
+  const normalized = value?.trim().toLowerCase() ?? '';
+  if (normalized === 'short_break' || normalized === 'stretch_break_suggestion') return 'short_break';
+  if (normalized === 'long_break' || normalized === 'break_suggestion') return 'long_break';
+  return null;
+}
+
+function resolveLegacyBreakPendingAction(value: string | null | undefined): string | null {
+  switch (normalizeBreakKind(value)) {
+    case 'short_break':
+      return 'stretch_break_suggestion';
+    case 'long_break':
+      return 'break_suggestion';
+    default:
+      return null;
+  }
+}
+
+export function normalizeMachineSummaryReport(row: MachineSummaryReport): MachineSummaryReport {
+  const focusEpisodeQuality = Number.isFinite(row.focusEpisodeQuality) ? row.focusEpisodeQuality : row.taskContinuityScore;
+  const focusEpisodeSeconds = Number.isFinite(row.focusEpisodeSeconds) ? row.focusEpisodeSeconds : row.taskContinuitySeconds;
+  const focusEpisodeState = row.focusEpisodeState ?? row.continuityState;
+  const pressureLevel = Number.isFinite(row.pressureLevel) ? row.pressureLevel : row.overloadLikelihood;
+  const pressureConfidence = Number.isFinite(row.pressureConfidence) ? row.pressureConfidence : row.modelConfidence;
+  const breakPendingKind = normalizeBreakKind(row.breakPendingKind ?? row.breakPendingAction);
+
+  return {
+    ...row,
+    focusEpisodeQuality,
+    focusEpisodeSeconds,
+    focusEpisodeState,
+    taskContinuityScore: focusEpisodeQuality,
+    taskContinuitySeconds: focusEpisodeSeconds,
+    continuityState: focusEpisodeState,
+    pressureLevel,
+    pressureConfidence,
+    overloadLikelihood: pressureLevel,
+    breakNeeded: row.breakNeeded || breakPendingKind !== null,
+    breakPendingKind,
+    breakPendingAction: resolveLegacyBreakPendingAction(row.breakPendingKind ?? breakPendingKind ?? row.breakPendingAction)
+  };
+}
+
 export async function fetchMachineSummaries(): Promise<MachineSummaryReport[]> {
   const response = await apiRequestRaw<MachineSummaryReport[] | CollectionResponse<MachineSummaryReport>>({
     path: '/v1/machines/summary',
@@ -107,15 +151,16 @@ export async function fetchMachineSummaries(): Promise<MachineSummaryReport[]> {
   });
 
   if (Array.isArray(response)) {
-    return response;
+    return response.map(normalizeMachineSummaryReport);
   }
 
-  return response.value ?? response.Value ?? [];
+  return (response.value ?? response.Value ?? []).map(normalizeMachineSummaryReport);
 }
 
 export async function fetchMachineSummary(machineId: string): Promise<MachineSummaryReport> {
-  return apiRequestRaw<MachineSummaryReport>({
+  const response = await apiRequestRaw<MachineSummaryReport>({
     path: `/v1/machines/${encodeURIComponent(machineId)}`,
     method: 'get'
   });
+  return normalizeMachineSummaryReport(response);
 }
