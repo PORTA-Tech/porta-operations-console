@@ -20,7 +20,7 @@ function buildSuggestionEvent(overrides: Partial<MachineActionEvent>): MachineAc
     appliedAtUtc: '2026-03-24T14:42:32.390Z',
     errorCode: null,
     policyId: 'overload-relief-v1',
-    whatChanged: 'Break suggestion shown',
+    whatChanged: 'Long break suggestion shown',
     howToUndo: 'Dismiss toast',
     ...overrides
   };
@@ -36,7 +36,7 @@ describe('reduceActionEventsToRecords', () => {
         }),
         buildSuggestionEvent({
           timestampUtc: '2026-03-24T14:42:55.000Z',
-          whatChanged: 'Break suggestion deactivated'
+          whatChanged: 'Long break suggestion deactivated'
         })
       ],
       machineNameById
