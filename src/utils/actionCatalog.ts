@@ -67,6 +67,11 @@ const ERROR_MESSAGES = new Map<string, string>([
   ['payload_parse_failed', 'Action payload invalid'],
   ['missing_toast_message', 'Suggestion message missing'],
   ['unsupported_command', 'Unsupported command'],
+  ['break_overlay_disposed', 'Break overlay unavailable'],
+  ['break_overlay_not_ready', 'Break overlay not ready'],
+  ['break_overlay_dispatch_failed', 'Break overlay failed to open'],
+  ['break_overlay_recovery_failed', 'Break overlay recovery failed'],
+  ['break_overlay_recovery_missing', 'Break overlay recovery state missing'],
   ['snapshot_capture_failed', 'Notification API unavailable'],
   ['notification_snapshot_failed', 'Notification API unavailable'],
   ['snapshot_invalid', 'Notification snapshot invalid'],
@@ -127,6 +132,69 @@ export function resolveTerminalResult(value: string | null): TerminalResult | nu
     return {
       result: 'Done',
       timePreference: 'applied'
+    };
+  }
+
+  if (normalized === 'overlay_completed') {
+    return {
+      result: 'Done',
+      timePreference: 'acked'
+    };
+  }
+
+  if (normalized === 'overlay_started') {
+    return {
+      result: 'Started',
+      timePreference: 'acked'
+    };
+  }
+
+  if (normalized === 'accepted') {
+    return {
+      result: 'Accepted',
+      timePreference: 'acked'
+    };
+  }
+
+  if (normalized === 'skipped') {
+    return {
+      result: 'Skipped',
+      timePreference: 'acked'
+    };
+  }
+
+  if (normalized === 'dismissed') {
+    return {
+      result: 'Dismissed',
+      timePreference: 'acked'
+    };
+  }
+
+  if (normalized === 'snoozed') {
+    return {
+      result: 'Snoozed',
+      timePreference: 'acked'
+    };
+  }
+
+  if (normalized === 'suppressed_by_preference') {
+    return {
+      result: 'Suppressed',
+      timePreference: 'acked'
+    };
+  }
+
+  if (normalized === 'overlay_recovered') {
+    return {
+      result: 'Recovered',
+      timePreference: 'acked'
+    };
+  }
+
+  if (normalized === 'overlay_aborted') {
+    return {
+      result: 'Interrupted',
+      timePreference: 'acked'
     };
   }
 

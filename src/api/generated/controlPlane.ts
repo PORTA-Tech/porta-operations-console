@@ -1405,7 +1405,7 @@ export interface components {
         /** @enum {string} */
         MachineActionDecisionStateValue: "decided";
         /** @enum {string} */
-        MachineActionExecutionStateValue: "decision_only" | "decided" | "applied" | "verified" | "failed";
+        MachineActionExecutionStateValue: "decision_only" | "decided" | "applied" | "verified" | "overlay_started" | "accepted" | "dismissed" | "skipped" | "snoozed" | "suppressed_by_preference" | "overlay_recovered" | "overlay_completed" | "overlay_aborted" | "failed";
         /** @enum {string} */
         MachineActionVerifiedStateValue: "not_applicable" | "pending" | "unverified" | "verified";
         AccountProfile: {
@@ -1635,6 +1635,11 @@ export interface components {
             /** Format: date-time */
             applied_at_utc?: string | null;
             error_code?: string | null;
+            delivery_surface?: string | null;
+            interaction_kind?: string | null;
+            break_kind?: string | null;
+            prompt_outcome?: string | null;
+            overlay_state?: string | null;
             policy_id: string;
             what_changed?: string | null;
             how_to_undo?: string | null;

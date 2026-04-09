@@ -25,6 +25,15 @@ function toActionType(value: MachineActionEvent['actionCategory']): ActionsRecor
 
 function toResult(event: MachineActionEvent): ActionsRecord['result'] | null {
   if (event.executionState === 'failed') return 'Failed';
+  if (event.executionState === 'overlay_started') return 'Started';
+  if (event.executionState === 'accepted') return 'Accepted';
+  if (event.executionState === 'skipped') return 'Skipped';
+  if (event.executionState === 'dismissed') return 'Dismissed';
+  if (event.executionState === 'snoozed') return 'Snoozed';
+  if (event.executionState === 'suppressed_by_preference') return 'Suppressed';
+  if (event.executionState === 'overlay_recovered') return 'Recovered';
+  if (event.executionState === 'overlay_completed') return 'Done';
+  if (event.executionState === 'overlay_aborted') return 'Interrupted';
   if (event.actionCategory === 'suggestion') {
     return event.executionState === 'applied' || event.executionState === 'verified' ? 'Done' : null;
   }
@@ -57,6 +66,9 @@ interface ActionCandidate {
 function suggestionGroupKey(event: MachineActionEvent): string | null {
   if (event.actionCategory !== 'suggestion') return null;
   if (!event.interventionId) return null;
+  if (event.executionState !== 'applied' && event.executionState !== 'verified' && event.executionState !== 'failed') {
+    return null;
+  }
   return [event.machineId, event.interventionId, event.action].join(':');
 }
 
@@ -136,7 +148,9 @@ export function reduceActionEventsToRecords(
       actionType: candidate.actionType,
       result: candidate.result,
       timeUtc: candidate.result === 'Done'
-        ? (candidate.event.appliedAtUtc ?? candidate.event.timestampUtc)
+        ? (candidate.event.executionState === 'overlay_completed'
+            ? candidate.event.timestampUtc
+            : (candidate.event.appliedAtUtc ?? candidate.event.timestampUtc))
         : candidate.event.timestampUtc,
       errorMessage: candidate.result === 'Failed' ? describeActionError(candidate.event.errorCode ?? null) : null
     } satisfies ActionsRecord))
@@ -164,7 +178,7 @@ export function useActionsLayer(): {
   const notices = useMemo(() => {
     if (actionsFeed.loading || actionsFeed.error) return [];
     if (actionsFeed.rows.length > 0 && records.length === 0) {
-      return ['No terminal meaningful actions were found. Layer 4 only shows suggestion and automatic-change actions with authoritative completion or failure truth.'];
+      return ['No meaningful action records were found. Layer 4 now expects explicit suggestion lifecycle or automatic-change truth from the control plane.'];
     }
     return [];
   }, [actionsFeed.error, actionsFeed.loading, actionsFeed.rows.length, records.length]);

@@ -1,5 +1,15 @@
 export type ActionsActionType = 'Suggestion' | 'Automatic change';
-export type ActionsResult = 'Done' | 'Failed';
+export type ActionsResult =
+  | 'Started'
+  | 'Accepted'
+  | 'Skipped'
+  | 'Dismissed'
+  | 'Snoozed'
+  | 'Suppressed'
+  | 'Recovered'
+  | 'Done'
+  | 'Interrupted'
+  | 'Failed';
 
 export interface ActionsRecord {
   id: string;

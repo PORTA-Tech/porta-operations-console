@@ -9,12 +9,28 @@ function actionTypeBadgeClass(value: ActionsActionType): string {
 }
 
 function resultBadgeClass(value: ActionsResult): string {
-  return value === 'Done' ? 'status-badge ok' : 'status-badge critical';
+  switch (value) {
+    case 'Done':
+      return 'status-badge ok';
+    case 'Started':
+    case 'Accepted':
+    case 'Recovered':
+      return 'status-badge focus';
+    case 'Skipped':
+    case 'Dismissed':
+    case 'Snoozed':
+    case 'Suppressed':
+    case 'Interrupted':
+      return 'status-badge neutral';
+    case 'Failed':
+    default:
+      return 'status-badge critical';
+  }
 }
 
 export function ActionsPage() {
   const { records, loading, error, notices } = useActionsLayer();
-  const suggestionCount = records.filter((record) => record.actionType === 'Suggestion' && record.result === 'Done').length;
+  const suggestionCount = records.filter((record) => record.actionType === 'Suggestion').length;
   const automaticChangeCount = records.filter((record) => record.actionType === 'Automatic change' && record.result === 'Done').length;
   const failedCount = records.filter((record) => record.result === 'Failed').length;
   const latestActionUtc = records[0]?.timeUtc ?? null;
@@ -36,7 +52,7 @@ export function ActionsPage() {
           {
             label: 'Suggestions shown',
             value: String(suggestionCount),
-            meta: suggestionCount === 1 ? 'Suggestion reached the user session' : 'Suggestions reached the user session',
+            meta: suggestionCount === 1 ? 'Suggestion lifecycle event reached the user session' : 'Suggestion lifecycle events reached the user session',
             tone: suggestionCount > 0 ? 'focus' : 'neutral'
           },
           {
@@ -61,12 +77,12 @@ export function ActionsPage() {
       />
       <Panel
         title="Action feed"
-        subtitle="Historical regulation events collapsed to one user-visible row per suggestion or automatic change."
+        subtitle="Historical regulation events with explicit suggestion overlay outcomes, not just generic done or failed states."
       >
         {records.length === 0 ? (
           <div className="empty-state">
             <p className="muted-line">
-              No terminal action rows are available. Actions only shows suggestions and automatic changes with authoritative completion or failure truth.
+              No action rows are available yet. Actions shows suggestion lifecycle outcomes and automatic changes once the control plane receives them.
             </p>
           </div>
         ) : (

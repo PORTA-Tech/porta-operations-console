@@ -14,6 +14,15 @@ export type MachineActionExecutionState =
   | 'decided'
   | 'applied'
   | 'verified'
+  | 'overlay_started'
+  | 'accepted'
+  | 'dismissed'
+  | 'skipped'
+  | 'snoozed'
+  | 'suppressed_by_preference'
+  | 'overlay_recovered'
+  | 'overlay_completed'
+  | 'overlay_aborted'
   | 'failed';
 
 export type MachineActionVerifiedState =
@@ -41,6 +50,11 @@ export interface MachineActionEvent {
   timestampUtc: string;
   appliedAtUtc?: string | null;
   errorCode?: string | null;
+  deliverySurface?: string | null;
+  interactionKind?: string | null;
+  breakKind?: string | null;
+  promptOutcome?: string | null;
+  overlayState?: string | null;
   policyId: string;
   whatChanged?: string | null;
   howToUndo?: string | null;

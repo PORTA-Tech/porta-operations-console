@@ -68,4 +68,28 @@ describe('reduceActionEventsToRecords', () => {
 
     expect(records).toHaveLength(2);
   });
+
+  it('keeps break overlay lifecycle rows separate and maps their operator results', () => {
+    const machineNameById = new Map([['DESKTOP-0MMJH0I', 'DESKTOP-0MMJH0I']]);
+    const records = reduceActionEventsToRecords(
+      [
+        buildSuggestionEvent({
+          executionState: 'overlay_started',
+          timestampUtc: '2026-03-24T14:42:25.000Z'
+        }),
+        buildSuggestionEvent({
+          executionState: 'accepted',
+          timestampUtc: '2026-03-24T14:42:35.000Z'
+        }),
+        buildSuggestionEvent({
+          executionState: 'overlay_completed',
+          timestampUtc: '2026-03-24T14:47:35.000Z'
+        })
+      ],
+      machineNameById
+    );
+
+    expect(records).toHaveLength(3);
+    expect(records.map((record) => record.result)).toEqual(['Done', 'Accepted', 'Started']);
+  });
 });
