@@ -95,10 +95,7 @@ function mapOverloadRisk(summary: MachineSummaryReport): UserActivityOverloadRis
 }
 
 function mapBreakNeeded(summary: MachineSummaryReport): UserActivityBreakNeeded {
-  // Compatibility mapping:
-  // breakPendingAction still carries legacy action IDs such as stretch_break_suggestion
-  // and break_suggestion until the shared contract publishes canonical break fields.
-  return summary.breakNeeded || summary.breakPendingAction ? 'Yes' : 'No';
+  return summary.breakNeeded || summary.breakPendingKind || summary.breakPendingAction ? 'Yes' : 'No';
 }
 
 export function describeActivityReason(summary: MachineSummaryReport, stateStale: boolean): string | null {

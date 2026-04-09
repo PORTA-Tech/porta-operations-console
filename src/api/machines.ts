@@ -11,6 +11,8 @@ export type AttentionSegmentKind =
   | 'fragmentation_distraction'
   | 'away';
 
+export type BreakKind = 'short_break' | 'long_break';
+
 export interface MachineSummaryReport {
   deviceId?: string;
   accountId?: string | null;
@@ -76,6 +78,9 @@ export interface MachineSummaryReport {
   // Canonical meaning aligns with overload active.
   overloadActive: boolean;
   breakNeeded: boolean;
+  // Canonical pending-break kind. Product-facing surfaces should prefer this over
+  // parsing the legacy action transport field.
+  breakPendingKind?: BreakKind | null;
   // Legacy break transport field. It may still carry stretch_break_suggestion
   // or break_suggestion while short-break and long-break naming migrates.
   breakPendingAction?: string | null;

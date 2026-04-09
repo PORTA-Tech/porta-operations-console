@@ -36,6 +36,7 @@ The console should use the canonical product meanings below even while control-p
 - `stretch_break_suggestion` -> short break
 - `break_suggestion` -> long break
 - `breakPendingAction` -> break readiness compatibility field
+- `breakPendingKind` -> canonical short-break / long-break readiness field
 
 The console may still consume those transport fields, but it should not present them to operators as the final product terminology.
 

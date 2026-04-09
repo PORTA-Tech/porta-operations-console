@@ -40,7 +40,7 @@ export function AppShell({ children }: AppShellProps) {
 
     const learning = summaryFeed.rows.filter((row) => row.calibrationStage !== 'calibrated').length;
     const deepWork = summaryFeed.rows.filter((row) => row.deepWorkActive).length;
-    const breakNeeded = summaryFeed.rows.filter((row) => row.breakNeeded || Boolean(row.breakPendingAction)).length;
+    const breakNeeded = summaryFeed.rows.filter((row) => row.breakNeeded || Boolean(row.breakPendingKind) || Boolean(row.breakPendingAction)).length;
 
     return [
       { label: 'Healthy', count: healthy, tone: 'ok' },

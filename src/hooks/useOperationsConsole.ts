@@ -73,6 +73,20 @@ function parseBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
+function normalizeBreakKind(value: string | null): 'short_break' | 'long_break' | null {
+  const normalized = value?.trim().toLowerCase() ?? '';
+  if (normalized === 'short_break' || normalized === 'stretch_break_suggestion') return 'short_break';
+  if (normalized === 'long_break' || normalized === 'break_suggestion') return 'long_break';
+  return null;
+}
+
+function displayBreakLabel(value: string | null): string | null {
+  const breakKind = normalizeBreakKind(value);
+  if (breakKind === 'short_break') return 'Short break';
+  if (breakKind === 'long_break') return 'Long break';
+  return null;
+}
+
 function pickString(record: Record<string, unknown>, keys: string[]): string | null {
   for (const key of keys) {
     const value = parseString(record[key]);
@@ -287,7 +301,7 @@ function actionNameFromPayload(bundle: ActionPayloadBundle): string | null {
     'kind',
     'title'
   ]);
-  if (direct) return humanizeAction(direct);
+  if (direct) return displayBreakLabel(direct) ?? humanizeAction(direct);
 
   const resultDirect = pickString(bundle.resultPayload, [
     'action_name',
@@ -298,14 +312,18 @@ function actionNameFromPayload(bundle: ActionPayloadBundle): string | null {
     'system_change',
     'change_summary'
   ]);
-  if (resultDirect) return humanizeAction(resultDirect);
+  if (resultDirect) return displayBreakLabel(resultDirect) ?? humanizeAction(resultDirect);
 
   const notificationsSuppressed = pickBoolean(bundle.resultPayload, ['notifications_suppressed']);
   if (notificationsSuppressed === true) return 'Notifications muted';
   if (notificationsSuppressed === false) return 'Notifications restored';
 
+  const pendingBreakKind = normalizeBreakKind(pickString(bundle.actionPayload, ['break_pending_kind', 'breakPendingKind']));
+  if (pendingBreakKind === 'short_break') return 'Short break';
+  if (pendingBreakKind === 'long_break') return 'Long break';
+
   if (pickBoolean(bundle.actionPayload, ['break_suggestion']) === true || pickString(bundle.actionPayload, ['break_pending_action']) !== null) {
-    return 'Break suggestion';
+    return 'Break ready';
   }
 
   return null;
@@ -379,6 +397,7 @@ function parseStreamMachineState(payload: Record<string, unknown>): StreamMachin
     pickString(signalPayload, ['last_activity_utc', 'lastActivityUtc', 'last_input_event_utc', 'lastInputEventUtc'])
   ]);
   const breakPendingAction = pickString(payload, ['break_pending_action', 'breakPendingAction']);
+  const breakPendingKind = normalizeBreakKind(pickString(payload, ['break_pending_kind', 'breakPendingKind']) ?? breakPendingAction);
 
   return {
     machineId,
@@ -418,7 +437,7 @@ function parseStreamMachineState(payload: Record<string, unknown>): StreamMachin
       'sustained_attention_duration_sec'
     ]),
     breakNeeded: pickBoolean(payload, ['break_needed', 'breakNeeded'])
-      ?? (breakPendingAction !== null ? true : null),
+      ?? (breakPendingKind !== null || breakPendingAction !== null ? true : null),
     confidenceScore: pickNumber(payload, ['pressure_confidence', 'model_confidence', 'confidence_score', 'confidence']),
     trustTier: pickString(payload, ['trust_tier', 'trustTier']),
     learningStage: pickString(payload, ['learning_stage', 'learningStage']),
@@ -475,6 +494,7 @@ function traceStateSource(row: AuditDecisionRecord): {
   ]);
 
   const breakPendingAction = pickString(statePayload, ['break_pending_action', 'breakPendingAction']);
+  const breakPendingKind = normalizeBreakKind(pickString(statePayload, ['break_pending_kind', 'breakPendingKind']) ?? breakPendingAction);
   return {
     timestampUtc,
     userName: pickString(signalPayload, ['user_name', 'userName', 'username', 'session_user', 'display_name']),
@@ -499,7 +519,7 @@ function traceStateSource(row: AuditDecisionRecord): {
       'sustained_attention_duration_sec'
     ]),
     breakNeeded: pickBoolean(statePayload, ['break_needed', 'breakNeeded'])
-      ?? (breakPendingAction !== null ? true : null),
+      ?? (breakPendingKind !== null || breakPendingAction !== null ? true : null),
     confidenceScore: parseNumber(row.confidence_score)
       ?? pickNumber(statePayload, ['pressure_confidence', 'model_confidence', 'confidence_score', 'confidence']),
     trustTier: pickString(statePayload, ['trust_tier', 'trustTier']),
