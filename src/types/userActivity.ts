@@ -19,5 +19,6 @@ export interface UserActivityRecord {
   stateTimestampUtc: string | null;
   stateStale: boolean;
   note: string | null;
+  activityReason: string | null;
   tone: UserActivityTone;
 }

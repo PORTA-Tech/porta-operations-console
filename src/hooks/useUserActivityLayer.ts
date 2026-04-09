@@ -96,6 +96,24 @@ function mapBreakNeeded(summary: MachineSummaryReport): UserActivityBreakNeeded 
   return summary.breakNeeded || summary.breakPendingAction ? 'Yes' : 'No';
 }
 
+export function describeActivityReason(summary: MachineSummaryReport, stateStale: boolean): string | null {
+  if (stateStale || !summary.agentRunning || !summary.userSessionConnected) {
+    return null;
+  }
+
+  const attentionReason = typeof summary.attentionSegmentReasonText === 'string'
+    ? summary.attentionSegmentReasonText.trim()
+    : '';
+  if (attentionReason.length > 0) {
+    return attentionReason;
+  }
+
+  const focusReason = typeof summary.focusEpisodeReasonText === 'string'
+    ? summary.focusEpisodeReasonText.trim()
+    : '';
+  return focusReason.length > 0 ? focusReason : null;
+}
+
 function deriveNote(summary: MachineSummaryReport, stateStale: boolean): string | null {
   if (!summary.agentRunning) return 'Agent is not running';
   if (stateStale) return 'Behavior state is stale';
@@ -131,6 +149,7 @@ export function useUserActivityLayer(): {
       .map((summary) => {
         const stateStale = !isFresh(summary.reportedAtUtc, STATE_FRESH_MS);
         const note = deriveNote(summary, stateStale);
+        const activityReason = describeActivityReason(summary, stateStale);
         const tone = deriveTone(summary, stateStale, note);
         const focusDurationSec = focusEpisodeSeconds(summary);
 
@@ -151,6 +170,7 @@ export function useUserActivityLayer(): {
           stateTimestampUtc: summary.reportedAtUtc,
           stateStale,
           note,
+          activityReason,
           tone
         } satisfies UserActivityRecord;
       })

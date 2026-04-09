@@ -125,6 +125,7 @@ export function UserActivityPage() {
                         <span className="user-activity-note">
                           {record.stateTimestampUtc ? `Updated ${formatRelativeFromNow(record.stateTimestampUtc)}` : 'Update time unavailable'}
                         </span>
+                        {record.note ? <span className="user-activity-note">{record.note}</span> : null}
                       </div>
                     </td>
                     <td>
@@ -144,6 +145,11 @@ export function UserActivityPage() {
                         {record.stateTimestampUtc ? (
                           <span className="user-activity-note">
                             State {formatRelativeFromNow(record.stateTimestampUtc)}
+                          </span>
+                        ) : null}
+                        {record.activityReason ? (
+                          <span className="user-activity-note">
+                            {record.activityReason}
                           </span>
                         ) : null}
                       </div>

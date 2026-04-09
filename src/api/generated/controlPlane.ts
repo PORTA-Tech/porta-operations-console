@@ -610,159 +610,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/rollout/evaluate": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Evaluate rollout guardrails and current promotion verdict */
-        get: {
-            parameters: {
-                query?: never;
-                header: {
-                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
-                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Rollout evaluation */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["RolloutEvaluationView"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/rollout/validation-gates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read the latest published rollout validation report */
-        get: {
-            parameters: {
-                query?: never;
-                header: {
-                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
-                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Current rollout validation report */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["RolloutValidationReport"];
-                    };
-                };
-                /** @description No validation report has been published yet */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content?: never;
-                };
-            };
-        };
-        put?: never;
-        /** Publish rollout validation gate results */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
-                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["RolloutValidationReportInput"];
-                };
-            };
-            responses: {
-                /** @description Stored rollout validation report */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["RolloutValidationReport"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/v1/rollout/evidence-pack": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Read the rollout evidence pack */
-        get: {
-            parameters: {
-                query?: {
-                    limit?: number;
-                };
-                header: {
-                    "x-operator-id": components["parameters"]["OperatorIdHeader"];
-                    "x-operator-role": components["parameters"]["OperatorRoleHeader"];
-                };
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description Rollout evidence pack */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["RolloutEvidencePackView"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/slo/evaluate": {
         parameters: {
             query?: never;
@@ -1495,148 +1342,6 @@ export interface components {
             /** Format: date-time */
             generated_at_utc: string;
         };
-        RolloutGuardrailEvidenceView: {
-            correlation_ids: string[];
-            cohorts: components["schemas"]["CohortId"][];
-            trace_refs: string[];
-        };
-        RolloutGuardrailView: {
-            guardrail_id: string;
-            /** @enum {string} */
-            status: "PASS" | "FAIL" | "INCONCLUSIVE" | "NOT_APPLICABLE";
-            value: number | null;
-            value_label: string;
-            threshold: number | null;
-            threshold_label: string;
-            window: string;
-            evidence: components["schemas"]["RolloutGuardrailEvidenceView"];
-            reason_code?: string;
-            reason_details?: {
-                [key: string]: unknown;
-            };
-        };
-        RolloutDataQualityView: {
-            baseline_cohort_id: components["schemas"]["CohortId"];
-            target_cohort_id: components["schemas"]["CohortId"];
-            sample_size_by_cohort: {
-                [key: string]: number;
-            };
-            coverage_pct_by_cohort: {
-                [key: string]: number;
-            };
-            min_sample_machines: number;
-            min_coverage_pct: number;
-            freshness_seconds: number | null;
-            freshness_ok: boolean;
-            ws_stream_ok: boolean;
-            metrics_available: boolean;
-            /** @enum {string} */
-            trust_status: "VALID" | "INVALID" | "UNKNOWN";
-            sample_valid: boolean;
-            coverage_valid: boolean;
-            valid: boolean;
-            messages: string[];
-        };
-        RolloutDecisionView: {
-            /** @enum {string} */
-            promotion_verdict: "ALLOW" | "BLOCK" | "INCONCLUSIVE";
-            trigger_reason_code: string;
-            trigger_reason_details: {
-                [key: string]: unknown;
-            };
-            /** Format: date-time */
-            evaluated_at_utc: string;
-        };
-        RolloutBlastRadiusView: {
-            node_count: number | null;
-            impacted_cohorts: components["schemas"]["CohortId"][];
-            /** @enum {string} */
-            confidence: "low" | "medium" | "high" | "unknown";
-            /** Format: date-time */
-            generated_at_utc: string;
-            availability_reason_code?: string;
-        };
-        RolloutDryRunPredictionView: {
-            error_rate_delta_pct: number | null;
-            p99_latency_delta_ms: number | null;
-            degradation_rate_delta_pct: number | null;
-            /** Format: date-time */
-            generated_at_utc: string;
-            availability_reason_code?: string;
-        };
-        RolloutEventView: {
-            event_id: string;
-            type: string;
-            /** Format: date-time */
-            timestamp_utc: string;
-            actor: string;
-            config_version: number;
-            cohorts: components["schemas"]["CohortId"][];
-            correlation_ids: string[];
-            details: string;
-        };
-        RolloutEvaluationView: {
-            rollout_state: components["schemas"]["RolloutState"];
-            halt_status: boolean;
-            /** @enum {string} */
-            current_stage: "CANARY" | "LIMITED" | "MAJORITY" | "FULL";
-            /** @enum {string|null} */
-            next_stage: "CANARY" | "LIMITED" | "MAJORITY" | "FULL" | null;
-            config_version: number;
-            /** Format: date-time */
-            cooldown_until_utc: string | null;
-            /** Format: date-time */
-            evaluated_at_utc: string;
-            data_quality: components["schemas"]["RolloutDataQualityView"];
-            guardrail_eval: components["schemas"]["RolloutGuardrailView"][];
-            decision: components["schemas"]["RolloutDecisionView"];
-            blast_radius: components["schemas"]["RolloutBlastRadiusView"];
-            dry_run_prediction: components["schemas"]["RolloutDryRunPredictionView"];
-            rollout_stage_progression_preview: components["schemas"]["RolloutState"][];
-            events: components["schemas"]["RolloutEventView"][];
-            evidence: {
-                correlation_ids: string[];
-                available: boolean;
-                /** Format: date-time */
-                generated_at_utc: string;
-            };
-        };
-        RolloutEvidencePackView: {
-            /** Format: date-time */
-            generated_at_utc: string;
-            evaluation: components["schemas"]["RolloutEvaluationView"];
-            cohort_snapshot: {
-                [key: string]: unknown;
-            };
-            event_stream: components["schemas"]["RolloutEventView"][];
-            guardrail_eval: components["schemas"]["RolloutGuardrailView"][];
-            correlation_ids: string[];
-        };
-        RolloutValidationGateReport: {
-            gateId: string;
-            name: string;
-            success: boolean;
-            detail: string;
-            /** Format: date-time */
-            checkedAtUtc: string;
-        };
-        RolloutValidationReportInput: {
-            suiteName: string;
-            machineId: string;
-            deviceId?: string | null;
-            accountId?: string | null;
-            orgId?: string | null;
-            /** Format: date-time */
-            generatedAtUtc: string;
-            /** Format: date-time */
-            expiresAtUtc?: string | null;
-            passed?: boolean;
-            gates: components["schemas"]["RolloutValidationGateReport"][];
-        };
-        RolloutValidationReport: components["schemas"]["RolloutValidationReportInput"] & {
-            /** Format: date-time */
-            updatedAtUtc: string;
-        };
         SLOMetrics: {
             /** Format: date-time */
             windowStartUtc: string;
@@ -1686,7 +1391,7 @@ export interface components {
         /** @enum {string} */
         MembershipStatusValue: "invited" | "active" | "suspended" | "revoked";
         /** @enum {string} */
-        DeviceStatusValue: "active" | "revoked" | "unlinked";
+        DeviceStatusValue: "active" | "revoked";
         /** @enum {string} */
         ConsentScopeValue: "account_legal" | "device_capture";
         /** @enum {string} */
@@ -1805,11 +1510,6 @@ export interface components {
             account_id?: string | null;
             /** Format: uuid */
             org_id?: string | null;
-            device_capture_consent_state?: components["schemas"]["ConsentStateValue"];
-            device_capture_consent_version?: string | null;
-            /** Format: date-time */
-            device_capture_consented_at?: string | null;
-            device_capture_telemetry_level?: components["schemas"]["TelemetryLevelValue"];
             session_token?: string | null;
             local_proof_token?: string | null;
         };
@@ -1860,12 +1560,6 @@ export interface components {
             last_activity_utc?: string | null;
             /** Format: date-time */
             user_agent_heartbeat_utc?: string | null;
-            user_agent_heartbeat_age_seconds?: number | null;
-            last_accepted_input_age_seconds?: number | null;
-            user_agent_startup_source?: string | null;
-            user_agent_startup_state?: string | null;
-            user_agent_last_launch_reason?: string | null;
-            user_agent_heartbeat_write_failure_count?: number | null;
             capture_context: components["schemas"]["CaptureContextValue"];
             keyboard_signal_active: boolean;
             mouse_signal_active: boolean;
@@ -1875,13 +1569,42 @@ export interface components {
             backend_connected: boolean;
             local_api_auth_ready: boolean;
             db_migration_failed: boolean;
+            /** @description Canonical durable focus-episode quality field. Prefer this over task_continuity_score when presenting product truth. */
+            focus_episode_quality: number;
+            /** @description Canonical durable focus-episode duration. This is the user-facing focus timer and must not be treated as current foreground-app age. */
+            focus_episode_seconds: number;
+            focus_episode_state: components["schemas"]["ContinuityStateValue"];
+            /** @description Canonical focus-episode reason code. This explains why the current focus episode is active, paused, fading, or reset. */
+            focus_episode_reason_code?: string | null;
+            /** @description Human-readable explanation for the current focus-episode state or ending reason. */
+            focus_episode_reason_text?: string | null;
+            /**
+             * @description Canonical current attention segment. This distinguishes steady focus from short context excursions, distraction episodes, and away time.
+             * @enum {string}
+             */
+            attention_segment_kind: "focus" | "context_excursion" | "off_task_distraction" | "fragmentation_distraction" | "away";
+            /** @description Duration of the current attention segment in seconds. */
+            attention_segment_seconds: number;
+            /** @description Canonical attention-segment reason code. This explains why the machine is currently classified as focus, excursion, distraction, or away. */
+            attention_segment_reason_code?: string | null;
+            /** @description Human-readable explanation for the current attention-segment classification. */
+            attention_segment_reason_text?: string | null;
+            /** @description True only when the current attention segment is a real distraction episode. */
+            distraction_episode_active: boolean;
+            /** @description Duration of the current distraction episode in seconds. Away time and short context excursions do not count here. */
+            distraction_episode_seconds: number;
+            /** @description Legacy compatibility field for continuity quality. Canonical product meaning is focus-episode quality. */
             task_continuity_score: number;
+            /** @description Legacy compatibility field for the durable focus timer. Canonical product meaning is focus-episode duration, not foreground-app age. */
             task_continuity_seconds: number;
             continuity_state: components["schemas"]["ContinuityStateValue"];
             deep_work_active: boolean;
+            /** @description Legacy visible overload field. Canonical product meaning is pressure. */
             overload_likelihood: number;
+            /** @description Conservative stabilized overload state used for interventions and system actions. */
             overload_active: boolean;
             break_needed: boolean;
+            /** @description Legacy break transport action ID. During migration it may still carry stretch_break_suggestion or break_suggestion, which map to short break and long break. */
             break_pending_action?: string | null;
             break_pending_reason_code?: string | null;
             calibration_stage: components["schemas"]["CalibrationStageValue"];
@@ -1901,6 +1624,7 @@ export interface components {
             org_id?: string | null;
             user_name: string;
             intervention_id: string;
+            /** @description Compatibility transport action ID. In particular, stretch_break_suggestion and break_suggestion are legacy action names for short break and long break. */
             action: string;
             action_category: components["schemas"]["MachineActionCategoryValue"];
             decision_state: components["schemas"]["MachineActionDecisionStateValue"];
