@@ -42,6 +42,8 @@ function buildSummary(overrides: Partial<MachineSummaryReport> = {}): MachineSum
     taskContinuitySeconds: 600,
     continuityState: 'keep',
     deepWorkActive: false,
+    pressureLevel: 0.18,
+    pressureConfidence: 0.9,
     overloadLikelihood: 0.1,
     overloadActive: false,
     breakNeeded: false,

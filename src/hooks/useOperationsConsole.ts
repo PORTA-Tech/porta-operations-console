@@ -395,7 +395,7 @@ function parseStreamMachineState(payload: Record<string, unknown>): StreamMachin
     sessionConnected: pickBoolean(payload, ['user_session_connected', 'session_connected', 'sessionConnected']),
     activityDetected: pickBoolean(payload, ['activity_detected', 'activityDetected']),
     focusScore: pickNumber(states, ['focus_strength', 'focus']),
-    overloadScore: pickNumber(states, ['overload_likelihood', 'overload']),
+    overloadScore: pickNumber(states, ['pressure_level', 'overload_likelihood', 'overload']),
     deepWorkActive: pickBoolean(payload, ['deep_work_active', 'deepWorkActive'])
       ?? pickBoolean(states, ['deep_work_active', 'deepWorkActive']),
     focusDurationSec: pickNumber(payload, [
@@ -419,7 +419,7 @@ function parseStreamMachineState(payload: Record<string, unknown>): StreamMachin
     ]),
     breakNeeded: pickBoolean(payload, ['break_needed', 'breakNeeded'])
       ?? (breakPendingAction !== null ? true : null),
-    confidenceScore: pickNumber(payload, ['model_confidence', 'confidence_score', 'confidence']),
+    confidenceScore: pickNumber(payload, ['pressure_confidence', 'model_confidence', 'confidence_score', 'confidence']),
     trustTier: pickString(payload, ['trust_tier', 'trustTier']),
     learningStage: pickString(payload, ['learning_stage', 'learningStage']),
     calibrationStage: pickString(payload, ['calibration_stage', 'calibrationStage']),
@@ -486,7 +486,7 @@ function traceStateSource(row: AuditDecisionRecord): {
     ]),
     activityDetected: pickBoolean(signalPayload, ['activity_detected', 'activityDetected']),
     focusScore: pickNumber(statePayload, ['focus_strength', 'focus']),
-    overloadScore: pickNumber(statePayload, ['overload_likelihood', 'overload']),
+    overloadScore: pickNumber(statePayload, ['pressure_level', 'overload_likelihood', 'overload']),
     deepWorkActive: pickBoolean(statePayload, ['deep_work_active', 'deepWorkActive']),
     focusDurationSec: pickNumber(statePayload, [
       'focus_episode_seconds',
@@ -501,7 +501,7 @@ function traceStateSource(row: AuditDecisionRecord): {
     breakNeeded: pickBoolean(statePayload, ['break_needed', 'breakNeeded'])
       ?? (breakPendingAction !== null ? true : null),
     confidenceScore: parseNumber(row.confidence_score)
-      ?? pickNumber(statePayload, ['model_confidence', 'confidence_score', 'confidence']),
+      ?? pickNumber(statePayload, ['pressure_confidence', 'model_confidence', 'confidence_score', 'confidence']),
     trustTier: pickString(statePayload, ['trust_tier', 'trustTier']),
     learningStage: pickString(statePayload, ['learning_stage', 'learningStage']),
     calibrationStage: pickString(statePayload, ['calibration_stage', 'calibrationStage']),

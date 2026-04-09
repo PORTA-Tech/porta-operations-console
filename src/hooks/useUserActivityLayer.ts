@@ -81,11 +81,16 @@ function mapDeepWork(summary: MachineSummaryReport): UserActivityDeepWork {
   return summary.deepWorkActive ? 'Active' : 'Not active';
 }
 
+function pressureLevel(summary: MachineSummaryReport): number {
+  return Number.isFinite(summary.pressureLevel)
+    ? summary.pressureLevel
+    : summary.overloadLikelihood;
+}
+
 function mapOverloadRisk(summary: MachineSummaryReport): UserActivityOverloadRisk {
-  // Compatibility mapping:
-  // overloadLikelihood is the legacy visible field that will migrate to Pressure.
-  if (summary.overloadActive || summary.overloadLikelihood >= 0.72) return 'High';
-  if (summary.overloadLikelihood >= 0.4) return 'Medium';
+  const pressure = pressureLevel(summary);
+  if (summary.overloadActive || pressure >= 0.72) return 'High';
+  if (pressure >= 0.4) return 'Medium';
   return 'Low';
 }
 

@@ -67,6 +67,10 @@ export interface MachineSummaryReport {
   taskContinuitySeconds: number;
   continuityState: ContinuityState;
   deepWorkActive: boolean;
+  // Canonical user-facing pressure signal.
+  pressureLevel: number;
+  // Confidence should be shown alongside pressure instead of hiding pressure.
+  pressureConfidence: number;
   // Legacy visible overload field. The product target is Pressure.
   overloadLikelihood: number;
   // Canonical meaning aligns with overload active.
