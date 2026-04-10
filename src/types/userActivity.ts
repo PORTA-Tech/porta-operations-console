@@ -13,6 +13,8 @@ export interface UserActivityRecord {
   focusLevel: UserActivityFocusLevel;
   deepWork: UserActivityDeepWork;
   overloadRisk: UserActivityOverloadRisk;
+  pressureLabel: string;
+  pressureConfidenceLabel: string;
   focusDurationSec: number | null;
   focusDurationLabel: string;
   breakNeeded: UserActivityBreakNeeded;

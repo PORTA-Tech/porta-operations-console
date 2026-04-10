@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { MachineSummaryReport } from '../api/machines';
-import { describeActivityReason } from './useUserActivityLayer';
+import {
+  describeActivityReason,
+  describePressureConfidence,
+  describePressureLabel
+} from './useUserActivityLayer';
 
 function buildSummary(overrides: Partial<MachineSummaryReport> = {}): MachineSummaryReport {
   return {
@@ -89,5 +93,41 @@ describe('describeActivityReason', () => {
     });
 
     expect(describeActivityReason(summary, true)).toBeNull();
+  });
+});
+
+describe('pressure presentation', () => {
+  it('shows canonical pressure even when overload is not active', () => {
+    const summary = buildSummary({
+      pressureLevel: 0.82,
+      pressureConfidence: 0.43,
+      overloadLikelihood: 0.18,
+      overloadActive: false
+    });
+
+    expect(describePressureLabel(summary, false)).toBe('82%');
+    expect(describePressureConfidence(summary, false)).toBe('Confidence Low (43%)');
+  });
+
+  it('keeps pressure visible when the row is limited by partial data', () => {
+    const summary = buildSummary({
+      pressureLevel: 0.76,
+      pressureConfidence: 0.61,
+      partialData: true,
+      missingMajorChannels: ['mouse']
+    });
+
+    expect(describePressureLabel(summary, false)).toBe('76%');
+    expect(describePressureConfidence(summary, false)).toBe('Confidence Medium (61%)');
+  });
+
+  it('hides pressure only when the row is unavailable', () => {
+    const summary = buildSummary({
+      pressureLevel: 0.82,
+      pressureConfidence: 0.43
+    });
+
+    expect(describePressureLabel(summary, true)).toBe('Unavailable');
+    expect(describePressureConfidence(summary, true)).toBe('Confidence unavailable');
   });
 });

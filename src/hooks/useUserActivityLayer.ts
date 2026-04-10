@@ -52,6 +52,11 @@ function formatDuration(seconds: number | null, fallback: 'Unknown' | 'Unavailab
   return `${minutes}m ${secs}s`;
 }
 
+function formatPercent(value: number | null, fallback: 'Unknown' | 'Unavailable'): string {
+  if (value === null || !Number.isFinite(value)) return fallback;
+  return `${Math.round(Math.max(0, Math.min(1, value)) * 100)}%`;
+}
+
 function mapFocusLevel(summary: MachineSummaryReport): UserActivityFocusLevel {
   const episodeSeconds = focusEpisodeSeconds(summary);
   const episodeQuality = focusEpisodeQuality(summary);
@@ -81,6 +86,17 @@ function pressureLevel(summary: MachineSummaryReport): number {
   return summary.pressureLevel;
 }
 
+function pressureConfidence(summary: MachineSummaryReport): number {
+  return summary.pressureConfidence;
+}
+
+function mapPressureConfidence(summary: MachineSummaryReport): 'Low' | 'Medium' | 'High' {
+  const confidence = pressureConfidence(summary);
+  if (confidence >= 0.75) return 'High';
+  if (confidence >= 0.5) return 'Medium';
+  return 'Low';
+}
+
 function mapOverloadRisk(summary: MachineSummaryReport): UserActivityOverloadRisk {
   const pressure = pressureLevel(summary);
   if (summary.overloadActive || pressure >= 0.72) return 'High';
@@ -90,6 +106,27 @@ function mapOverloadRisk(summary: MachineSummaryReport): UserActivityOverloadRis
 
 function mapBreakNeeded(summary: MachineSummaryReport): UserActivityBreakNeeded {
   return summary.breakNeeded || summary.breakPendingKind ? 'Yes' : 'No';
+}
+
+export function describePressureLabel(summary: MachineSummaryReport, stateStale: boolean): string {
+  if (stateStale || !summary.agentRunning || !summary.userSessionConnected) {
+    return 'Unavailable';
+  }
+
+  return formatPercent(pressureLevel(summary), 'Unknown');
+}
+
+export function describePressureConfidence(summary: MachineSummaryReport, stateStale: boolean): string {
+  if (stateStale || !summary.agentRunning || !summary.userSessionConnected) {
+    return 'Confidence unavailable';
+  }
+
+  const confidence = pressureConfidence(summary);
+  if (!Number.isFinite(confidence)) {
+    return 'Confidence unavailable';
+  }
+
+  return `Confidence ${mapPressureConfidence(summary)} (${formatPercent(confidence, 'Unknown')})`;
 }
 
 export function describeActivityReason(summary: MachineSummaryReport, stateStale: boolean): string | null {
@@ -146,6 +183,8 @@ export function useUserActivityLayer(): {
         const stateStale = !isFresh(summary.reportedAtUtc, STATE_FRESH_MS);
         const note = deriveNote(summary, stateStale);
         const activityReason = describeActivityReason(summary, stateStale);
+        const pressureLabel = describePressureLabel(summary, stateStale);
+        const pressureConfidenceLabel = describePressureConfidence(summary, stateStale);
         const tone = deriveTone(summary, stateStale, note);
         const focusDurationSec = focusEpisodeSeconds(summary);
 
@@ -158,6 +197,8 @@ export function useUserActivityLayer(): {
           focusLevel: tone === 'unavailable' ? 'Unavailable' : mapFocusLevel(summary),
           deepWork: tone === 'unavailable' ? 'Unavailable' : mapDeepWork(summary),
           overloadRisk: tone === 'unavailable' ? 'Unavailable' : mapOverloadRisk(summary),
+          pressureLabel,
+          pressureConfidenceLabel,
           focusDurationSec: tone === 'unavailable' ? null : focusDurationSec,
           focusDurationLabel: tone === 'unavailable'
             ? formatDuration(null, 'Unavailable')

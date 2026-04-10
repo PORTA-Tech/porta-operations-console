@@ -135,7 +135,11 @@ export function UserActivityPage() {
                       <span className={deepWorkBadgeClass(record.deepWork)}>{record.deepWork}</span>
                     </td>
                     <td>
-                      <span className={overloadBadgeClass(record.overloadRisk)}>{record.overloadRisk}</span>
+                      <div className="user-activity-context">
+                        <span className={overloadBadgeClass(record.overloadRisk)}>{record.overloadRisk}</span>
+                        <span className="user-activity-note">Pressure {record.pressureLabel}</span>
+                        <span className="user-activity-note">{record.pressureConfidenceLabel}</span>
+                      </div>
                     </td>
                     <td>
                       <div className="user-activity-context">
