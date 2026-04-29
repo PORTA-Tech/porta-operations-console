@@ -423,18 +423,14 @@ function parseStreamMachineState(payload: Record<string, unknown>): StreamMachin
       'task_continuity_seconds',
       'taskContinuitySeconds',
       'focus_duration_seconds',
-      'focusDurationSeconds',
-      'sustained_attention_duration',
-      'sustained_attention_duration_sec'
+      'focusDurationSeconds'
     ]) ?? pickNumber(states, [
       'focus_episode_seconds',
       'focusEpisodeSeconds',
       'task_continuity_seconds',
       'taskContinuitySeconds',
       'focus_duration_seconds',
-      'focusDurationSeconds',
-      'sustained_attention_duration',
-      'sustained_attention_duration_sec'
+      'focusDurationSeconds'
     ]),
     breakNeeded: pickBoolean(payload, ['break_needed', 'breakNeeded'])
       ?? (breakPendingKind !== null || breakPendingAction !== null ? true : null),
@@ -514,9 +510,7 @@ function traceStateSource(row: AuditDecisionRecord): {
       'task_continuity_seconds',
       'taskContinuitySeconds',
       'focus_duration_seconds',
-      'focusDurationSeconds',
-      'sustained_attention_duration',
-      'sustained_attention_duration_sec'
+      'focusDurationSeconds'
     ]),
     breakNeeded: pickBoolean(statePayload, ['break_needed', 'breakNeeded'])
       ?? (breakPendingKind !== null || breakPendingAction !== null ? true : null),
