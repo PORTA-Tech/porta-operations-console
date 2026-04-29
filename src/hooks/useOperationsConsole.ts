@@ -36,6 +36,11 @@ interface StreamMachineState {
   deepWorkActive: boolean | null;
   focusDurationSec: number | null;
   breakNeeded: boolean | null;
+  attentionSegmentKind: string | null;
+  distractionEpisodeActive: boolean | null;
+  distractionEpisodeSeconds: number | null;
+  attentionSegmentReasonCode: string | null;
+  attentionSegmentReasonText: string | null;
   confidenceScore: number | null;
   trustTier: string | null;
   learningStage: string | null;
@@ -434,6 +439,11 @@ function parseStreamMachineState(payload: Record<string, unknown>): StreamMachin
     ]),
     breakNeeded: pickBoolean(payload, ['break_needed', 'breakNeeded'])
       ?? (breakPendingKind !== null || breakPendingAction !== null ? true : null),
+    attentionSegmentKind: pickString(payload, ['attention_segment_kind', 'attentionSegmentKind']),
+    distractionEpisodeActive: pickBoolean(payload, ['distraction_episode_active', 'distractionEpisodeActive']),
+    distractionEpisodeSeconds: pickNumber(payload, ['distraction_episode_seconds', 'distractionEpisodeSeconds']),
+    attentionSegmentReasonCode: pickString(payload, ['attention_segment_reason_code', 'attentionSegmentReasonCode']),
+    attentionSegmentReasonText: pickString(payload, ['attention_segment_reason_text', 'attentionSegmentReasonText']),
     confidenceScore: pickNumber(payload, ['pressure_confidence', 'model_confidence', 'confidence_score', 'confidence']),
     trustTier: pickString(payload, ['trust_tier', 'trustTier']),
     learningStage: pickString(payload, ['learning_stage', 'learningStage']),
@@ -469,6 +479,11 @@ function traceStateSource(row: AuditDecisionRecord): {
   deepWorkActive: boolean | null;
   focusDurationSec: number | null;
   breakNeeded: boolean | null;
+  attentionSegmentKind: string | null;
+  distractionEpisodeActive: boolean | null;
+  distractionEpisodeSeconds: number | null;
+  attentionSegmentReasonCode: string | null;
+  attentionSegmentReasonText: string | null;
   confidenceScore: number | null;
   trustTier: string | null;
   learningStage: string | null;
@@ -514,6 +529,11 @@ function traceStateSource(row: AuditDecisionRecord): {
     ]),
     breakNeeded: pickBoolean(statePayload, ['break_needed', 'breakNeeded'])
       ?? (breakPendingKind !== null || breakPendingAction !== null ? true : null),
+    attentionSegmentKind: pickString(statePayload, ['attention_segment_kind', 'attentionSegmentKind']),
+    distractionEpisodeActive: pickBoolean(statePayload, ['distraction_episode_active', 'distractionEpisodeActive']),
+    distractionEpisodeSeconds: pickNumber(statePayload, ['distraction_episode_seconds', 'distractionEpisodeSeconds']),
+    attentionSegmentReasonCode: pickString(statePayload, ['attention_segment_reason_code', 'attentionSegmentReasonCode']),
+    attentionSegmentReasonText: pickString(statePayload, ['attention_segment_reason_text', 'attentionSegmentReasonText']),
     confidenceScore: parseNumber(row.confidence_score)
       ?? pickNumber(statePayload, ['pressure_confidence', 'model_confidence', 'confidence_score', 'confidence']),
     trustTier: pickString(statePayload, ['trust_tier', 'trustTier']),
@@ -754,13 +774,21 @@ export function useOperationsConsole(): {
         const deepWorkActive = streamFresh ? (streamState?.deepWorkActive ?? null) : (traceFresh ? (traceSource?.deepWorkActive ?? null) : null);
         const focusDurationSec = streamFresh ? (streamState?.focusDurationSec ?? null) : (traceFresh ? (traceSource?.focusDurationSec ?? null) : null);
         const breakNeeded = streamFresh ? (streamState?.breakNeeded ?? null) : (traceFresh ? (traceSource?.breakNeeded ?? null) : null);
+        const attentionSegmentKind = streamFresh ? (streamState?.attentionSegmentKind ?? null) : (traceFresh ? (traceSource?.attentionSegmentKind ?? null) : null);
+        const distractionEpisodeActive = streamFresh ? (streamState?.distractionEpisodeActive ?? null) : (traceFresh ? (traceSource?.distractionEpisodeActive ?? null) : null);
+        const distractionEpisodeSeconds = streamFresh ? (streamState?.distractionEpisodeSeconds ?? null) : (traceFresh ? (traceSource?.distractionEpisodeSeconds ?? null) : null);
+        const attentionSegmentReasonText = streamFresh ? (streamState?.attentionSegmentReasonText ?? null) : (traceFresh ? (traceSource?.attentionSegmentReasonText ?? null) : null);
 
         const layer2 = {
           focusLevel: focusLabel(focusScore),
           deepWork: actionActivityLabel(deepWorkActive),
           overloadRisk: riskLabel(overloadScore),
           focusDurationSec,
-          breakNeeded: toTruthLabel(breakNeeded)
+          breakNeeded: toTruthLabel(breakNeeded),
+          attentionSegmentKind,
+          distractionEpisodeActive,
+          distractionEpisodeSeconds,
+          attentionSegmentReasonText
         };
 
         const learningStage = learningStageLabel({

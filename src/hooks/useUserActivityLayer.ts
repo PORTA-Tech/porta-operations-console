@@ -208,6 +208,9 @@ export function useUserActivityLayer(): {
           stateStale,
           note,
           activityReason,
+          attentionSegmentKind: tone === 'unavailable' ? null : (summary.attentionSegmentKind ?? null),
+          distractionEpisodeActive: tone === 'unavailable' ? null : summary.distractionEpisodeActive,
+          distractionEpisodeSeconds: tone === 'unavailable' ? null : summary.distractionEpisodeSeconds,
           tone
         } satisfies UserActivityRecord;
       })

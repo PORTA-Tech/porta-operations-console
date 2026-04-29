@@ -24,6 +24,10 @@ export interface OperationsLayer2 {
   overloadRisk: OperationsRiskLabel;
   focusDurationSec: number | null;
   breakNeeded: OperationsTruthLabel;
+  attentionSegmentKind: string | null;
+  distractionEpisodeActive: boolean | null;
+  distractionEpisodeSeconds: number | null;
+  attentionSegmentReasonText: string | null;
 }
 
 export interface OperationsLayer3 {

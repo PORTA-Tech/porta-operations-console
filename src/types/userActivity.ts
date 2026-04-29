@@ -22,5 +22,8 @@ export interface UserActivityRecord {
   stateStale: boolean;
   note: string | null;
   activityReason: string | null;
+  attentionSegmentKind: string | null;
+  distractionEpisodeActive: boolean | null;
+  distractionEpisodeSeconds: number | null;
   tone: UserActivityTone;
 }
