@@ -41,6 +41,7 @@ interface StreamMachineState {
   distractionEpisodeSeconds: number | null;
   attentionSegmentReasonCode: string | null;
   attentionSegmentReasonText: string | null;
+  focusEpisodeReasonText: string | null;
   confidenceScore: number | null;
   trustTier: string | null;
   learningStage: string | null;
@@ -444,6 +445,7 @@ function parseStreamMachineState(payload: Record<string, unknown>): StreamMachin
     distractionEpisodeSeconds: pickNumber(payload, ['distraction_episode_seconds', 'distractionEpisodeSeconds']),
     attentionSegmentReasonCode: pickString(payload, ['attention_segment_reason_code', 'attentionSegmentReasonCode']),
     attentionSegmentReasonText: pickString(payload, ['attention_segment_reason_text', 'attentionSegmentReasonText']),
+    focusEpisodeReasonText: pickString(payload, ['focus_episode_reason_text', 'focusEpisodeReasonText']),
     confidenceScore: pickNumber(payload, ['pressure_confidence', 'model_confidence', 'confidence_score', 'confidence']),
     trustTier: pickString(payload, ['trust_tier', 'trustTier']),
     learningStage: pickString(payload, ['learning_stage', 'learningStage']),
@@ -484,6 +486,7 @@ function traceStateSource(row: AuditDecisionRecord): {
   distractionEpisodeSeconds: number | null;
   attentionSegmentReasonCode: string | null;
   attentionSegmentReasonText: string | null;
+  focusEpisodeReasonText: string | null;
   confidenceScore: number | null;
   trustTier: string | null;
   learningStage: string | null;
@@ -534,6 +537,7 @@ function traceStateSource(row: AuditDecisionRecord): {
     distractionEpisodeSeconds: pickNumber(statePayload, ['distraction_episode_seconds', 'distractionEpisodeSeconds']),
     attentionSegmentReasonCode: pickString(statePayload, ['attention_segment_reason_code', 'attentionSegmentReasonCode']),
     attentionSegmentReasonText: pickString(statePayload, ['attention_segment_reason_text', 'attentionSegmentReasonText']),
+    focusEpisodeReasonText: pickString(statePayload, ['focus_episode_reason_text', 'focusEpisodeReasonText']),
     confidenceScore: parseNumber(row.confidence_score)
       ?? pickNumber(statePayload, ['pressure_confidence', 'model_confidence', 'confidence_score', 'confidence']),
     trustTier: pickString(statePayload, ['trust_tier', 'trustTier']),
@@ -778,6 +782,7 @@ export function useOperationsConsole(): {
         const distractionEpisodeActive = streamFresh ? (streamState?.distractionEpisodeActive ?? null) : (traceFresh ? (traceSource?.distractionEpisodeActive ?? null) : null);
         const distractionEpisodeSeconds = streamFresh ? (streamState?.distractionEpisodeSeconds ?? null) : (traceFresh ? (traceSource?.distractionEpisodeSeconds ?? null) : null);
         const attentionSegmentReasonText = streamFresh ? (streamState?.attentionSegmentReasonText ?? null) : (traceFresh ? (traceSource?.attentionSegmentReasonText ?? null) : null);
+        const focusEpisodeReasonText = streamFresh ? (streamState?.focusEpisodeReasonText ?? null) : (traceFresh ? (traceSource?.focusEpisodeReasonText ?? null) : null);
 
         const layer2 = {
           focusLevel: focusLabel(focusScore),
@@ -788,7 +793,8 @@ export function useOperationsConsole(): {
           attentionSegmentKind,
           distractionEpisodeActive,
           distractionEpisodeSeconds,
-          attentionSegmentReasonText
+          attentionSegmentReasonText,
+          focusEpisodeReasonText
         };
 
         const learningStage = learningStageLabel({

@@ -28,6 +28,7 @@ export interface OperationsLayer2 {
   distractionEpisodeActive: boolean | null;
   distractionEpisodeSeconds: number | null;
   attentionSegmentReasonText: string | null;
+  focusEpisodeReasonText: string | null;
 }
 
 export interface OperationsLayer3 {

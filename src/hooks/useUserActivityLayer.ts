@@ -211,6 +211,7 @@ export function useUserActivityLayer(): {
           attentionSegmentKind: tone === 'unavailable' ? null : (summary.attentionSegmentKind ?? null),
           distractionEpisodeActive: tone === 'unavailable' ? null : summary.distractionEpisodeActive,
           distractionEpisodeSeconds: tone === 'unavailable' ? null : summary.distractionEpisodeSeconds,
+          focusEpisodeReasonText: tone === 'unavailable' ? null : (typeof summary.focusEpisodeReasonText === 'string' && summary.focusEpisodeReasonText.trim().length > 0 ? summary.focusEpisodeReasonText.trim() : null),
           tone
         } satisfies UserActivityRecord;
       })
