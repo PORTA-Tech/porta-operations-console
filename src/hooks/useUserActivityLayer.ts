@@ -99,7 +99,9 @@ function mapPressureConfidence(summary: MachineSummaryReport): 'Low' | 'Medium' 
 
 function mapOverloadRisk(summary: MachineSummaryReport): UserActivityOverloadRisk {
   const pressure = pressureLevel(summary);
-  if (summary.overloadActive || pressure >= 0.72) return 'High';
+  // Use expressive pressure only — overloadActive is a separate stabilized gate,
+  // not an input to the risk label.
+  if (pressure >= 0.72) return 'High';
   if (pressure >= 0.4) return 'Medium';
   return 'Low';
 }
@@ -212,6 +214,8 @@ export function useUserActivityLayer(): {
           distractionEpisodeActive: tone === 'unavailable' ? null : summary.distractionEpisodeActive,
           distractionEpisodeSeconds: tone === 'unavailable' ? null : summary.distractionEpisodeSeconds,
           focusEpisodeReasonText: tone === 'unavailable' ? null : (typeof summary.focusEpisodeReasonText === 'string' && summary.focusEpisodeReasonText.trim().length > 0 ? summary.focusEpisodeReasonText.trim() : null),
+          overloadActive: tone === 'unavailable' ? null : summary.overloadActive,
+          pressureLevel: tone === 'unavailable' ? null : summary.pressureLevel,
           tone
         } satisfies UserActivityRecord;
       })

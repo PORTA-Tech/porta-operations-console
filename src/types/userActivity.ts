@@ -26,5 +26,7 @@ export interface UserActivityRecord {
   distractionEpisodeActive: boolean | null;
   distractionEpisodeSeconds: number | null;
   focusEpisodeReasonText: string | null;
+  overloadActive: boolean | null;
+  pressureLevel: number | null;
   tone: UserActivityTone;
 }
