@@ -16,14 +16,14 @@ const ACTION_CATALOG: ActionCatalogEntry[] = [
   {
     displayName: 'Long break',
     actionType: 'Suggestion',
-    actionCodes: ['break_suggestion', 'long_break'],
-    commandTypes: ['show_break_toast']
+    actionCodes: ['long_break', 'break_suggestion'],
+    commandTypes: ['show_break_overlay', 'show_break_toast']
   },
   {
     displayName: 'Short break',
     actionType: 'Suggestion',
-    actionCodes: ['stretch_break_suggestion', 'short_break'],
-    commandTypes: ['show_stretch_break_toast']
+    actionCodes: ['short_break', 'stretch_break_suggestion'],
+    commandTypes: ['show_break_overlay', 'show_stretch_break_toast']
   },
   {
     displayName: 'Focus lock suggestion',
