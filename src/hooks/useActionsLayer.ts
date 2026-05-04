@@ -66,7 +66,16 @@ interface ActionCandidate {
 function suggestionGroupKey(event: MachineActionEvent): string | null {
   if (event.actionCategory !== 'suggestion') return null;
   if (!event.interventionId) return null;
-  if (event.executionState !== 'applied' && event.executionState !== 'verified' && event.executionState !== 'failed') {
+  // Terminal states for widget suggestions and break overlay suggestions both collapse
+  // into a single representative record per intervention.
+  // overlay_completed / overlay_aborted are the break-overlay equivalents of applied/verified/failed.
+  const isTerminal =
+    event.executionState === 'applied' ||
+    event.executionState === 'verified' ||
+    event.executionState === 'failed' ||
+    event.executionState === 'overlay_completed' ||
+    event.executionState === 'overlay_aborted';
+  if (!isTerminal) {
     return null;
   }
   return [event.machineId, event.interventionId, event.action].join(':');
