@@ -1,5 +1,38 @@
 # PORTA Operations Console
 
+Admin console for the **Ari** agent fleet.
+
+## What Ari Is
+
+**Ari** is a Windows productivity-tracking agent (`porta-agent-windows-x64`). It runs as three processes on the user's Windows machine:
+- **ari.exe** — Windows service: captures input signals, runs the 5-second analysis pipeline, hosts the local HTTP API
+- **Porta.UserAgent.exe** — user-session process: keyboard/mouse capture hooks, floating desktop widget
+- **Porta.ControlCenter.exe** — WPF dashboard the user opens on demand
+
+The agent connects to `porta-control-plane` for policy sync and fleet telemetry. This console is the operator view of the fleet.
+
+## What This Console Shows
+
+- **System Health** — service status, capture quality, API health per machine
+- **User Activity** — work-today timeline, focus sessions, pressure history
+- **Trust Level** — baseline calibration stage (Cold / Provisional / Ready / Calibrated)
+- **Actions** — break suggestions, interventions, pause/resume history
+
+## Key Domain Terms
+
+| Term | Meaning |
+|---|---|
+| focus episode | Durable unit of sustained user focus time (≥15s threshold, survives short context switches ≤60s) |
+| pressure | User-facing overload score 0–1 (shown as %) |
+| overload active | Stabilized binary overload state used for intervention triggers |
+| short break | Light break suggestion after ~30 min of effective focus |
+| long break | Full break suggestion after ~75 min of effective focus |
+| freshness_state | `"fresh"` = state is current; `"stale"` = last refresh pending |
+| provisional | Baseline calibration phase — not enough data yet for full confidence |
+| capture context | `UserSession` = full input capture; other values = degraded/reconnecting |
+
+---
+
 Admin console for the current PORTA V1 operations surface.
 
 ## Current Scope
