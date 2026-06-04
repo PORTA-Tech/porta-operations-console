@@ -1,104 +1,137 @@
-import { useMemo, useState } from 'react';
-import { Panel } from '../../components/Layout/Panel';
+import { useMemo } from 'react';
 import { useMachineActionFeed } from '../../hooks/useMachineActionFeed';
 import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
-import { formatRelativeFromNow } from '../../utils/date';
+import { relativeTime } from '../../utils/console';
 
-function formatLabel(raw: string): string {
-  return raw.replace(/_/g, ' ');
+function formatActionLabel(action: string): string {
+  return action.replace(/_/g, ' ');
 }
-
-function executionStateBadgeClass(state: string): string {
-  if (state === 'verified' || state === 'overlay_completed' || state === 'applied') return 'status-badge ok';
-  if (state === 'failed') return 'status-badge critical';
-  if (state === 'skipped' || state === 'dismissed' || state === 'snoozed' || state === 'suppressed_by_preference') return 'status-badge neutral';
-  if (state === 'overlay_started' || state === 'accepted') return 'status-badge focus';
-  return 'status-badge neutral';
-}
-
-const PAGE_SIZE = 20;
 
 export function ActionsPage() {
   const actionsFeed = useMachineActionFeed(200);
   const summaryFeed = useMachineSummaryFeed();
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const machineNames = useMemo(
     () => new Map(summaryFeed.rows.map((r) => [r.machineId, r.machineName])),
     [summaryFeed.rows]
   );
 
-  const loading = actionsFeed.loading || summaryFeed.loading;
-  const error = actionsFeed.error ?? summaryFeed.error;
-  const visibleRows = actionsFeed.rows.slice(0, visibleCount);
-  const hasMore = actionsFeed.rows.length > visibleCount;
+  const events = actionsFeed.rows;
+  const totalCount = events.length;
+  const totalBadge = totalCount >= 200 ? '200+' : String(totalCount);
+
+  const appliedCount = events.filter((e) => e.executionState === 'applied' || e.executionState === 'verified').length;
+  const appliedPct = totalCount > 0 ? Math.round((appliedCount / totalCount) * 100) : 0;
+
+  const focusModeCount = events.filter(
+    (e) => e.action === 'focus_mode_enabled' || e.action === 'deep_work_active'
+  ).length;
+
+  const overloadCount = events.filter(
+    (e) => e.action === 'inform_overload_risk' || e.actionCategory === ('overload' as unknown as typeof e.actionCategory)
+  ).length;
+
+  const timeline = events.slice(0, 20);
+  const breakSuggestions = events.filter(
+    (e) => e.action === 'stretch_break_suggestion' || e.action === 'break_suggestion'
+  ).slice(0, 10);
 
   return (
-    <div className="stack">
-      {loading ? <p className="muted-line">Loading action events...</p> : null}
-      {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
+    <>
+      {/* Fleet strip */}
+      <div className="fleet-strip">
+        <div className="fleet-card c-accent">
+          <div className="fc-label">Total Actions</div>
+          <div className="fc-val accent">{totalBadge}</div>
+          <div className="fc-sub">Last 200 fetched</div>
+        </div>
+        <div className="fleet-card c-green">
+          <div className="fc-label">Applied</div>
+          <div className="fc-val green">~{appliedPct}%</div>
+          <div className="fc-sub">Executed by agent</div>
+        </div>
+        <div className="fleet-card c-blue">
+          <div className="fc-label">Focus Mode</div>
+          <div className="fc-val blue">{focusModeCount}</div>
+          <div className="fc-sub">Enabled today</div>
+        </div>
+        <div className="fleet-card c-amber">
+          <div className="fc-label">Overload Alerts</div>
+          <div className="fc-val amber">{overloadCount}</div>
+          <div className="fc-sub">Risk warnings sent</div>
+        </div>
+      </div>
 
-      <Panel
-        title="Action timeline"
-        subtitle="Raw action events from all machines in chronological order — what Ari decided, suggested, or applied."
-      >
-        {actionsFeed.rows.length === 0 && !loading ? (
-          <div className="empty-state">
-            <p className="muted-line">
-              No action events yet. The timeline populates once Ari agents send action events to the control plane.
-            </p>
-          </div>
-        ) : (
-          <>
-            <div className="table-scroll-wrap">
-              <table className="simple-table actions-timeline-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: '110px' }}>Time</th>
-                    <th>Machine</th>
-                    <th>User</th>
-                    <th>Action</th>
-                    <th style={{ width: '160px' }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleRows.map((event, index) => (
-                    <tr
-                      key={`${event.machineId}:${event.interventionId}:${event.timestampUtc}:${event.executionState}:${index}`}
-                    >
-                      <td>
-                        <div className="actions-time">
-                          <strong>{formatRelativeFromNow(event.timestampUtc)}</strong>
-                        </div>
-                      </td>
-                      <td>{machineNames.get(event.machineId) ?? event.machineId}</td>
-                      <td>{event.userName}</td>
-                      <td>{formatLabel(event.action)}</td>
-                      <td>
-                        <span className={executionStateBadgeClass(event.executionState)}>
-                          {formatLabel(event.executionState)}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      <div className="grid-2">
+        {/* Action Timeline */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Action Timeline</div>
+              <div className="card-sub">Last 20 Ari decisions — what was decided vs applied</div>
             </div>
-
-            {hasMore ? (
-              <div className="actions-load-more">
-                <button
-                  type="button"
-                  className="context-action-button"
-                  onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}
-                >
-                  Load more ({actionsFeed.rows.length - visibleCount} remaining)
-                </button>
+            <span className="card-tag tag-accent">Live</span>
+          </div>
+          <div className="card-body">
+            {timeline.length === 0 ? (
+              <div className="empty-state">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.3, margin: '0 auto' }}>
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                </svg>
+                <p>No action events yet.<br />Ari will log them here once triggered.</p>
               </div>
-            ) : null}
-          </>
-        )}
-      </Panel>
-    </div>
+            ) : (
+              timeline.map((e, i) => {
+                const isApplied = e.executionState === 'applied' || e.executionState === 'verified' || e.executionState === 'overlay_completed';
+                return (
+                  <div className="action-row" key={`${e.interventionId}:${e.executionState}:${i}`}>
+                    <div className="action-time">{relativeTime(e.timestampUtc)}</div>
+                    <div className="action-machine">{machineNames.get(e.machineId) ?? e.machineId}</div>
+                    <div className="action-label">{formatActionLabel(e.action)}</div>
+                    <div className={`action-status ${isApplied ? 'as-applied' : 'as-decided'}`}>
+                      {isApplied ? 'applied' : e.executionState.replace(/_/g, ' ')}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Break Suggestions */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Break Suggestions Log</div>
+              <div className="card-sub">Last 10 break suggestions with acknowledgement</div>
+            </div>
+          </div>
+          <div className="card-body">
+            {breakSuggestions.length === 0 ? (
+              <div className="empty-state">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.3, margin: '0 auto' }}>
+                  <circle cx="12" cy="12" r="10" /><path d="M12 8v4M12 16h.01" />
+                </svg>
+                <p>No break suggestions sent yet.<br />Ari will log them here once triggered.</p>
+              </div>
+            ) : (
+              breakSuggestions.map((e, i) => {
+                const isApplied = e.executionState === 'applied' || e.executionState === 'verified';
+                return (
+                  <div className="action-row" key={`break:${e.interventionId}:${i}`}>
+                    <div className="action-time">{relativeTime(e.timestampUtc)}</div>
+                    <div className="action-machine">{machineNames.get(e.machineId) ?? e.machineId}</div>
+                    <div className="action-label">{formatActionLabel(e.action)}</div>
+                    <div className={`action-status ${isApplied ? 'as-applied' : 'as-decided'}`}>
+                      {isApplied ? 'applied' : 'pending'}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </div>
+    </>
   );
 }

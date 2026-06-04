@@ -1,495 +1,355 @@
 import { useEffect, useMemo, useState } from 'react';
-import {
-  fetchAccountDevices,
-  revokeAccountDevice,
-  unlinkAccountDevice,
-  type AccountDeviceProfile
-} from '../../api/accountDevices';
+import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
 import { fetchMachineUptime, type UptimeSample } from '../../api/machines';
-import { toApiError } from '../../api/client';
-import { Panel } from '../../components/Layout/Panel';
-import { SummaryBand } from '../../components/Layout/SummaryBand';
-import { useSystemHealthLayer } from '../../hooks/useSystemHealthLayer';
-import type { SystemHealthRecord, SystemHealthStatus } from '../../types/systemHealth';
-import { formatRelativeFromNow, formatUtc } from '../../utils/date';
+import { relativeTime, getDayLabels, getLastSevenDayStrings } from '../../utils/console';
 
-type DeviceSelection = {
-  machineId: string;
-  accountId: string;
-  machineName: string;
-  userName: string;
-  userDetail: string | null;
-  orgRole: string | null;
-  deviceId: string | null;
-};
+// ─── UPTIME HELPERS ───────────────────────────────────────────────────────────
 
-function statusClass(value: SystemHealthStatus): string {
-  if (value === 'Yes') return 'status-badge ok';
-  if (value === 'No') return 'status-badge critical';
-  return 'status-badge warn';
+function computeDayBuckets(
+  samples: UptimeSample[],
+  dayStrings: string[]
+): ('online' | 'offline')[] {
+  return dayStrings.map((day) => {
+    const daySamples = samples.filter((s) => s.sampledAtUtc.slice(0, 10) === day);
+    return daySamples.some((s) => s.agentRunning) ? 'online' : 'offline';
+  });
 }
 
-function deviceStatusClass(value: string | null | undefined): string {
-  if (value === 'active') return 'status-badge ok';
-  if (value === 'revoked') return 'status-badge critical';
-  if (value === 'unlinked') return 'status-badge warn';
-  return 'status-badge neutral';
+function uptimePct(buckets: ('online' | 'offline')[]): number {
+  return Math.round((buckets.filter((b) => b === 'online').length / buckets.length) * 100);
 }
 
-function deviceStatusLabel(value: string | null | undefined): string {
-  if (!value) return 'Unknown';
+// ─── QUALITY TREND SVG ───────────────────────────────────────────────────────
 
-  return value
-    .trim()
-    .replace(/[_-]+/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+interface QualityTrendProps {
+  allUptime: Record<string, ('online' | 'offline')[]>;
+  machineCount: number;
 }
 
-function deviceSortRank(device: AccountDeviceProfile, currentDeviceId: string | null): number {
-  if (currentDeviceId && device.deviceId === currentDeviceId) return 0;
-  if (device.status === 'active') return 1;
-  if (device.status === 'unlinked') return 2;
-  if (device.status === 'revoked') return 3;
-  return 4;
-}
+function QualityTrendChart({ allUptime, machineCount }: QualityTrendProps) {
+  const W = 400, H = 140;
+  const pad = { t: 10, b: 10, l: 10, r: 10 };
 
-function timeCell(valueUtc: string | null, label: string, stale: boolean) {
-  const title = valueUtc ? formatUtc(valueUtc) : label;
-  const className = stale ? 'system-health-time stale' : 'system-health-time';
-  return (
-    <span className={className} title={title}>
-      {label}
-    </span>
-  );
-}
+  const healthy: number[] = [];
+  const degraded: number[] = [];
+  const disconnected: number[] = [];
 
-function UptimeSparkline({ machineId }: { machineId: string }) {
-  const [samples, setSamples] = useState<UptimeSample[]>([]);
-  const [fetched, setFetched] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetchMachineUptime(machineId, 7)
-      .then((data) => { if (!cancelled) { setSamples(data); setFetched(true); } })
-      .catch(() => { if (!cancelled) setFetched(true); });
-    return () => { cancelled = true; };
-  }, [machineId]);
-
-  const days: string[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    days.push(d.toISOString().slice(0, 10));
+  for (let d = 0; d < 7; d++) {
+    let h = 0, deg = 0, disc = 0;
+    Object.values(allUptime).forEach((buckets) => {
+      const status = buckets[d] ?? 'offline';
+      if (status === 'online') h++;
+      else disc++;
+    });
+    // Any machines with no uptime data at all are disconnected
+    const tracked = Object.keys(allUptime).length;
+    disc += Math.max(0, machineCount - tracked);
+    healthy.push(h);
+    degraded.push(deg);
+    disconnected.push(disc);
   }
 
-  const onlineByDay = useMemo(
-    () => new Set(samples.filter((s) => s.agentRunning).map((s) => s.sampledAtUtc.slice(0, 10))),
-    [samples]
-  );
+  const maxVal = Math.max(1, machineCount);
+  const dw = (W - pad.l - pad.r) / 7;
+  const scaleY = (v: number) =>
+    H - pad.b - (v / maxVal) * (H - pad.t - pad.b);
 
-  if (!fetched) {
-    return <span className="uptime-sparkline uptime-sparkline-loading" aria-label="Loading uptime" />;
-  }
+  const datasets = [
+    { data: healthy, color: 'rgba(74,222,128,0.7)' },
+    { data: degraded, color: 'rgba(251,191,36,0.6)' },
+    { data: disconnected, color: 'rgba(248,113,113,0.6)' },
+  ];
+
+  const gridLines = [2, 4, 6, 8].filter((v) => v <= maxVal);
 
   return (
-    <span className="uptime-sparkline" aria-label="7-day agent uptime">
-      {days.map((day) => (
-        <span
-          key={day}
-          className={`uptime-segment ${samples.length === 0 ? 'nodata' : onlineByDay.has(day) ? 'online' : 'offline'}`}
-          title={day}
-        />
-      ))}
-    </span>
+    <svg width="100%" height="140" viewBox="0 0 400 140">
+      {gridLines.map((v) => {
+        const y = scaleY(v);
+        return (
+          <g key={v}>
+            <line x1={pad.l} y1={y} x2={W - pad.r} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+            <text x={pad.l} y={y - 3} fill="rgba(255,255,255,0.2)" fontSize="9" fontFamily="JetBrains Mono">{v}</text>
+          </g>
+        );
+      })}
+      {datasets.map(({ data, color }) => {
+        const pts = data.map((v, i) => {
+          const x = pad.l + i * dw + dw / 2;
+          const y = scaleY(v);
+          return `${x},${y}`;
+        });
+        const d = pts.map((p, i) => (i === 0 ? `M${p}` : `L${p}`)).join(' ');
+        return (
+          <g key={color}>
+            <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            {data.map((v, i) => {
+              const x = pad.l + i * dw + dw / 2;
+              const y = scaleY(v);
+              return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
+            })}
+          </g>
+        );
+      })}
+    </svg>
   );
 }
+
+// ─── PAGE ────────────────────────────────────────────────────────────────────
 
 export function SystemHealthPage() {
-  const { records, loading, error, notices } = useSystemHealthLayer();
-  const [selection, setSelection] = useState<DeviceSelection | null>(null);
-  const [accountDevices, setAccountDevices] = useState<AccountDeviceProfile[]>([]);
-  const [deviceLoading, setDeviceLoading] = useState(false);
-  const [deviceError, setDeviceError] = useState<string | null>(null);
-  const [deviceNotice, setDeviceNotice] = useState<string | null>(null);
-  const [pendingDeviceAction, setPendingDeviceAction] = useState<string | null>(null);
-  const [deviceRefreshToken, setDeviceRefreshToken] = useState(0);
+  const { rows, lastRefreshUtc } = useMachineSummaryFeed();
+  const [allUptimeData, setAllUptimeData] = useState<Record<string, UptimeSample[]>>({});
+  const dayStrings = useMemo(() => getLastSevenDayStrings(), []);
+  const dayLabels = useMemo(() => getDayLabels(), []);
 
-  const healthyCount = records.filter((record) => record.tone === 'healthy').length;
-  const degradedCount = records.filter((record) => record.tone === 'warning').length;
-  const disconnectedCount = records.filter((record) => record.agentRunning === 'No').length;
-  const revokedCount = records.filter((record) => record.deviceStatus === 'revoked').length;
-  const noActivityCount = records.filter(
-    (record) => record.agentRunning === 'Yes' && record.userSessionConnected === 'Yes' && record.activityDetected !== 'Yes'
-  ).length;
-  const latestSeenUtc = records[0]?.lastSeenUtc ?? null;
-  const latestActivityUtc = records
-    .filter((record) => record.lastActivityUtc)
-    .sort((left, right) => Date.parse(right.lastActivityUtc ?? '') - Date.parse(left.lastActivityUtc ?? ''))[0]?.lastActivityUtc ?? null;
-
-  const selectedRecord = useMemo(
-    () => (selection ? records.find((record) => record.machineId === selection.machineId) ?? null : null),
-    [records, selection]
-  );
-
-  const selectedAccountId = selectedRecord?.accountId ?? selection?.accountId ?? null;
-  const selectedMachineName = selectedRecord?.machineName ?? selection?.machineName ?? 'Unknown machine';
-  const selectedUserName = selectedRecord?.userName ?? selection?.userName ?? 'Unknown user';
-  const selectedUserDetail = selectedRecord?.userDetail ?? selection?.userDetail ?? null;
-  const selectedOrgRole = selectedRecord?.orgRole ?? selection?.orgRole ?? null;
-  const selectedDeviceId = selectedRecord?.deviceId ?? selection?.deviceId ?? null;
-  const selectedDeviceStatus = selectedRecord?.deviceStatus ?? null;
-  const selectedDeviceRevokedAt = selectedRecord?.deviceRevokedAt ?? null;
-
-  const sortedAccountDevices = useMemo(
-    () => (
-      [...accountDevices].sort((left, right) => {
-        const rankDelta = deviceSortRank(left, selectedDeviceId) - deviceSortRank(right, selectedDeviceId);
-        if (rankDelta !== 0) {
-          return rankDelta;
-        }
-
-        return Date.parse(right.lastSeenAt) - Date.parse(left.lastSeenAt);
-      })
-    ),
-    [accountDevices, selectedDeviceId]
-  );
-
+  // Fetch uptime for all machines once rows are available
   useEffect(() => {
-    setDeviceError(null);
-    setDeviceNotice(null);
-  }, [selection?.machineId]);
-
-  useEffect(() => {
-    if (!selectedAccountId) {
-      setAccountDevices([]);
-      setDeviceLoading(false);
-      return;
-    }
-
+    if (rows.length === 0) return;
     let cancelled = false;
-    setAccountDevices([]);
-    setDeviceLoading(true);
-    setDeviceError(null);
 
-    void fetchAccountDevices(selectedAccountId)
-      .then((devices) => {
-        if (cancelled) return;
-        setAccountDevices(devices);
-      })
-      .catch((nextError: unknown) => {
-        if (cancelled) return;
-        setAccountDevices([]);
-        setDeviceError(toApiError(nextError).message);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setDeviceLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [deviceRefreshToken, selectedAccountId]);
-
-  async function handleDeviceAction(device: AccountDeviceProfile, action: 'unlink' | 'revoke') {
-    if (!selectedAccountId) {
-      return;
-    }
-
-    const deviceLabel = device.deviceDisplayName || device.machineName || device.deviceId;
-    const confirmed = window.confirm(
-      action === 'revoke'
-        ? `Revoke ${deviceLabel}? This device will stop being treated as an active account-linked device.`
-        : `Unlink ${deviceLabel}? This removes the device from the selected account.`
-    );
-    if (!confirmed) {
-      return;
-    }
-
-    const actionKey = `${action}:${device.deviceId}`;
-    setPendingDeviceAction(actionKey);
-    setDeviceError(null);
-    setDeviceNotice(null);
-
-    try {
-      if (action === 'revoke') {
-        await revokeAccountDevice(selectedAccountId, device.deviceId);
-        setDeviceNotice(`Device revoked centrally: ${deviceLabel}.`);
-      } else {
-        await unlinkAccountDevice(selectedAccountId, device.deviceId);
-        setDeviceNotice(`Device unlinked centrally: ${deviceLabel}.`);
-      }
-
-      setDeviceRefreshToken((value) => value + 1);
-    } catch (nextError) {
-      setDeviceError(toApiError(nextError).message);
-    } finally {
-      setPendingDeviceAction(null);
-    }
-  }
-
-  function selectDeviceManager(record: SystemHealthRecord) {
-    if (!record.accountId) {
-      return;
-    }
-
-    setSelection({
-      machineId: record.machineId,
-      accountId: record.accountId,
-      machineName: record.machineName,
-      userName: record.userName,
-      userDetail: record.userDetail,
-      orgRole: record.orgRole,
-      deviceId: record.deviceId
+    Promise.all(
+      rows.map((r) =>
+        fetchMachineUptime(r.machineId, 7)
+          .then((data) => ({ id: r.machineId, data }))
+          .catch(() => ({ id: r.machineId, data: [] as UptimeSample[] }))
+      )
+    ).then((results) => {
+      if (cancelled) return;
+      const map: Record<string, UptimeSample[]> = {};
+      results.forEach(({ id, data }) => { map[id] = data; });
+      setAllUptimeData(map);
     });
-  }
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastRefreshUtc]);
+
+  // Per-machine day buckets
+  const machineBuckets = useMemo(() => {
+    const result: Record<string, ('online' | 'offline')[]> = {};
+    rows.forEach((r) => {
+      const samples = allUptimeData[r.machineId] ?? [];
+      result[r.machineId] = computeDayBuckets(samples, dayStrings);
+    });
+    return result;
+  }, [allUptimeData, rows, dayStrings]);
+
+  // Fleet strip counts
+  const healthyCount = rows.filter(
+    (r) => r.agentRunning && r.userSessionConnected && !r.partialData && !r.lastError
+  ).length;
+  const degradedCount = rows.filter(
+    (r) => r.partialData === true || (r.missingMajorChannels?.length ?? 0) > 0
+  ).length;
+  const disconnectedCount = rows.filter((r) => !r.agentRunning).length;
+  const noActivityRows = rows.filter((r) => !r.activityDetected && r.agentRunning);
+  const noActivityCount = noActivityRows.length;
+  const noActivityLastUtc = noActivityRows
+    .map((r) => r.lastActivityUtc)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+
+  const noActivitySub = noActivityLastUtc
+    ? `Last activity ${relativeTime(noActivityLastUtc)}`
+    : 'No recent activity';
+
+  // Simplified quality trend data from buckets
+  const allBuckets = useMemo(() => {
+    const result: Record<string, ('online' | 'offline')[]> = {};
+    Object.entries(machineBuckets).forEach(([id, buckets]) => {
+      result[id] = buckets;
+    });
+    return result;
+  }, [machineBuckets]);
 
   return (
-    <div className="stack">
-      {loading ? <p className="muted-line">Loading system health truth...</p> : null}
-      {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
-      {notices.map((notice) => (
-        <div key={notice} className="operations-warning-banner">
-          {notice}
+    <>
+      {/* Fleet strip */}
+      <div className="fleet-strip">
+        <div className="fleet-card c-green">
+          <div className="fc-label">Healthy</div>
+          <div className="fc-val green">{healthyCount}</div>
+          <div className="fc-sub">All systems operational</div>
         </div>
-      ))}
-      <SummaryBand
-        title="Fleet health"
-        subtitle="Immediate operational truth for runtime, session, activity ingest health, and whether account-linked devices are still active."
-        items={[
-          {
-            label: 'Healthy machines',
-            value: String(healthyCount),
-            meta: latestSeenUtc ? `Last seen ${formatRelativeFromNow(latestSeenUtc)}` : (healthyCount === 1 ? 'Machine fully reporting' : 'Machines fully reporting'),
-            tone: 'ok'
-          },
-          {
-            label: 'Degraded capture',
-            value: String(degradedCount),
-            meta: degradedCount === 1 ? 'Machine needs attention' : 'Machines need attention',
-            tone: degradedCount > 0 ? 'warn' : 'neutral'
-          },
-          {
-            label: 'Disconnected agents',
-            value: String(disconnectedCount),
-            meta: disconnectedCount === 1 ? 'Agent offline' : 'Agents offline',
-            tone: disconnectedCount > 0 ? 'critical' : 'neutral'
-          },
-          {
-            label: 'Revoked devices',
-            value: String(revokedCount),
-            meta: revokedCount === 1 ? 'Machine no longer active for account link' : 'Machines no longer active for account link',
-            tone: revokedCount > 0 ? 'critical' : 'neutral'
-          },
-          {
-            label: 'No live activity',
-            value: String(noActivityCount),
-            meta: latestActivityUtc ? `Last activity ${formatRelativeFromNow(latestActivityUtc)}` : (noActivityCount === 1 ? 'Session quiet or stalled' : 'Sessions quiet or stalled'),
-            tone: noActivityCount > 0 ? 'warn' : 'neutral'
-          }
-        ]}
-      />
-      <Panel
-        title="Machine detail"
-        subtitle="Supporting runtime, session, activity, and current device-link state beneath the live fleet health summary."
-      >
-        {records.length === 0 ? (
-          <div className="empty-state">
-            <p className="muted-line">
-              No machine health rows are available. System Health cannot render operational truth until the backend supplies machine, session, activity, and device state to the console.
-            </p>
+        <div className="fleet-card c-amber">
+          <div className="fc-label">Degraded Capture</div>
+          <div className="fc-val amber">{degradedCount}</div>
+          <div className="fc-sub">{degradedCount === 1 ? 'Needs attention' : 'Need attention'}</div>
+        </div>
+        <div className="fleet-card c-red">
+          <div className="fc-label">Disconnected</div>
+          <div className="fc-val red">{disconnectedCount}</div>
+          <div className="fc-sub">Agents offline</div>
+        </div>
+        <div className="fleet-card c-blue">
+          <div className="fc-label">No Live Activity</div>
+          <div className="fc-val blue">{noActivityCount}</div>
+          <div className="fc-sub">{noActivitySub}</div>
+        </div>
+      </div>
+
+      {/* Charts row */}
+      <div className="grid-2">
+        {/* Uptime chart */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Agent Uptime — Last 7 Days</div>
+              <div className="card-sub">Online vs offline per machine</div>
+            </div>
           </div>
-        ) : (
-          <div className="table-scroll-wrap">
-            <table className="simple-table system-health-table">
+          <div className="card-body">
+            <div className="chart-legend">
+              <div className="legend-item">
+                <div className="legend-dot" style={{ background: 'var(--green)', opacity: 0.7 }} />
+                Online
+              </div>
+              <div className="legend-item">
+                <div className="legend-dot" style={{ background: 'var(--bg3)' }} />
+                Offline
+              </div>
+            </div>
+            {rows.map((r) => {
+              const buckets = machineBuckets[r.machineId] ?? Array(7).fill('offline');
+              const pct = uptimePct(buckets);
+              const pctColor = pct > 70 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
+              return (
+                <div className="uptime-row" key={r.machineId}>
+                  <div className="uptime-name">{r.machineName}</div>
+                  <div className="uptime-bars">
+                    {buckets.map((b, i) => (
+                      <div key={i} className={`uptime-bar ${b}`} />
+                    ))}
+                  </div>
+                  <div className="uptime-pct" style={{ color: pctColor }}>{pct}%</div>
+                </div>
+              );
+            })}
+            {rows.length === 0 && (
+              <div className="empty-state">
+                <p>No machines reporting.</p>
+              </div>
+            )}
+            <div className="chart-label-row" style={{ paddingLeft: '150px' }}>
+              {dayLabels.map((l) => (
+                <span key={l} className="chart-label">{l}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Quality trend */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Capture Quality Trend</div>
+              <div className="card-sub">Healthy / Degraded / Disconnected count per day</div>
+            </div>
+          </div>
+          <div className="card-body">
+            <div className="chart-legend">
+              <div className="legend-item">
+                <div className="legend-dot" style={{ background: 'var(--green)' }} />
+                Healthy
+              </div>
+              <div className="legend-item">
+                <div className="legend-dot" style={{ background: 'var(--amber)' }} />
+                Degraded
+              </div>
+              <div className="legend-item">
+                <div className="legend-dot" style={{ background: 'var(--red)' }} />
+                Disconnected
+              </div>
+            </div>
+            <QualityTrendChart allUptime={allBuckets} machineCount={rows.length} />
+            <div className="chart-label-row">
+              {dayLabels.map((l) => (
+                <span key={l} className="chart-label">{l}</span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Machine detail table */}
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <div className="card-title">Machine Detail</div>
+            <div className="card-sub">Runtime, session, activity, and device-link state</div>
+          </div>
+          <span className="card-tag tag-accent">{rows.length} machines</span>
+        </div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {rows.length === 0 ? (
+            <div className="empty-state">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.3, margin: '0 auto' }}>
+                <rect x="2" y="3" width="20" height="14" rx="2" />
+                <path d="M8 21h8M12 17v4" />
+              </svg>
+              <p>No machines reporting yet.</p>
+            </div>
+          ) : (
+            <table className="data-table">
               <thead>
                 <tr>
-                  <th>Machine name</th>
-                  <th>User name</th>
-                  <th>Device status</th>
-                  <th>Last seen time</th>
-                  <th>Agent running</th>
-                  <th>User session connected</th>
-                  <th>Activity detected</th>
-                  <th>Last activity time</th>
-                  <th>7d uptime</th>
-                  <th>Error message</th>
-                  <th>Device admin</th>
+                  <th>Machine</th>
+                  <th>User</th>
+                  <th>Device Status</th>
+                  <th>Last Seen</th>
+                  <th>Agent</th>
+                  <th>Activity</th>
+                  <th>7d Uptime</th>
+                  <th>Error</th>
                 </tr>
               </thead>
               <tbody>
-                {records.map((record) => (
-                  <tr key={record.machineId} className="system-health-row" data-tone={record.tone}>
-                    <td title={record.machineId}>{record.machineName}</td>
-                    <td>
-                      <div className="identity-stack">
-                        <strong>{record.userName}</strong>
-                        {record.userDetail ? <span className="identity-subline">{record.userDetail}</span> : null}
-                        {record.orgRole ? <span className="identity-tertiary">{record.orgRole}</span> : null}
-                      </div>
-                    </td>
-                    <td>
-                      <div className="identity-stack">
-                        <span className={deviceStatusClass(record.deviceStatus)}>{deviceStatusLabel(record.deviceStatus)}</span>
-                        {record.deviceRevokedAt ? (
-                          <span className="identity-subline">Revoked {formatRelativeFromNow(record.deviceRevokedAt)}</span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td>{timeCell(record.lastSeenUtc, record.lastSeenLabel, record.lastSeenStale)}</td>
-                    <td>
-                      <span className={statusClass(record.agentRunning)}>{record.agentRunning}</span>
-                    </td>
-                    <td>
-                      <span className={statusClass(record.userSessionConnected)}>{record.userSessionConnected}</span>
-                    </td>
-                    <td>
-                      <span className={statusClass(record.activityDetected)}>{record.activityDetected}</span>
-                    </td>
-                    <td>{timeCell(record.lastActivityUtc, record.lastActivityLabel, record.lastActivityStale)}</td>
-                    <td><UptimeSparkline machineId={record.machineId} /></td>
-                    <td>{record.errorMessage ?? ''}</td>
-                    <td>
-                      {record.accountId ? (
-                        <button
-                          type="button"
-                          className="context-action-button"
-                          onClick={() => selectDeviceManager(record)}
-                        >
-                          Manage devices
-                        </button>
-                      ) : (
-                        <span className="device-admin-note">Unlinked</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((r) => {
+                  const buckets = machineBuckets[r.machineId] ?? Array(7).fill('offline');
+                  const pct = uptimePct(buckets);
+                  const upColor = pct > 70 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
+                  const errorMsg = r.lastError || r.captureFailureReason || r.ownershipWarning || '';
+                  return (
+                    <tr key={r.machineId}>
+                      <td><div className="td-main">{r.machineName}</div></td>
+                      <td>
+                        <div style={{ fontSize: '12px', color: 'var(--text)' }}>{r.userName}</div>
+                        {r.primaryEmail && <div className="td-email">{r.primaryEmail}</div>}
+                      </td>
+                      <td>
+                        <span className="state-badge state-focused" style={{ fontSize: '9px' }}>
+                          {(r as { deviceStatus?: string }).deviceStatus || 'Active'}
+                        </span>
+                      </td>
+                      <td style={{ fontFamily: 'var(--font-m)', fontSize: '11px' }}>
+                        {relativeTime(r.reportedAtUtc)}
+                      </td>
+                      <td>
+                        {r.agentRunning
+                          ? <span style={{ color: 'var(--green)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>Yes</span>
+                          : <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>No</span>}
+                      </td>
+                      <td>
+                        {r.activityDetected
+                          ? <span style={{ color: 'var(--green)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>Yes</span>
+                          : <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>No</span>}
+                      </td>
+                      <td>
+                        <span style={{ fontFamily: 'var(--font-m)', fontSize: '11px', color: upColor }}>{pct}%</span>
+                      </td>
+                      <td style={{ fontSize: '11px', color: 'var(--muted)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {errorMsg || '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
-          </div>
-        )}
-      </Panel>
-      <Panel
-        title="Device management"
-        subtitle="Central account device list for a selected machine row. Revoking or unlinking here changes which devices remain active account-linked devices."
-      >
-        {!selection || !selectedAccountId ? (
-          <div className="empty-state">
-            <p className="muted-line">
-              Select Manage devices on a linked machine row to inspect the account device list and centrally revoke or unlink devices.
-            </p>
-          </div>
-        ) : (
-          <div className="stack">
-            <div className="operations-summary-bar device-management-summary">
-              <div className="identity-stack">
-                <strong>{selectedUserName}</strong>
-                {selectedUserDetail ? <span className="identity-subline">{selectedUserDetail}</span> : null}
-                {selectedOrgRole ? <span className="identity-tertiary">{selectedOrgRole}</span> : null}
-              </div>
-              <div className="device-management-meta">
-                <span>Machine: {selectedMachineName}</span>
-                <span>Device ID: {selectedDeviceId ?? 'Unavailable'}</span>
-                <span className={deviceStatusClass(selectedDeviceStatus)}>
-                  Current status: {deviceStatusLabel(selectedDeviceStatus)}
-                </span>
-                {selectedDeviceRevokedAt ? <span>Revoked {formatRelativeFromNow(selectedDeviceRevokedAt)}</span> : null}
-              </div>
-              <div className="context-actions">
-                <button type="button" className="context-action-button" onClick={() => setDeviceRefreshToken((value) => value + 1)}>
-                  Refresh devices
-                </button>
-                <button type="button" className="context-action-button" onClick={() => setSelection(null)}>
-                  Close
-                </button>
-              </div>
-            </div>
-
-            {deviceNotice ? <p className="device-success-line">{deviceNotice}</p> : null}
-            {deviceError ? <p className="error-line">{deviceError}</p> : null}
-            {deviceLoading ? <p className="muted-line">Loading account devices...</p> : null}
-
-            {sortedAccountDevices.length === 0 && !deviceLoading ? (
-              <div className="empty-state">
-                <p className="muted-line">
-                  No devices are currently linked to this account. If the selected machine was unlinked, it will disappear from the account device list immediately.
-                </p>
-              </div>
-            ) : null}
-
-            {sortedAccountDevices.length > 0 ? (
-              <div className="table-scroll-wrap table-scroll-wrap-secondary">
-                <table className="simple-table">
-                  <thead>
-                    <tr>
-                      <th>Device</th>
-                      <th>Status</th>
-                      <th>Last seen</th>
-                      <th>Workspace</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedAccountDevices.map((device) => {
-                      const isCurrentDevice = selectedDeviceId === device.deviceId;
-                      const busyKey = pendingDeviceAction;
-                      const unlinkBusy = busyKey === `unlink:${device.deviceId}`;
-                      const revokeBusy = busyKey === `revoke:${device.deviceId}`;
-
-                      return (
-                        <tr key={device.deviceId}>
-                          <td>
-                            <div className="identity-stack">
-                              <strong>{isCurrentDevice ? `${device.deviceDisplayName} (Current machine)` : device.deviceDisplayName}</strong>
-                              <span className="identity-subline">
-                                {device.machineName} / {deviceStatusLabel(device.platform)} / {device.agentVersion}
-                              </span>
-                              <span className="identity-tertiary">{device.deviceId}</span>
-                            </div>
-                          </td>
-                          <td>
-                            <div className="identity-stack">
-                              <span className={deviceStatusClass(device.status)}>{deviceStatusLabel(device.status)}</span>
-                              {device.revokedAt ? <span className="identity-subline">Revoked {formatRelativeFromNow(device.revokedAt)}</span> : null}
-                            </div>
-                          </td>
-                          <td title={formatUtc(device.lastSeenAt)}>
-                            <div className="identity-stack">
-                              <strong>{formatRelativeFromNow(device.lastSeenAt)}</strong>
-                              <span className="identity-subline">{formatUtc(device.lastSeenAt)}</span>
-                            </div>
-                          </td>
-                          <td>{device.orgId ?? 'Unlinked'}</td>
-                          <td>
-                            <div className="device-action-row">
-                              <button
-                                type="button"
-                                className="context-action-button"
-                                disabled={!device.currentAccountId || unlinkBusy || revokeBusy}
-                                onClick={() => void handleDeviceAction(device, 'unlink')}
-                              >
-                                {unlinkBusy ? 'Unlinking...' : 'Unlink'}
-                              </button>
-                              <button
-                                type="button"
-                                className="context-action-button danger"
-                                disabled={device.status === 'revoked' || unlinkBusy || revokeBusy}
-                                onClick={() => void handleDeviceAction(device, 'revoke')}
-                              >
-                                {revokeBusy ? 'Revoking...' : 'Revoke'}
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            ) : null}
-          </div>
-        )}
-      </Panel>
-    </div>
+          )}
+        </div>
+      </div>
+    </>
   );
 }

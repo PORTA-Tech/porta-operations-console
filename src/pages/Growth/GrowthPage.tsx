@@ -1,561 +1,316 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Panel } from '../../components/Layout/Panel';
-import { SummaryBand } from '../../components/Layout/SummaryBand';
 import { useGrowthDashboard } from '../../hooks/useGrowthDashboard';
-import type {
-  GrowthCohortRow,
-  GrowthCohortWindow,
-  GrowthSeries,
-  GrowthSeriesMetric,
-  GrowthUserJourneyEvent
-} from '../../api/growth';
-import { formatRelativeFromNow, formatUtc } from '../../utils/date';
+import type { GrowthSeries } from '../../api/growth';
 
-type CohortFocus = {
-  cohortDate: string;
-  day: number;
-};
+// ─── REGISTRATION BAR CHART ──────────────────────────────────────────────────
 
-const percentFormatter = new Intl.NumberFormat(undefined, {
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 2
-});
-
-const integerFormatter = new Intl.NumberFormat(undefined);
-
-function formatPercent(value: number | null | undefined): string {
-  if (value === null || value === undefined) {
-    return 'n/a';
-  }
-  return `${percentFormatter.format(value)}%`;
-}
-
-function formatCount(value: number): string {
-  return integerFormatter.format(value);
-}
-
-function formatShortDate(value: string): string {
-  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-function formatShortDateTime(value: string): string {
-  return new Date(value).toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  });
-}
-
-function metricLabel(metric: GrowthSeriesMetric): string {
-  if (metric === 'registrations') return 'Registrations';
-  if (metric === 'activations') return 'Activations';
-  return 'Active Users';
-}
-
-function metricSubtitle(metric: GrowthSeriesMetric): string {
-  if (metric === 'registrations') return 'Daily new user accounts from the control plane registration facts.';
-  if (metric === 'activations') return 'Daily first-time activations after membership, device, consent, and activity all exist.';
-  return 'Daily active users from account-active-day facts, not machine snapshots.';
-}
-
-function metricTone(metric: GrowthSeriesMetric): 'ok' | 'focus' | 'warn' | 'neutral' {
-  if (metric === 'registrations') return 'ok';
-  if (metric === 'activations') return 'focus';
-  if (metric === 'active_users') return 'warn';
-  return 'neutral';
-}
-
-function seriesHeadlineValue(series: GrowthSeries): number {
-  if (series.metric === 'active_users') {
-    return series.points[series.points.length - 1]?.value ?? 0;
-  }
-
-  return series.points.reduce((total, point) => total + point.value, 0);
-}
-
-function bucketLabel(series: GrowthSeries, index: number): string {
-  const point = series.points[index];
-  if (!point) {
-    return 'No bucket selected';
-  }
-
-  if (series.interval === 'day') {
-    return formatShortDate(point.bucketStartUtc);
-  }
-
-  return `${formatShortDate(point.bucketStartUtc)} - ${formatShortDate(point.bucketEndUtc)}`;
-}
-
-function eventLabel(event: GrowthUserJourneyEvent['eventType']): string {
-  return event
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function describeJourneyEvent(event: GrowthUserJourneyEvent): string {
-  const segments: string[] = [];
-  if (event.activityDate) segments.push(`activity date ${event.activityDate}`);
-  if (event.deviceId) segments.push(`device ${event.deviceId}`);
-  if (event.orgId) segments.push(`workspace ${event.orgId}`);
-  if (event.machineId) segments.push(`machine ${event.machineId}`);
-
-  if (event.metadata && Object.keys(event.metadata).length > 0) {
-    segments.push(
-      Object.entries(event.metadata)
-        .map(([key, value]) => `${key}: ${String(value)}`)
-        .join(', ')
+function RegistrationChart({ series }: { series: GrowthSeries | undefined }) {
+  const W = 500, H = 160;
+  if (!series || series.points.length === 0) {
+    return (
+      <svg width="100%" height="160" viewBox="0 0 500 160">
+        <text x="250" y="80" textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="12" fontFamily="JetBrains Mono">No data</text>
+      </svg>
     );
   }
 
-  return segments.length > 0 ? segments.join(' | ') : 'No extra payload';
-}
-
-function resolveDefaultCohortFocus(rows: GrowthCohortRow[]): CohortFocus | null {
-  const latestRow = rows[rows.length - 1] ?? null;
-  if (!latestRow) {
-    return null;
-  }
-
-  const preferred = latestRow.windows.find((window) => window.day === 7 && window.retentionRatePct !== null)
-    ?? latestRow.windows.find((window) => window.day === 1 && window.retentionRatePct !== null)
-    ?? latestRow.windows[0]
-    ?? null;
-
-  return preferred ? { cohortDate: latestRow.cohortDate, day: preferred.day } : null;
-}
-
-function MetricChartCard({ series }: { series: GrowthSeries }) {
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const maxValue = Math.max(1, ...series.points.map((point) => point.value));
-
-  useEffect(() => {
-    setSelectedIndex(Math.max(0, series.points.length - 1));
-  }, [series.metric, series.points.length]);
-
-  const selectedPoint = series.points[selectedIndex] ?? null;
-  const headlineValue = seriesHeadlineValue(series);
-  const tone = metricTone(series.metric);
+  const points = series.points.slice(-30);
+  const n = points.length;
+  const dw = W / n;
+  const maxH = H - 30;
 
   return (
-    <article className="growth-chart-card">
-      <div className="growth-chart-header">
-        <div className="growth-chart-copy">
-          <p className="detail-section-kicker">{metricLabel(series.metric)}</p>
-          <h3 className="growth-chart-title">{formatCount(headlineValue)}</h3>
-          <p className="detail-section-copy">{metricSubtitle(series.metric)}</p>
-        </div>
-        <span className={`status-badge ${tone}`}>
-          {series.metric === 'active_users' ? 'Latest bucket' : 'Window total'}
-        </span>
-      </div>
-
-      {series.points.length === 0 ? (
-        <div className="empty-state">
-          <p className="muted-line">No buckets are available for this metric yet.</p>
-        </div>
-      ) : (
-        <>
-          <div className="growth-bar-chart" role="list" aria-label={`${metricLabel(series.metric)} chart`}>
-            {series.points.map((point, index) => {
-              const heightPct = point.value === 0 ? 4 : Math.max(14, Math.round((point.value / maxValue) * 100));
-              const selected = index === selectedIndex;
-
-              return (
-                <button
-                  key={`${series.metric}:${point.bucketStartUtc}`}
-                  type="button"
-                  className={selected ? 'growth-bar active' : 'growth-bar'}
-                  onClick={() => setSelectedIndex(index)}
-                  title={`${bucketLabel(series, index)} • ${point.value}`}
-                >
-                  <span className="growth-bar-track">
-                    <span className="growth-bar-fill" style={{ height: `${heightPct}%` }} />
-                  </span>
-                  <span className="growth-bar-label">{formatShortDate(point.bucketStartUtc)}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="growth-chart-selection">
-            <div>
-              <span className="operations-field-label">Selected bucket</span>
-              <strong>{selectedPoint ? bucketLabel(series, selectedIndex) : 'No bucket selected'}</strong>
-            </div>
-            <div>
-              <span className="operations-field-label">Exact count</span>
-              <strong>{selectedPoint ? formatCount(selectedPoint.value) : 'n/a'}</strong>
-            </div>
-            <div>
-              <span className="operations-field-label">Bucket end</span>
-              <strong>{selectedPoint ? formatShortDateTime(selectedPoint.bucketEndUtc) : 'n/a'}</strong>
-            </div>
-          </div>
-        </>
-      )}
-    </article>
+    <svg width="100%" height="160" viewBox={`0 0 ${W} ${H}`}>
+      {points.map((p, i) => {
+        const x = i * dw + dw * 0.15;
+        const bw = dw * 0.7;
+        const bh = p.value === 0 ? 3 : maxH * 0.7;
+        const y = H - 20 - bh;
+        const col = p.value > 0 ? 'rgba(200,255,71,0.85)' : 'rgba(255,255,255,0.04)';
+        return (
+          <g key={p.bucketStartUtc}>
+            <rect x={x} y={y} width={bw} height={bh} rx="3" fill={col} />
+            {p.value > 0 && (
+              <text x={x + bw / 2} y={y - 6} textAnchor="middle" fill="rgba(200,255,71,0.9)" fontSize="10" fontFamily="JetBrains Mono">+{p.value}</text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
   );
 }
+
+function regDateLabels(series: GrowthSeries | undefined): string[] {
+  if (!series) return [];
+  return series.points
+    .filter((p) => p.value > 0)
+    .map((p) => new Date(p.bucketStartUtc).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))
+    .slice(-6);
+}
+
+// ─── DAU LINE/AREA CHART ─────────────────────────────────────────────────────
+
+function DauChart({ series }: { series: GrowthSeries | undefined }) {
+  const W = 500, H = 160;
+  if (!series || series.points.length === 0) {
+    return (
+      <svg width="100%" height="160" viewBox="0 0 500 160">
+        <text x="250" y="80" textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="12" fontFamily="JetBrains Mono">No data</text>
+      </svg>
+    );
+  }
+
+  const pts = series.points.slice(-10);
+  const n = pts.length;
+  const maxY = Math.max(1, ...pts.map((p) => p.value));
+  const dw = n > 1 ? W / (n - 1) : W;
+  const scaleY = (v: number) => H - 30 - (v / maxY) * (H - 50);
+
+  const coords = pts.map((p, i) => ({ x: i * dw, y: scaleY(p.value), v: p.value }));
+
+  let linePath = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
+  let areaPath = linePath + ` L${coords[coords.length - 1]!.x},${H - 20} L0,${H - 20} Z`;
+
+  return (
+    <svg width="100%" height="160" viewBox={`0 0 ${W} ${H}`}>
+      {[1, 2, 3].filter((v) => v <= maxY + 1).map((v) => {
+        const y = scaleY(v);
+        return (
+          <g key={v}>
+            <line x1="0" y1={y} x2={W} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+            <text x="4" y={y - 3} fill="rgba(255,255,255,0.2)" fontSize="9" fontFamily="JetBrains Mono">{v}</text>
+          </g>
+        );
+      })}
+      <path d={areaPath} fill="rgba(200,255,71,0.06)" />
+      <path d={linePath} fill="none" stroke="rgba(200,255,71,0.8)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {coords.map((c, i) => (
+        <g key={i}>
+          <circle cx={c.x} cy={c.y} r="5" fill="var(--bg1)" stroke="rgba(200,255,71,0.9)" strokeWidth="2" />
+          <text x={c.x} y={c.y - 10} textAnchor="middle" fill="rgba(200,255,71,0.7)" fontSize="10" fontFamily="JetBrains Mono">{c.v}</text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function dauDateLabels(series: GrowthSeries | undefined): string[] {
+  if (!series) return [];
+  return series.points
+    .slice(-5)
+    .map((p) => new Date(p.bucketStartUtc).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }));
+}
+
+// ─── PAGE ────────────────────────────────────────────────────────────────────
 
 export function GrowthPage() {
-  const {
-    loading,
-    refreshing,
-    error,
-    summary,
-    seriesByMetric,
-    cohorts,
-    lastRefreshUtc,
-    journey,
-    journeyLoading,
-    journeyError,
-    loadJourney,
-    clearJourney,
-    refresh
-  } = useGrowthDashboard();
-  const [journeyAccountId, setJourneyAccountId] = useState('');
-  const [cohortFocus, setCohortFocus] = useState<CohortFocus | null>(null);
+  const { loading, error, summary, seriesByMetric, cohorts } = useGrowthDashboard();
 
-  useEffect(() => {
-    if (cohortFocus || !cohorts || cohorts.rows.length === 0) {
-      return;
-    }
-
-    setCohortFocus(resolveDefaultCohortFocus(cohorts.rows));
-  }, [cohortFocus, cohorts]);
-
-  const selectedCohortRow = useMemo(
-    () => cohorts?.rows.find((row) => row.cohortDate === cohortFocus?.cohortDate) ?? null,
-    [cohortFocus, cohorts]
-  );
-
-  const selectedCohortWindow = useMemo<GrowthCohortWindow | null>(
-    () => selectedCohortRow?.windows.find((window) => window.day === cohortFocus?.day) ?? null,
-    [cohortFocus, selectedCohortRow]
-  );
-
-  async function handleJourneySubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    await loadJourney(journeyAccountId);
+  if (loading) {
+    return (
+      <div className="empty-state">
+        <p style={{ color: 'var(--muted)' }}>Loading growth data…</p>
+      </div>
+    );
   }
 
-  const summaryItems = summary
-    ? [
-      {
-        label: 'Registered users',
-        value: formatCount(summary.totalRegisteredUsers),
-        meta: `Generated ${formatRelativeFromNow(summary.generatedAtUtc)}`,
-        tone: 'neutral' as const
-      },
-      {
-        label: 'New users (30d)',
-        value: formatCount(summary.newRegisteredUsers),
-        meta: `${formatShortDate(summary.windowStartUtc)} to ${formatShortDate(summary.windowEndUtc)}`,
-        tone: 'ok' as const
-      },
-      {
-        label: 'Activated users (30d)',
-        value: formatCount(summary.activatedUsers),
-        meta: summary.activationRatePct === null ? 'Awaiting cohort denominator' : `${formatPercent(summary.activationRatePct)} activation`,
-        tone: 'focus' as const
-      },
-      {
-        label: 'Retention D1',
-        value: formatPercent(summary.retentionRateD1Pct),
-        meta: summary.retentionRateD1Pct === null ? 'Not enough activity history yet' : `${formatPercent(summary.churnRateD1Pct)} churn`,
-        tone: summary.retentionRateD1Pct === null ? 'neutral' as const : 'ok' as const
-      },
-      {
-        label: 'Retention D7',
-        value: formatPercent(summary.retentionRateD7Pct),
-        meta: summary.retentionRateD7Pct === null ? 'Waiting for seven-day maturity' : `${formatPercent(summary.churnRateD7Pct)} churn`,
-        tone: summary.retentionRateD7Pct === null ? 'neutral' as const : 'warn' as const
-      },
-      {
-        label: 'Retention D30',
-        value: formatPercent(summary.retentionRateD30Pct),
-        meta: summary.retentionRateD30Pct === null ? 'Thirty-day history not mature yet' : `${formatPercent(summary.churnRateD30Pct)} churn`,
-        tone: summary.retentionRateD30Pct === null ? 'neutral' as const : 'critical' as const
-      }
-    ]
-    : [];
+  if (error || !summary) {
+    return (
+      <div className="empty-state">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.3, margin: '0 auto' }}>
+          <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+          <polyline points="17 6 23 6 23 12" />
+        </svg>
+        <p>Growth data unavailable.<br />The control plane may be starting up.</p>
+      </div>
+    );
+  }
 
-  const chartSeries = [
-    seriesByMetric.registrations,
-    seriesByMetric.activations,
-    seriesByMetric.active_users
-  ].filter((value): value is GrowthSeries => Boolean(value));
+  const regSeries = seriesByMetric.registrations;
+  const dauSeries = seriesByMetric.active_users;
+
+  const todayDau = dauSeries?.points.at(-1)?.value ?? 0;
+  const newUsers = summary.newRegisteredUsers;
+
+  const d1Pct = summary.retentionRateD1Pct != null ? `${summary.retentionRateD1Pct.toFixed(1)}%` : 'n/a';
+  const d7Pct = summary.retentionRateD7Pct != null ? `${summary.retentionRateD7Pct.toFixed(1)}%` : 'n/a';
+  const actPct = summary.activationRatePct != null ? `${summary.activationRatePct.toFixed(1)}%` : 'n/a';
+
+  const d7Color = summary.retentionRateD7Pct != null
+    ? (summary.retentionRateD7Pct >= 80 ? 'var(--green)' : summary.retentionRateD7Pct >= 50 ? 'var(--amber)' : 'var(--red)')
+    : 'var(--muted)';
 
   return (
-    <div className="stack">
-      {loading ? <p className="muted-line">Loading growth facts from the control plane...</p> : null}
-      {refreshing && !loading ? <p className="muted-line">Refreshing growth facts…</p> : null}
-      {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
+    <>
+      {/* Hero metrics — 5-column */}
+      <div className="growth-hero">
+        <div className="g-metric">
+          <div className="g-metric-val" style={{ color: 'var(--accent)' }}>{summary.totalRegisteredUsers}</div>
+          <div className="g-metric-lbl">Registered Users</div>
+          <div className="g-metric-delta delta-up">↑ {newUsers} in last 30d</div>
+        </div>
+        <div className="g-metric">
+          <div className="g-metric-val" style={{ color: 'var(--green)' }}>{actPct}</div>
+          <div className="g-metric-lbl">Activation Rate</div>
+          <div className="g-metric-delta delta-up">{summary.activatedUsers}/{summary.totalRegisteredUsers} activated</div>
+        </div>
+        <div className="g-metric">
+          <div className="g-metric-val" style={{ color: 'var(--green)' }}>{d1Pct}</div>
+          <div className="g-metric-lbl">D1 Retention</div>
+          <div className="g-metric-delta delta-up">
+            {summary.retentionRateD1Pct === 100 ? 'All users returned' : `${d1Pct} returned`}
+          </div>
+        </div>
+        <div className="g-metric">
+          <div className="g-metric-val" style={{ color: d7Color }}>{d7Pct}</div>
+          <div className="g-metric-lbl">D7 Retention</div>
+          <div className="g-metric-delta delta-neutral">
+            {summary.retentionRateD7Pct != null
+              ? `${summary.retentionRateD7Pct.toFixed(1)}% retained`
+              : 'Maturing'}
+          </div>
+        </div>
+        <div className="g-metric">
+          <div className="g-metric-val" style={{ color: 'var(--blue)' }}>{todayDau}</div>
+          <div className="g-metric-lbl">Active Today</div>
+          <div className="g-metric-delta delta-up">
+            {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+          </div>
+        </div>
+      </div>
 
-      {summary ? (
-        <SummaryBand
-          title="Sticky engine of growth"
-          subtitle="Real registration, activation, retention, and churn computed from growth facts and account-active-day history."
-          items={summaryItems}
-        />
-      ) : (
-        <Panel
-          title="Growth metrics"
-          subtitle="The dashboard will populate once the control plane returns the growth summary payload."
-        >
-          <div className="empty-state">
-            <p className="muted-line">No growth summary is available yet.</p>
+      {/* Charts row */}
+      <div className="grid-2">
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Registrations — Last 30 Days</div>
+              <div className="card-sub">{newUsers} new in window</div>
+            </div>
+            <span className="card-tag tag-accent">+{newUsers}</span>
           </div>
-        </Panel>
-      )}
+          <div className="card-body">
+            <RegistrationChart series={regSeries} />
+            <div className="chart-label-row">
+              {regDateLabels(regSeries).map((l) => (
+                <span key={l} className="chart-label">{l}</span>
+              ))}
+            </div>
+          </div>
+        </div>
 
-      <Panel
-        title="Trend charts"
-        subtitle="Daily evolution for registrations, activations, and active users. Each bar is clickable for exact bucket counts."
-      >
-        {chartSeries.length === 0 ? (
-          <div className="empty-state">
-            <p className="muted-line">No growth series are available yet.</p>
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Daily Active Users</div>
+              <div className="card-sub">Account-active-day facts</div>
+            </div>
+            <span className="card-tag tag-green">{todayDau} today</span>
           </div>
-        ) : (
-          <div className="growth-chart-grid">
-            {chartSeries.map((series) => (
-              <MetricChartCard key={series.metric} series={series} />
-            ))}
+          <div className="card-body">
+            <DauChart series={dauSeries} />
+            <div className="chart-label-row">
+              {dauDateLabels(dauSeries).map((l) => (
+                <span key={l} className="chart-label">{l}</span>
+              ))}
+            </div>
           </div>
-        )}
-      </Panel>
+        </div>
+      </div>
 
-      <Panel
-        title="Cohort retention"
-        subtitle="Retention and churn are driven only by account-active-day facts. Cells stay unavailable until the cohort window is mature."
-      >
-        {!cohorts || cohorts.rows.length === 0 ? (
-          <div className="empty-state">
-            <p className="muted-line">No cohort rows are available yet.</p>
+      {/* Retention row */}
+      <div className="grid-1-2">
+        {/* Retention funnel */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Retention Funnel</div>
+              <div className="card-sub">D1 → D7 → D30</div>
+            </div>
           </div>
-        ) : (
-          <div className="growth-cohort-layout">
-            <div className="table-scroll-wrap">
-              <table className="simple-table growth-cohort-table">
+          <div className="card-body">
+            <div style={{ padding: '8px 0' }}>
+              {[
+                { label: 'Registered', pct: 100, color: 'var(--accent)', fillClass: 'prog-fill-accent', display: String(summary.totalRegisteredUsers) },
+                { label: 'D1 Retained', pct: summary.retentionRateD1Pct ?? 0, color: 'var(--green)', fillClass: 'prog-fill-green', display: d1Pct },
+                { label: 'D7 Retained', pct: summary.retentionRateD7Pct ?? 0, color: d7Color, fillClass: 'prog-fill-amber', display: d7Pct },
+                { label: 'D30 Retained', pct: summary.retentionRateD30Pct ?? 0, color: 'var(--muted)', fillClass: '', display: summary.retentionRateD30Pct != null ? `${summary.retentionRateD30Pct.toFixed(1)}%` : 'Maturing' },
+              ].map(({ label, pct, color, fillClass, display }) => (
+                <div key={label} style={{ marginBottom: '20px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--muted2)' }}>{label}</span>
+                    <span style={{ fontFamily: 'var(--font-m)', fontSize: '12px', color }}>{display}</span>
+                  </div>
+                  <div className="prog-track" style={{ height: '10px' }}>
+                    <div
+                      className={`prog-fill ${fillClass}`}
+                      style={{ width: `${Math.min(100, pct)}%`, ...(fillClass === '' ? { background: 'var(--muted)', opacity: 0.3 } : {}) }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Cohort retention table */}
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Cohort Retention Table</div>
+              <div className="card-sub">By registration week · cells unlock as window matures</div>
+            </div>
+          </div>
+          <div className="card-body" style={{ padding: 0 }}>
+            {!cohorts || cohorts.rows.length === 0 ? (
+              <div className="empty-state">
+                <p>No cohort data yet.</p>
+              </div>
+            ) : (
+              <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Cohort date</th>
+                    <th>Cohort</th>
                     <th>Registered</th>
                     <th>Activated</th>
-                    <th>D1 retention</th>
-                    <th>D7 retention</th>
-                    <th>D30 retention</th>
+                    <th style={{ textAlign: 'center' }}>D1</th>
+                    <th style={{ textAlign: 'center' }}>D7</th>
+                    <th style={{ textAlign: 'center' }}>D30</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {cohorts.rows.map((row) => (
-                    <tr key={row.cohortDate}>
-                      <td>
-                        <div className="identity-stack">
-                          <strong>{row.cohortDate}</strong>
-                          <span className="identity-subline">
-                            {formatShortDate(`${row.cohortDate}T00:00:00.000Z`)}
-                          </span>
-                        </div>
-                      </td>
-                      <td>{formatCount(row.registeredUsers)}</td>
-                      <td>{formatCount(row.activatedUsers)}</td>
-                      {[1, 7, 30].map((day) => {
-                        const window = row.windows.find((entry) => entry.day === day) ?? null;
-                        const selected = cohortFocus?.cohortDate === row.cohortDate && cohortFocus.day === day;
+                  {cohorts.rows.map((row) => {
+                    const getWindow = (day: number) => row.windows.find((w) => w.day === day);
+                    const retColor = (pct: number | null) =>
+                      pct == null ? 'var(--muted)' : pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
 
-                        return (
-                          <td key={`${row.cohortDate}:${day}`}>
-                            <button
-                              type="button"
-                              className={selected ? 'growth-cohort-button active' : 'growth-cohort-button'}
-                              onClick={() => setCohortFocus({ cohortDate: row.cohortDate, day })}
-                            >
-                              <strong>{formatPercent(window?.retentionRatePct ?? null)}</strong>
-                              <span>
-                                {window?.retainedUsers ?? 0} / {window?.eligibleUsers ?? 0}
-                              </span>
-                            </button>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
+                    return (
+                      <tr key={row.cohortDate}>
+                        <td className="td-main">{row.cohortDate}</td>
+                        <td>{row.registeredUsers}</td>
+                        <td style={{ color: 'var(--green)' }}>{row.activatedUsers}</td>
+                        {[1, 7, 30].map((day) => {
+                          const w = getWindow(day);
+                          if (!w || w.retentionRatePct == null) {
+                            return <td key={day} className="ret-cell"><div className="ret-na">n/a</div></td>;
+                          }
+                          return (
+                            <td key={day} className="ret-cell">
+                              <div className="ret-val" style={{ color: retColor(w.retentionRatePct) }}>
+                                {w.retentionRatePct.toFixed(1)}%
+                              </div>
+                              <div className="ret-sub">{w.retainedUsers}/{w.eligibleUsers}</div>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
-            </div>
-
-            <div className="growth-cohort-focus">
-              <p className="detail-section-kicker">Selected cohort window</p>
-              {selectedCohortRow && selectedCohortWindow ? (
-                <div className="operations-layer-grid compact">
-                  <div className="operations-field">
-                    <span className="operations-field-label">Cohort</span>
-                    <strong>{selectedCohortRow.cohortDate}</strong>
-                  </div>
-                  <div className="operations-field">
-                    <span className="operations-field-label">Window</span>
-                    <strong>Day {selectedCohortWindow.day}</strong>
-                  </div>
-                  <div className="operations-field">
-                    <span className="operations-field-label">Target date</span>
-                    <strong>{formatShortDate(`${selectedCohortRow.cohortDate}T00:00:00.000Z`)}</strong>
-                    <span className="identity-subline">+ {selectedCohortWindow.day} days</span>
-                  </div>
-                  <div className="operations-field">
-                    <span className="operations-field-label">Eligible users</span>
-                    <strong>{formatCount(selectedCohortWindow.eligibleUsers)}</strong>
-                  </div>
-                  <div className="operations-field">
-                    <span className="operations-field-label">Retained users</span>
-                    <strong>{formatCount(selectedCohortWindow.retainedUsers)}</strong>
-                  </div>
-                  <div className="operations-field">
-                    <span className="operations-field-label">Churned users</span>
-                    <strong>{formatCount(selectedCohortWindow.churnedUsers)}</strong>
-                  </div>
-                  <div className="operations-field">
-                    <span className="operations-field-label">Retention</span>
-                    <strong>{formatPercent(selectedCohortWindow.retentionRatePct)}</strong>
-                  </div>
-                  <div className="operations-field">
-                    <span className="operations-field-label">Churn</span>
-                    <strong>{formatPercent(selectedCohortWindow.churnRatePct)}</strong>
-                  </div>
-                  <div className="operations-field">
-                    <span className="operations-field-label">Registered / activated</span>
-                    <strong>{formatCount(selectedCohortRow.registeredUsers)} / {formatCount(selectedCohortRow.activatedUsers)}</strong>
-                  </div>
-                </div>
-              ) : (
-                <div className="empty-state">
-                  <p className="muted-line">Click a cohort cell to inspect the exact retention window.</p>
-                </div>
-              )}
-            </div>
+            )}
           </div>
-        )}
-      </Panel>
-
-      <Panel
-        title="User journey drilldown"
-        subtitle="Load a single account journey from the growth API. This page uses only growth endpoints, so journey lookup is direct by account ID for now."
-      >
-        <div className="growth-drilldown-shell">
-          <form className="growth-journey-form" onSubmit={handleJourneySubmit}>
-            <label>
-              <span className="operations-field-label">Account ID</span>
-              <input
-                type="text"
-                value={journeyAccountId}
-                onChange={(event) => setJourneyAccountId(event.target.value)}
-                placeholder="Paste an account UUID"
-              />
-            </label>
-            <div className="growth-journey-actions">
-              <button type="submit" disabled={journeyLoading || journeyAccountId.trim().length === 0}>
-                {journeyLoading ? 'Loading journey…' : 'Load journey'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setJourneyAccountId('');
-                  clearJourney();
-                }}
-                disabled={journeyLoading && !journey}
-              >
-                Clear
-              </button>
-              <button type="button" onClick={() => void refresh()} disabled={refreshing}>
-                {refreshing ? 'Refreshing…' : 'Refresh growth data'}
-              </button>
-            </div>
-          </form>
-
-          {lastRefreshUtc ? (
-            <p className="muted-line">Dashboard refreshed {formatRelativeFromNow(lastRefreshUtc)}.</p>
-          ) : null}
-          {journeyError ? <p className="error-line">{journeyError.code}: {journeyError.message}</p> : null}
-
-          {journey ? (
-            <div className="growth-journey-layout">
-              <div className="operations-layer-grid compact">
-                <div className="operations-field">
-                  <span className="operations-field-label">Account</span>
-                  <strong>{journey.accountId}</strong>
-                </div>
-                <div className="operations-field">
-                  <span className="operations-field-label">User</span>
-                  <strong>{journey.userId}</strong>
-                </div>
-                <div className="operations-field">
-                  <span className="operations-field-label">Source</span>
-                  <strong>{journey.source}</strong>
-                </div>
-                <div className="operations-field">
-                  <span className="operations-field-label">Registered at</span>
-                  <strong>{journey.registrationAtUtc ? formatUtc(journey.registrationAtUtc) : 'n/a'}</strong>
-                </div>
-                <div className="operations-field">
-                  <span className="operations-field-label">Activated at</span>
-                  <strong>{journey.activationAtUtc ? formatUtc(journey.activationAtUtc) : 'n/a'}</strong>
-                </div>
-                <div className="operations-field">
-                  <span className="operations-field-label">Active days</span>
-                  <strong>{journey.activeDays.length}</strong>
-                </div>
-              </div>
-
-              <div className="growth-active-days">
-                <span className="operations-field-label">Recorded active days</span>
-                <div className="growth-active-day-list">
-                  {journey.activeDays.length > 0 ? (
-                    journey.activeDays.map((day) => (
-                      <span key={day} className="status-badge neutral">{day}</span>
-                    ))
-                  ) : (
-                    <span className="muted-line">No active days recorded.</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="table-scroll-wrap">
-                <table className="simple-table growth-journey-table">
-                  <thead>
-                    <tr>
-                      <th>Event</th>
-                      <th>Occurred</th>
-                      <th>Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {journey.events.map((event, index) => (
-                      <tr key={`${event.eventType}:${event.occurredAtUtc}:${index}`}>
-                        <td>
-                          <div className="identity-stack">
-                            <strong>{eventLabel(event.eventType)}</strong>
-                            <span className="identity-subline">{formatRelativeFromNow(event.occurredAtUtc)}</span>
-                          </div>
-                        </td>
-                        <td>{formatUtc(event.occurredAtUtc)}</td>
-                        <td>{describeJourneyEvent(event)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="empty-state">
-              <p className="muted-line">
-                Enter an account ID to load the exact lifecycle and activity timeline for that user.
-              </p>
-            </div>
-          )}
         </div>
-      </Panel>
-    </div>
+      </div>
+    </>
   );
 }

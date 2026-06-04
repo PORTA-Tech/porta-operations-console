@@ -8,38 +8,21 @@ import { ActionsPage } from './pages/Actions/ActionsPage';
 import { DigestPage } from './pages/Digest/DigestPage';
 import { GrowthPage } from './pages/Growth/GrowthPage';
 
-const DEFAULT_ROUTE = '/system-health';
-
 export default function App() {
-  const { loading, error } = useFleetState();
+  // Keep fleet state running for liveConnected in topbar + sidebar
+  useFleetState();
 
   return (
     <AppShell>
-      {loading ? <p>Connecting to control plane...</p> : null}
-      {error && error.status !== 403 ? <p className="error-line">{error.code}: {error.message}</p> : null}
       <Routes>
-        <Route path="/" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="/" element={<Navigate to="/system-health" replace />} />
         <Route path="/system-health" element={<SystemHealthPage />} />
         <Route path="/user-activity" element={<UserActivityPage />} />
         <Route path="/trust-level" element={<TrustLevelPage />} />
         <Route path="/actions" element={<ActionsPage />} />
         <Route path="/digest" element={<DigestPage />} />
         <Route path="/growth" element={<GrowthPage />} />
-        <Route path="/operations" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/alerts" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/cohorts" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/machines" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/experiments" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/rollouts" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/policies" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/audit-traces" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/config" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/security-access" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/console" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/nodes" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/rollout" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="/login" element={<Navigate to={DEFAULT_ROUTE} replace />} />
-        <Route path="*" element={<Navigate to={DEFAULT_ROUTE} replace />} />
+        <Route path="*" element={<Navigate to="/system-health" replace />} />
       </Routes>
     </AppShell>
   );
