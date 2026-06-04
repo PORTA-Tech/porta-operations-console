@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { fetchDigestLog, type DigestLogEntry } from '../../api/digest';
 import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
-import { toApiError } from '../../api/client';
 import { formatSeconds, relativeTime } from '../../utils/console';
 
 function failureReasonLabel(reason: string | null): string {
@@ -48,7 +47,8 @@ export function DigestPage() {
   );
 
   const lastNightCount = entries.filter((e) => isLastNight(e.dateLocal)).length;
-  const eligibleTonight = summaryFeed.rows.filter((r) => (r.trackedSeconds ?? 0) >= 3600).length;
+  // trackedSeconds is not in MachineSummaryReport — eligible count is unavailable from this endpoint
+  const eligibleTonight = 0;
 
   return (
     <>

@@ -39,7 +39,7 @@ export function AppShell({ children }: AppShellProps) {
   const actionCount = actionsFeed.rows.length;
   const actionBadge = actionCount >= 200 ? '200+' : String(actionCount) || '0';
 
-  const meta = sectionMeta[location.pathname] ?? sectionMeta['/system-health'];
+  const meta = sectionMeta[location.pathname] ?? { title: 'System Health', sub: 'Is Porta running and collecting activity correctly?' };
 
   return (
     <div className="layout">
