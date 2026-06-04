@@ -1,170 +1,151 @@
 import { Panel } from '../../components/Layout/Panel';
 import { SummaryBand } from '../../components/Layout/SummaryBand';
-import { useUserActivityLayer } from '../../hooks/useUserActivityLayer';
+import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
+import type { MachineSummaryReport } from '../../api/machines';
 import { formatRelativeFromNow } from '../../utils/date';
-import type {
-  UserActivityBreakNeeded,
-  UserActivityDeepWork,
-  UserActivityFocusLevel,
-  UserActivityOverloadRisk
-} from '../../types/userActivity';
 
-function focusBadgeClass(value: UserActivityFocusLevel): string {
-  if (value === 'High') return 'status-badge focus';
-  if (value === 'Medium') return 'status-badge ok';
-  if (value === 'Low') return 'status-badge neutral';
-  return 'status-badge neutral';
+function formatDuration(seconds: number | null | undefined): string {
+  if (!seconds || seconds <= 0) return '—';
+  if (seconds < 60) return `${seconds}s`;
+  const m = Math.floor(seconds / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem > 0 ? `${h}h ${rem}m` : `${h}h`;
 }
 
-function deepWorkBadgeClass(value: UserActivityDeepWork): string {
-  if (value === 'Active') return 'status-badge focus';
-  if (value === 'Not active') return 'status-badge neutral';
-  return 'status-badge neutral';
+function stateLabel(kind: MachineSummaryReport['attentionSegmentKind'] | null | undefined): string {
+  switch (kind) {
+    case 'focus': return 'FOCUSED';
+    case 'context_excursion': return 'CONTEXT SWITCH';
+    case 'off_task_distraction': return 'DISTRACTED';
+    case 'fragmentation_distraction': return 'FRAGMENTED';
+    case 'away': return 'AWAY';
+    default: return 'UNKNOWN';
+  }
 }
 
-function overloadBadgeClass(value: UserActivityOverloadRisk): string {
-  if (value === 'High') return 'status-badge critical';
-  if (value === 'Medium') return 'status-badge warn';
-  if (value === 'Low') return 'status-badge ok';
-  return 'status-badge warn';
+function stateLabelClass(kind: MachineSummaryReport['attentionSegmentKind'] | null | undefined): string {
+  switch (kind) {
+    case 'focus': return 'machine-state-label state-focus';
+    case 'context_excursion': return 'machine-state-label state-context';
+    case 'off_task_distraction':
+    case 'fragmentation_distraction': return 'machine-state-label state-distracted';
+    case 'away': return 'machine-state-label state-away';
+    default: return 'machine-state-label state-away';
+  }
 }
 
-function breakNeededBadgeClass(value: UserActivityBreakNeeded): string {
-  if (value === 'Yes') return 'status-badge warn';
-  if (value === 'No') return 'status-badge ok';
-  return 'status-badge warn';
+function MachineStateCard({ row }: { row: MachineSummaryReport }) {
+  const pressure = row.pressureLevel != null ? `${Math.round(row.pressureLevel * 100)}%` : '—';
+  const showBreak = Boolean(row.breakPendingKind);
+  const showLearning = row.calibrationStage === 'provisional';
+  const showWarmup = row.calibrationStage === 'cold';
+
+  return (
+    <article
+      className="machine-state-card"
+      data-state={row.attentionSegmentKind ?? 'away'}
+    >
+      <div className="machine-state-card-head">
+        <div>
+          <strong className="machine-state-name">{row.machineName}</strong>
+          <div className="machine-state-user">{row.userName}</div>
+        </div>
+        <span className={stateLabelClass(row.attentionSegmentKind)}>
+          {stateLabel(row.attentionSegmentKind)}
+        </span>
+      </div>
+
+      <div className="machine-state-stats">
+        <div className="machine-state-stat">
+          <span className="machine-state-stat-label">In state</span>
+          <span className="machine-state-stat-value">{formatDuration(row.attentionSegmentSeconds)}</span>
+        </div>
+        <div className="machine-state-stat">
+          <span className="machine-state-stat-label">Focus today</span>
+          <span className="machine-state-stat-value">{formatDuration(row.focusEpisodeSeconds)}</span>
+        </div>
+        <div className="machine-state-stat">
+          <span className="machine-state-stat-label">Pressure</span>
+          <span className="machine-state-stat-value">{pressure}</span>
+        </div>
+        <div className="machine-state-stat">
+          <span className="machine-state-stat-label">Updated</span>
+          <span className="machine-state-stat-value">{formatRelativeFromNow(row.reportedAtUtc)}</span>
+        </div>
+      </div>
+
+      {(showBreak || showLearning || showWarmup) ? (
+        <div className="machine-state-badges">
+          {showBreak ? <span className="status-badge warn">Break suggested</span> : null}
+          {showLearning ? <span className="status-badge neutral">Learning</span> : null}
+          {showWarmup ? <span className="status-badge neutral">Warming up</span> : null}
+        </div>
+      ) : null}
+    </article>
+  );
 }
 
 export function UserActivityPage() {
-  const { records, loading, error, notices } = useUserActivityLayer();
-  const focusHighCount = records.filter((record) => record.focusLevel === 'High').length;
-  const deepWorkCount = records.filter((record) => record.deepWork === 'Active').length;
-  const breakNeededCount = records.filter((record) => record.breakNeeded === 'Yes').length;
-  const overloadHighCount = records.filter((record) => record.overloadRisk === 'High').length;
-  const strongestFocus = records
-    .filter((record) => record.focusDurationSec !== null)
-    .sort((left, right) => (right.focusDurationSec ?? 0) - (left.focusDurationSec ?? 0))[0];
-  const latestBreakReady = records
-    .filter((record) => record.breakNeeded === 'Yes' && record.stateTimestampUtc)
-    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
-  const latestOverload = records
-    .filter((record) => record.overloadRisk === 'High' && record.stateTimestampUtc)
-    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
+  const { rows, loading, error, lastRefreshUtc } = useMachineSummaryFeed();
+
+  const activeCount = rows.filter((r) => r.activityDetected).length;
+  const focusCount = rows.filter((r) => r.attentionSegmentKind === 'focus').length;
+  const distractedCount = rows.filter((r) => r.distractionEpisodeActive).length;
+  const breakCount = rows.filter((r) => r.breakNeeded).length;
 
   return (
     <div className="stack">
-      {loading ? <p className="muted-line">Loading user activity truth...</p> : null}
+      {loading ? <p className="muted-line">Loading activity state...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
-      {notices.map((notice) => (
-        <div key={notice} className="operations-warning-banner">
-          {notice}
-        </div>
-      ))}
+
       <SummaryBand
-        title="Current activity"
-        subtitle="A simplified operational view of what PORTA thinks users are doing right now."
+        title="Live fleet state"
+        subtitle="Real-time attention, focus, distraction, and break state across all reporting Ari agents."
         items={[
           {
-            label: 'Focus high',
-            value: String(focusHighCount),
-            meta: strongestFocus ? `Longest focus episode ${strongestFocus.focusDurationLabel}` : (focusHighCount === 1 ? 'Machine in strong focus episode' : 'Machines in strong focus episodes'),
-            tone: focusHighCount > 0 ? 'focus' : 'neutral'
+            label: 'Active right now',
+            value: String(activeCount),
+            meta: activeCount === 1 ? 'Machine with activity detected' : 'Machines with activity detected',
+            tone: activeCount > 0 ? 'ok' : 'neutral'
           },
           {
-            label: 'Deep work active',
-            value: String(deepWorkCount),
-            meta: strongestFocus && deepWorkCount > 0 ? `Active for up to ${strongestFocus.focusDurationLabel}` : (deepWorkCount === 1 ? 'Protected focus episode' : 'Protected focus episodes'),
-            tone: deepWorkCount > 0 ? 'focus' : 'neutral'
+            label: 'In focus',
+            value: String(focusCount),
+            meta: focusCount === 1 ? 'Machine in focused work' : 'Machines in focused work',
+            tone: focusCount > 0 ? 'focus' : 'neutral'
+          },
+          {
+            label: 'Distracted',
+            value: String(distractedCount),
+            meta: distractedCount === 1 ? 'Machine in distraction episode' : 'Machines in distraction episode',
+            tone: distractedCount > 0 ? 'critical' : 'neutral'
           },
           {
             label: 'Break ready',
-            value: String(breakNeededCount),
-            meta: latestBreakReady?.stateTimestampUtc ? `Break ready ${formatRelativeFromNow(latestBreakReady.stateTimestampUtc)}` : (breakNeededCount === 1 ? 'Machine ready for a short or long break' : 'Machines ready for short or long breaks'),
-            tone: breakNeededCount > 0 ? 'warn' : 'neutral'
-          },
-          {
-            label: 'Pressure high',
-            value: String(overloadHighCount),
-            meta: latestOverload?.stateTimestampUtc ? `Observed ${formatRelativeFromNow(latestOverload.stateTimestampUtc)}` : (overloadHighCount === 1 ? 'Machine in elevated pressure' : 'Machines in elevated pressure'),
-            tone: overloadHighCount > 0 ? 'critical' : 'neutral'
+            value: String(breakCount),
+            meta: breakCount === 1 ? 'Machine ready for a break' : 'Machines ready for a break',
+            tone: breakCount > 0 ? 'warn' : 'neutral'
           }
         ]}
       />
+
       <Panel
-        title="Behavior detail"
-        subtitle="Supporting machine-level activity truth beneath the live focus, pressure, and regulation summary."
+        title="Machine states"
+        subtitle={lastRefreshUtc ? `Updated ${formatRelativeFromNow(lastRefreshUtc)} · polls every 5s` : 'Waiting for machine data'}
       >
-        {records.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="empty-state">
             <p className="muted-line">
-              No user-activity rows are available. User Activity cannot render current behavioral truth until the backend supplies focus-episode, deep-work, pressure, and break-readiness state.
+              No machines are reporting. User Activity shows live attention and focus state once Ari agents start sending telemetry.
             </p>
           </div>
         ) : (
-          <div className="table-scroll-wrap">
-            <table className="simple-table user-activity-table">
-              <thead>
-                <tr>
-                  <th>Machine / User</th>
-                  <th>Focus level</th>
-                  <th>Deep work</th>
-                  <th>Pressure</th>
-                  <th>Focus episode</th>
-                  <th>Break ready</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((record) => (
-                  <tr key={record.machineId} className="user-activity-row" data-tone={record.tone}>
-                    <td>
-                      <div className="user-activity-context">
-                        <strong>{record.machineName}</strong>
-                        <span className="user-activity-user">{record.userName}</span>
-                        {record.userDetail ? <span className="user-activity-user">{record.userDetail}</span> : null}
-                        {record.orgRole ? <span className="user-activity-note">{record.orgRole}</span> : null}
-                        <span className="user-activity-note">
-                          {record.stateTimestampUtc ? `Updated ${formatRelativeFromNow(record.stateTimestampUtc)}` : 'Update time unavailable'}
-                        </span>
-                        {record.note ? <span className="user-activity-note">{record.note}</span> : null}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={focusBadgeClass(record.focusLevel)}>{record.focusLevel}</span>
-                    </td>
-                    <td>
-                      <span className={deepWorkBadgeClass(record.deepWork)}>{record.deepWork}</span>
-                    </td>
-                    <td>
-                      <div className="user-activity-context">
-                        <span className={overloadBadgeClass(record.overloadRisk)}>{record.overloadRisk}</span>
-                        <span className="user-activity-note">Pressure {record.pressureLabel}</span>
-                        <span className="user-activity-note">{record.pressureConfidenceLabel}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <div className="user-activity-context">
-                        <span className={record.stateStale ? 'system-health-time stale' : 'system-health-time'}>
-                          {record.focusDurationLabel}
-                        </span>
-                        {record.stateTimestampUtc ? (
-                          <span className="user-activity-note">
-                            State {formatRelativeFromNow(record.stateTimestampUtc)}
-                          </span>
-                        ) : null}
-                        {record.activityReason ? (
-                          <span className="user-activity-note">
-                            {record.activityReason}
-                          </span>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={breakNeededBadgeClass(record.breakNeeded)}>{record.breakNeeded}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="machine-state-grid">
+            {rows.map((row) => (
+              <MachineStateCard key={row.machineId} row={row} />
+            ))}
           </div>
         )}
       </Panel>

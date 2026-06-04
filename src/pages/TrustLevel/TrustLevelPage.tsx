@@ -1,126 +1,112 @@
 import { Panel } from '../../components/Layout/Panel';
 import { SummaryBand } from '../../components/Layout/SummaryBand';
-import { useTrustLevelLayer } from '../../hooks/useTrustLevelLayer';
+import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
 import { formatRelativeFromNow } from '../../utils/date';
-import type { TrustConfidence, TrustDataQuality, TrustLearningStage } from '../../types/trustLevel';
 
-function learningStageBadgeClass(value: TrustLearningStage): string {
-  return value === 'Ready' ? 'status-badge ok' : 'status-badge warn';
+function calibrationBadgeClass(stage: string): string {
+  if (stage === 'calibrated') return 'status-badge ok';
+  if (stage === 'provisional') return 'status-badge warn';
+  return 'status-badge neutral';
 }
 
-function confidenceBadgeClass(value: TrustConfidence): string {
-  if (value === 'High') return 'status-badge ok';
-  if (value === 'Medium') return 'status-badge warn';
-  return 'status-badge critical';
+function calibrationLabel(stage: string): string {
+  if (stage === 'calibrated') return 'Calibrated';
+  if (stage === 'provisional') return 'Learning';
+  return 'Warming up';
 }
 
-function dataQualityBadgeClass(value: TrustDataQuality): string {
-  if (value === 'Good') return 'status-badge ok';
-  if (value === 'Partial') return 'status-badge warn';
-  return 'status-badge critical';
+function trustTierBadgeClass(tier: string): string {
+  if (tier === 'high') return 'status-badge ok';
+  if (tier === 'medium') return 'status-badge warn';
+  return 'status-badge neutral';
 }
 
 export function TrustLevelPage() {
-  const { records, loading, error, notices } = useTrustLevelLayer();
-  const readyCount = records.filter((record) => record.learningStage === 'Ready').length;
-  const learningCount = records.filter((record) => record.learningStage === 'Learning').length;
-  const confidenceHighCount = records.filter((record) => record.confidence === 'High').length;
-  const limitedQualityCount = records.filter((record) => record.dataQuality !== 'Good').length;
-  const latestReady = records
-    .filter((record) => record.learningStage === 'Ready' && record.stateTimestampUtc)
-    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
-  const latestLearning = records
-    .filter((record) => record.learningStage === 'Learning' && record.stateTimestampUtc)
-    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
-  const latestHighConfidence = records
-    .filter((record) => record.confidence === 'High' && record.stateTimestampUtc)
-    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
-  const latestLimitedQuality = records
-    .filter((record) => record.dataQuality !== 'Good' && record.stateTimestampUtc)
-    .sort((left, right) => Date.parse(right.stateTimestampUtc ?? '') - Date.parse(left.stateTimestampUtc ?? ''))[0];
+  const { rows, loading, error, lastRefreshUtc } = useMachineSummaryFeed();
+
+  const calibratedCount = rows.filter((r) => r.calibrationStage === 'calibrated').length;
+  const provisionalCount = rows.filter((r) => r.calibrationStage === 'provisional').length;
+  const coldCount = rows.filter((r) => r.calibrationStage === 'cold').length;
 
   return (
     <div className="stack">
-      {loading ? <p className="muted-line">Loading trust truth...</p> : null}
+      {loading ? <p className="muted-line">Loading calibration state...</p> : null}
       {error ? <p className="error-line">{error.code}: {error.message}</p> : null}
-      {notices.map((notice) => (
-        <div key={notice} className="operations-warning-banner">
-          {notice}
-        </div>
-      ))}
+
       <SummaryBand
-        title="Trust readiness"
-        subtitle="How quickly the fleet is becoming safe enough for regulation and how reliable that trust is."
+        title="Baseline & calibration"
+        subtitle="How well calibrated each Ari agent is and how much baseline trust it has earned for behavioral regulation."
         items={[
           {
             label: 'Ready',
-            value: String(readyCount),
-            meta: latestReady?.stateTimestampUtc ? `Updated ${formatRelativeFromNow(latestReady.stateTimestampUtc)}` : (readyCount === 1 ? 'Machine fully calibrated' : 'Machines fully calibrated'),
-            tone: readyCount > 0 ? 'ok' : 'neutral'
+            value: String(calibratedCount),
+            meta: calibratedCount === 1 ? 'Machine fully calibrated' : 'Machines fully calibrated',
+            tone: calibratedCount > 0 ? 'ok' : 'neutral'
           },
           {
             label: 'Learning',
-            value: String(learningCount),
-            meta: latestLearning?.stateTimestampUtc ? `Updated ${formatRelativeFromNow(latestLearning.stateTimestampUtc)}` : (learningCount === 1 ? 'Machine still calibrating' : 'Machines still calibrating'),
-            tone: learningCount > 0 ? 'warn' : 'neutral'
+            value: String(provisionalCount),
+            meta: provisionalCount === 1 ? 'Machine building baseline' : 'Machines building baseline',
+            tone: provisionalCount > 0 ? 'warn' : 'neutral'
           },
           {
-            label: 'Confidence high',
-            value: String(confidenceHighCount),
-            meta: latestHighConfidence?.stateTimestampUtc ? `Seen ${formatRelativeFromNow(latestHighConfidence.stateTimestampUtc)}` : (confidenceHighCount === 1 ? 'Machine above high-confidence threshold' : 'Machines above high-confidence threshold'),
-            tone: confidenceHighCount > 0 ? 'ok' : 'neutral'
+            label: 'Warming up',
+            value: String(coldCount),
+            meta: coldCount === 1 ? 'Machine with no baseline yet' : 'Machines with no baseline yet',
+            tone: coldCount > 0 ? 'warn' : 'neutral'
           },
           {
-            label: 'Quality limited',
-            value: String(limitedQualityCount),
-            meta: latestLimitedQuality?.stateTimestampUtc ? `Seen ${formatRelativeFromNow(latestLimitedQuality.stateTimestampUtc)}` : (limitedQualityCount === 1 ? 'Machine with partial or poor quality' : 'Machines with partial or poor quality'),
-            tone: limitedQualityCount > 0 ? 'warn' : 'neutral'
+            label: 'Total machines',
+            value: String(rows.length),
+            meta: lastRefreshUtc ? `Updated ${formatRelativeFromNow(lastRefreshUtc)}` : 'Awaiting data',
+            tone: 'neutral'
           }
         ]}
       />
+
       <Panel
-        title="Trust detail"
-        subtitle="Supporting calibration, confidence, and data-quality rows beneath the live trust summary."
+        title="Calibration detail"
+        subtitle="Per-machine calibration stage, trust tier, and last report time."
       >
-        {records.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="empty-state">
             <p className="muted-line">
-              No trust rows are available. Trust Level cannot render calibration, confidence, or data-quality truth until the backend supplies current trust state.
+              No machines are reporting. Baseline &amp; Calibration shows data once Ari agents send telemetry.
             </p>
           </div>
         ) : (
           <div className="table-scroll-wrap">
-            <table className="simple-table trust-level-table">
+            <table className="simple-table calibration-table">
               <thead>
                 <tr>
-                  <th>Machine / User</th>
-                  <th>Learning stage</th>
-                  <th>Confidence</th>
-                  <th>Data quality</th>
+                  <th>Machine</th>
+                  <th>User</th>
+                  <th>Calibration</th>
+                  <th>Trust tier</th>
+                  <th>Last reported</th>
                 </tr>
               </thead>
               <tbody>
-                {records.map((record) => (
-                  <tr key={record.machineId} className="trust-level-row" data-tone={record.tone}>
+                {rows.map((row) => (
+                  <tr key={row.machineId}>
                     <td>
-                      <div className="trust-level-context">
-                        <strong>{record.machineName}</strong>
-                        <span className="trust-level-user">{record.userName}</span>
-                        {record.userDetail ? <span className="trust-level-user">{record.userDetail}</span> : null}
-                        {record.orgRole ? <span className="trust-level-note">{record.orgRole}</span> : null}
-                        <span className="trust-level-note">
-                          {record.stateTimestampUtc ? `Updated ${formatRelativeFromNow(record.stateTimestampUtc)}` : 'Update time unavailable'}
-                        </span>
-                      </div>
+                      <strong>{row.machineName}</strong>
+                    </td>
+                    <td>{row.userName}</td>
+                    <td>
+                      <span className={calibrationBadgeClass(row.calibrationStage)}>
+                        {calibrationLabel(row.calibrationStage)}
+                      </span>
                     </td>
                     <td>
-                      <span className={learningStageBadgeClass(record.learningStage)}>{record.learningStage}</span>
+                      <span className={trustTierBadgeClass(row.trustTier)}>
+                        {row.trustTier}
+                      </span>
                     </td>
                     <td>
-                      <span className={confidenceBadgeClass(record.confidence)}>{record.confidence}</span>
-                    </td>
-                    <td>
-                      <span className={dataQualityBadgeClass(record.dataQuality)}>{record.dataQuality}</span>
+                      <span className="system-health-time">
+                        {formatRelativeFromNow(row.reportedAtUtc)}
+                      </span>
                     </td>
                   </tr>
                 ))}

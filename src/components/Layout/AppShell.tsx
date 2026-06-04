@@ -12,8 +12,9 @@ interface AppShellProps {
 const navItems = [
   { to: '/system-health', label: 'System Health' },
   { to: '/user-activity', label: 'User Activity' },
-  { to: '/trust-level', label: 'Trust Level' },
+  { to: '/trust-level', label: 'Baseline & Calibration' },
   { to: '/actions', label: 'Actions' },
+  { to: '/digest', label: 'Digest' },
   { to: '/growth', label: 'Growth' }
 ];
 
@@ -58,7 +59,7 @@ export function AppShell({ children }: AppShellProps) {
       <header className="topbar">
         <div className="topbar-brand-block">
           <Link to="/system-health" className="brand">PORTA Operations Console</Link>
-          <p className="brand-subtitle">Behavioral regulation command surface for machine truth, trust, and action state.</p>
+          <p className="brand-subtitle">Fleet status and operational visibility for Ari agents.</p>
         </div>
         <div className="topbar-meta">
           <span className={`topbar-signal ${liveConnected ? 'ok' : 'warn'}`}>

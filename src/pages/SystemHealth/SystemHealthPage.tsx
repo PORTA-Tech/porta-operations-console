@@ -5,6 +5,7 @@ import {
   unlinkAccountDevice,
   type AccountDeviceProfile
 } from '../../api/accountDevices';
+import { fetchMachineUptime, type UptimeSample } from '../../api/machines';
 import { toApiError } from '../../api/client';
 import { Panel } from '../../components/Layout/Panel';
 import { SummaryBand } from '../../components/Layout/SummaryBand';
@@ -58,6 +59,47 @@ function timeCell(valueUtc: string | null, label: string, stale: boolean) {
   return (
     <span className={className} title={title}>
       {label}
+    </span>
+  );
+}
+
+function UptimeSparkline({ machineId }: { machineId: string }) {
+  const [samples, setSamples] = useState<UptimeSample[]>([]);
+  const [fetched, setFetched] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchMachineUptime(machineId, 7)
+      .then((data) => { if (!cancelled) { setSamples(data); setFetched(true); } })
+      .catch(() => { if (!cancelled) setFetched(true); });
+    return () => { cancelled = true; };
+  }, [machineId]);
+
+  const days: string[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d.toISOString().slice(0, 10));
+  }
+
+  const onlineByDay = useMemo(
+    () => new Set(samples.filter((s) => s.agentRunning).map((s) => s.sampledAtUtc.slice(0, 10))),
+    [samples]
+  );
+
+  if (!fetched) {
+    return <span className="uptime-sparkline uptime-sparkline-loading" aria-label="Loading uptime" />;
+  }
+
+  return (
+    <span className="uptime-sparkline" aria-label="7-day agent uptime">
+      {days.map((day) => (
+        <span
+          key={day}
+          className={`uptime-segment ${samples.length === 0 ? 'nodata' : onlineByDay.has(day) ? 'online' : 'offline'}`}
+          title={day}
+        />
+      ))}
     </span>
   );
 }
@@ -270,6 +312,7 @@ export function SystemHealthPage() {
                   <th>User session connected</th>
                   <th>Activity detected</th>
                   <th>Last activity time</th>
+                  <th>7d uptime</th>
                   <th>Error message</th>
                   <th>Device admin</th>
                 </tr>
@@ -304,6 +347,7 @@ export function SystemHealthPage() {
                       <span className={statusClass(record.activityDetected)}>{record.activityDetected}</span>
                     </td>
                     <td>{timeCell(record.lastActivityUtc, record.lastActivityLabel, record.lastActivityStale)}</td>
+                    <td><UptimeSparkline machineId={record.machineId} /></td>
                     <td>{record.errorMessage ?? ''}</td>
                     <td>
                       {record.accountId ? (

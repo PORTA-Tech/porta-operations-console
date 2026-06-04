@@ -14,12 +14,16 @@ const pageMeta: Record<string, { title: string; subtitle: string }> = {
     subtitle: 'What does PORTA think the user is doing right now?'
   },
   '/trust-level': {
-    title: 'Trust Level',
-    subtitle: 'Can PORTA be trusted for this user yet?'
+    title: 'Baseline & Calibration',
+    subtitle: 'How calibrated is each Ari agent and how much trust has it earned?'
   },
   '/actions': {
     title: 'Actions',
-    subtitle: 'What did PORTA decide, apply, or fail to change?'
+    subtitle: 'What did Ari decide, suggest, or apply?'
+  },
+  '/digest': {
+    title: 'Digest',
+    subtitle: 'Did the nightly digest fire for each machine last night?'
   },
   '/growth': {
     title: 'Growth',

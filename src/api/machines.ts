@@ -164,3 +164,18 @@ export async function fetchMachineSummary(machineId: string): Promise<MachineSum
   });
   return normalizeMachineSummaryReport(response);
 }
+
+export interface UptimeSample {
+  machineId: string;
+  sampledAtUtc: string;
+  agentRunning: boolean;
+  userSessionConnected: boolean;
+  activityDetected: boolean;
+}
+
+export async function fetchMachineUptime(machineId: string, days = 7): Promise<UptimeSample[]> {
+  return apiRequestRaw<UptimeSample[]>({
+    path: `/v1/machines/${encodeURIComponent(machineId)}/uptime?days=${days}`,
+    method: 'get'
+  });
+}

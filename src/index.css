@@ -1112,6 +1112,212 @@ select {
   gap: 0.5rem;
 }
 
+/* ── Brand palette (B8) ─────────────────────────────────────────────────── */
+
+:root {
+  --brand-green:  #22c55e;
+  --brand-amber:  #f59e0b;
+  --brand-red:    #ef4444;
+  --brand-grey:   #9ca3af;
+  --brand-purple: #5252b0;
+}
+
+/* ── Machine state cards (B3) ────────────────────────────────────────────── */
+
+.machine-state-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.75rem;
+}
+
+.machine-state-card {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1rem 1rem 1rem 1.25rem;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--line-strong);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 8px 20px rgba(20, 37, 42, 0.05);
+}
+
+.machine-state-card[data-state="focus"] {
+  border-left-color: var(--brand-green);
+}
+
+.machine-state-card[data-state="context_excursion"] {
+  border-left-color: var(--brand-amber);
+}
+
+.machine-state-card[data-state="off_task_distraction"],
+.machine-state-card[data-state="fragmentation_distraction"] {
+  border-left-color: var(--brand-red);
+}
+
+.machine-state-card[data-state="away"] {
+  border-left-color: var(--brand-grey);
+}
+
+.machine-state-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.machine-state-name {
+  font-size: 0.95rem;
+  line-height: 1.2;
+}
+
+.machine-state-user {
+  color: var(--muted);
+  font-size: 0.84rem;
+  margin-top: 0.1rem;
+}
+
+.machine-state-label {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.machine-state-label.state-focus {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.machine-state-label.state-context {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fcd34d;
+}
+
+.machine-state-label.state-distracted {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.machine-state-label.state-away {
+  color: #374151;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.machine-state-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem 0.75rem;
+}
+
+.machine-state-stat {
+  display: grid;
+  gap: 0.08rem;
+}
+
+.machine-state-stat-label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.machine-state-stat-value {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.machine-state-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+/* ── Uptime sparkline (B2) ───────────────────────────────────────────────── */
+
+.uptime-sparkline {
+  display: inline-flex;
+  gap: 2px;
+  align-items: center;
+}
+
+.uptime-sparkline-loading {
+  display: inline-block;
+  width: 75px;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(170, 185, 198, 0.25);
+}
+
+.uptime-segment {
+  display: inline-block;
+  width: 8px;
+  height: 18px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.uptime-segment.online {
+  background: var(--brand-green);
+  opacity: 0.85;
+}
+
+.uptime-segment.offline {
+  background: #d1d5db;
+}
+
+.uptime-segment.nodata {
+  background: rgba(170, 185, 198, 0.3);
+}
+
+/* ── Digest page (B7) ────────────────────────────────────────────────────── */
+
+.digest-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+}
+
+.digest-status-sent {
+  color: #166534;
+  font-weight: 700;
+}
+
+.digest-status-skipped {
+  color: var(--critical);
+  font-weight: 700;
+}
+
+.digest-reason {
+  display: inline-block;
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  background: var(--critical-soft);
+  color: var(--critical);
+  font-size: 0.8rem;
+  border: 1px solid rgba(160, 68, 60, 0.2);
+}
+
+/* ── Actions load-more (B5) ──────────────────────────────────────────────── */
+
+.actions-load-more {
+  display: flex;
+  justify-content: center;
+  padding-top: 0.85rem;
+}
+
+/* ── Responsive additions ────────────────────────────────────────────────── */
+
 @media (max-width: 960px) {
   .topbar,
   .fleet-ribbon {
