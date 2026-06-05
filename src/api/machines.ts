@@ -92,6 +92,10 @@ export interface MachineSummaryReport {
   signalQualityScore?: number | null;
   partialData: boolean;
   missingMajorChannels: string[];
+  userAgentCaptureFailureCode?: string | null;
+  watchdogLaunchFailureCode?: string | null;
+  userAgentSelfTestState?: string | null;
+  userAgentSelfTestErrorCode?: string | null;
 }
 
 interface CollectionResponse<T> {

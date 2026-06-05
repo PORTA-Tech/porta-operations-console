@@ -301,6 +301,7 @@ export function SystemHealthPage() {
                   <th>Last Seen</th>
                   <th>Agent</th>
                   <th>Activity</th>
+                  <th>Capture Issue</th>
                   <th>7d Uptime</th>
                   <th>Error</th>
                 </tr>
@@ -311,6 +312,19 @@ export function SystemHealthPage() {
                   const pct = uptimePct(buckets);
                   const upColor = pct > 70 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
                   const errorMsg = r.lastError || r.captureFailureReason || r.ownershipWarning || '';
+                  const captureIssueCode = r.watchdogLaunchFailureCode || r.userAgentCaptureFailureCode || null;
+                  const captureIssueLabel = captureIssueCode
+                    ? ({
+                        service_session: 'Wrong session (no hooks)',
+                        hooks_unavailable: 'Hooks blocked',
+                        signals_not_delivering: 'Signals not reaching API',
+                        self_test_failed: 'Capture self-test failed',
+                        no_interactive_session: 'No desktop session found',
+                      } as Record<string, string>)[captureIssueCode]
+                      ?? (captureIssueCode.startsWith('token_query_failed:') ? 'Session token error'
+                        : captureIssueCode.startsWith('process_create_failed:') ? 'Process launch failed'
+                        : captureIssueCode)
+                    : null;
                   return (
                     <tr key={r.machineId}>
                       <td><div className="td-main">{r.machineName}</div></td>
@@ -337,9 +351,14 @@ export function SystemHealthPage() {
                           : <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>No</span>}
                       </td>
                       <td>
+                        {captureIssueLabel
+                          ? <span title={captureIssueCode ?? undefined} style={{ color: 'var(--red)', fontFamily: 'var(--font-m)', fontSize: '11px', cursor: 'help' }}>{captureIssueLabel}</span>
+                          : <span style={{ color: 'var(--green)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>—</span>}
+                      </td>
+                      <td>
                         <span style={{ fontFamily: 'var(--font-m)', fontSize: '11px', color: upColor }}>{pct}%</span>
                       </td>
-                      <td style={{ fontSize: '11px', color: 'var(--muted)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <td title={r.userAgentSelfTestState ?? undefined} style={{ fontSize: '11px', color: 'var(--muted)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: r.userAgentSelfTestState ? 'help' : undefined }}>
                         {errorMsg || '—'}
                       </td>
                     </tr>
