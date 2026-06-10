@@ -141,8 +141,15 @@ export function GrowthPage() {
 
   return (
     <>
-      {/* Hero metrics — 5-column */}
+      {/* Hero metrics */}
       <div className="growth-hero">
+        <div className="g-metric">
+          <div className="g-metric-val" style={{ color: 'var(--blue)' }}>{summary.totalInstalls ?? '—'}</div>
+          <div className="g-metric-lbl">Installs</div>
+          <div className="g-metric-delta delta-neutral">
+            {summary.unlinkedMachines != null ? `${summary.unlinkedMachines} not signed in` : 'machines ever seen'}
+          </div>
+        </div>
         <div className="g-metric">
           <div className="g-metric-val" style={{ color: 'var(--accent)' }}>{summary.totalRegisteredUsers}</div>
           <div className="g-metric-lbl">Registered Users</div>
@@ -174,6 +181,52 @@ export function GrowthPage() {
           <div className="g-metric-lbl">Active Today</div>
           <div className="g-metric-delta delta-up">
             {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+          </div>
+        </div>
+      </div>
+
+      {/* Adoption funnel: installs → reporting → registered → activated */}
+      <div className="card" style={{ marginBottom: '16px' }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">Adoption Funnel</div>
+            <div className="card-sub">
+              Installs → Reporting (48h) → Registered → Activated · activity data before 10 Jun 2026 may be inflated (agent bug, fixed in 1.2.82)
+            </div>
+          </div>
+          {summary.installToRegistrationRatePct != null && (
+            <span className="card-tag tag-accent">{summary.installToRegistrationRatePct.toFixed(0)}% install → signup</span>
+          )}
+        </div>
+        <div className="card-body">
+          <div style={{ padding: '8px 0' }}>
+            {(() => {
+              const installs = summary.totalInstalls ?? 0;
+              const stages = [
+                { label: 'Installed', value: installs, color: 'var(--blue)', fillClass: 'prog-fill-accent' },
+                { label: 'Reporting (48h)', value: summary.reportingMachines48h ?? 0, color: 'var(--accent)', fillClass: 'prog-fill-accent' },
+                { label: 'Registered', value: summary.totalRegisteredUsers, color: 'var(--green)', fillClass: 'prog-fill-green' },
+                { label: 'Activated', value: summary.activatedUsers, color: 'var(--green)', fillClass: 'prog-fill-green' }
+              ];
+              const base = Math.max(1, installs, summary.totalRegisteredUsers);
+              return stages.map((stage, index) => {
+                const prev = index > 0 ? stages[index - 1]!.value : null;
+                const conversion = prev != null && prev > 0
+                  ? ` · ${Math.round((stage.value / prev) * 100)}% of previous`
+                  : '';
+                return (
+                  <div key={stage.label} style={{ marginBottom: '18px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '12px', color: 'var(--muted2)' }}>{stage.label}{conversion}</span>
+                      <span style={{ fontFamily: 'var(--font-m)', fontSize: '12px', color: stage.color }}>{stage.value}</span>
+                    </div>
+                    <div className="prog-track" style={{ height: '10px' }}>
+                      <div className={`prog-fill ${stage.fillClass}`} style={{ width: `${Math.min(100, (stage.value / base) * 100)}%` }} />
+                    </div>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
       </div>

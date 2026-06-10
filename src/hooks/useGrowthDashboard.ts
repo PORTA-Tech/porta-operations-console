@@ -6,7 +6,7 @@ import {
   fetchGrowthUserJourney,
   type GrowthCohorts,
   type GrowthSeries,
-  type GrowthSeriesMetric,
+  type ConsoleSeriesMetric,
   type GrowthSummary,
   type GrowthUserJourney
 } from '../api/growth';
@@ -28,11 +28,11 @@ function buildTrailingWindow(windowDays: number): { from: string; to: string } {
 
 async function fetchDashboardBundle(windowDays: number): Promise<{
   summary: GrowthSummary;
-  seriesByMetric: Record<GrowthSeriesMetric, GrowthSeries>;
+  seriesByMetric: Partial<Record<ConsoleSeriesMetric, GrowthSeries>>;
   cohorts: GrowthCohorts;
 }> {
   const range = buildTrailingWindow(windowDays);
-  const [summary, registrations, activations, activeUsers, cohorts] = await Promise.all([
+  const [summary, registrations, activations, activeUsers, installs, cohorts] = await Promise.all([
     fetchGrowthSummary(windowDays),
     fetchGrowthSeries({
       metric: 'registrations',
@@ -52,6 +52,12 @@ async function fetchDashboardBundle(windowDays: number): Promise<{
       from: range.from,
       to: range.to
     }),
+    fetchGrowthSeries({
+      metric: 'installs',
+      interval: 'day',
+      from: range.from,
+      to: range.to
+    }).catch(() => undefined),
     fetchGrowthCohorts({ limit: DEFAULT_COHORT_LIMIT })
   ]);
 
@@ -60,7 +66,8 @@ async function fetchDashboardBundle(windowDays: number): Promise<{
     seriesByMetric: {
       registrations,
       activations,
-      active_users: activeUsers
+      active_users: activeUsers,
+      ...(installs ? { installs } : {})
     },
     cohorts
   };
@@ -71,7 +78,7 @@ export interface GrowthDashboardState {
   refreshing: boolean;
   error: ApiError | undefined;
   summary: GrowthSummary | null;
-  seriesByMetric: Partial<Record<GrowthSeriesMetric, GrowthSeries>>;
+  seriesByMetric: Partial<Record<ConsoleSeriesMetric, GrowthSeries>>;
   cohorts: GrowthCohorts | null;
   lastRefreshUtc: string | null;
   journey: GrowthUserJourney | null;
@@ -87,7 +94,7 @@ export function useGrowthDashboard(): GrowthDashboardState {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<ApiError | undefined>();
   const [summary, setSummary] = useState<GrowthSummary | null>(null);
-  const [seriesByMetric, setSeriesByMetric] = useState<Partial<Record<GrowthSeriesMetric, GrowthSeries>>>({});
+  const [seriesByMetric, setSeriesByMetric] = useState<Partial<Record<ConsoleSeriesMetric, GrowthSeries>>>({});
   const [cohorts, setCohorts] = useState<GrowthCohorts | null>(null);
   const [lastRefreshUtc, setLastRefreshUtc] = useState<string | null>(null);
   const [journey, setJourney] = useState<GrowthUserJourney | null>(null);

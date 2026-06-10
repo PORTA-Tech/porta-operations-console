@@ -96,6 +96,15 @@ export interface MachineSummaryReport {
   watchdogLaunchFailureCode?: string | null;
   userAgentSelfTestState?: string | null;
   userAgentSelfTestErrorCode?: string | null;
+  userAgentLogTail?: string | null;
+  // Server-derived truth fields (control plane fleetReadService):
+  // presence is liveness; deviceStatus only means the device credential is not revoked.
+  presence?: 'online' | 'recent' | 'offline';
+  offlineSinceUtc?: string | null;
+  hasInputData?: boolean;
+  selfTestEffective?: string | null;
+  agentOutdated?: boolean;
+  latestKnownAgentVersion?: string | null;
 }
 
 interface CollectionResponse<T> {

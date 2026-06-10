@@ -1,7 +1,20 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
-import { fetchMachineUptime, type UptimeSample } from '../../api/machines';
+import { fetchMachineUptime, type MachineSummaryReport, type UptimeSample } from '../../api/machines';
 import { relativeTime, getDayLabels, getLastSevenDayStrings } from '../../utils/console';
+
+// Liveness comes from the server-derived presence field; deviceStatus only means
+// the device credential is not revoked. Older control planes lack presence, so we
+// fall back to agentRunning from the last report.
+function presenceOf(row: MachineSummaryReport): 'online' | 'recent' | 'offline' {
+  return row.presence ?? (row.agentRunning ? 'online' : 'offline');
+}
+
+const PRESENCE_STYLE: Record<'online' | 'recent' | 'offline', { color: string; label: string }> = {
+  online: { color: 'var(--green)', label: 'ONLINE' },
+  recent: { color: 'var(--amber)', label: 'RECENT' },
+  offline: { color: 'var(--red)', label: 'OFFLINE' }
+};
 
 // ─── UPTIME HELPERS ───────────────────────────────────────────────────────────
 
@@ -98,8 +111,9 @@ function QualityTrendChart({ allUptime, machineCount }: QualityTrendProps) {
 // ─── PAGE ────────────────────────────────────────────────────────────────────
 
 export function SystemHealthPage() {
-  const { rows, lastRefreshUtc } = useMachineSummaryFeed();
+  const { rows, error, loading, lastRefreshUtc } = useMachineSummaryFeed();
   const [allUptimeData, setAllUptimeData] = useState<Record<string, UptimeSample[]>>({});
+  const [expandedMachineId, setExpandedMachineId] = useState<string | null>(null);
   const dayStrings = useMemo(() => getLastSevenDayStrings(), []);
   const dayLabels = useMemo(() => getDayLabels(), []);
 
@@ -135,15 +149,28 @@ export function SystemHealthPage() {
     return result;
   }, [allUptimeData, rows, dayStrings]);
 
-  // Fleet strip counts
-  const healthyCount = rows.filter(
-    (r) => r.agentRunning && r.userSessionConnected && !r.partialData && !r.lastError
-  ).length;
+  // Fleet strip counts — presence-aware: a machine silent for weeks is
+  // disconnected even though its last report said agentRunning=true.
+  const disconnectedCount = rows.filter((r) => presenceOf(r) === 'offline').length;
   const degradedCount = rows.filter(
-    (r) => r.partialData === true || (r.missingMajorChannels?.length ?? 0) > 0
+    (r) => presenceOf(r) !== 'offline'
+      && (r.partialData === true
+        || (r.missingMajorChannels?.length ?? 0) > 0
+        || r.selfTestEffective === 'stale_pending'
+        || r.hasInputData === false)
   ).length;
-  const disconnectedCount = rows.filter((r) => !r.agentRunning).length;
-  const noActivityRows = rows.filter((r) => !r.activityDetected && r.agentRunning);
+  const healthyCount = rows.filter(
+    (r) => presenceOf(r) === 'online'
+      && r.userSessionConnected
+      && r.hasInputData !== false
+      && r.selfTestEffective !== 'stale_pending'
+      && !r.partialData
+      && !r.lastError
+  ).length;
+  const noActivityRows = rows.filter(
+    (r) => presenceOf(r) !== 'offline'
+      && (r.hasInputData === false || (r.hasInputData === undefined && !r.activityDetected))
+  );
   const noActivityCount = noActivityRows.length;
   const noActivityLastUtc = noActivityRows
     .map((r) => r.lastActivityUtc)
@@ -154,6 +181,24 @@ export function SystemHealthPage() {
   const noActivitySub = noActivityLastUtc
     ? `Last activity ${relativeTime(noActivityLastUtc)}`
     : 'No recent activity';
+
+  // C7: never render zero-filled dashboards when the API is failing — zeros that
+  // mean "logged out" are indistinguishable from a real outage.
+  if (!loading && error && rows.length === 0) {
+    return (
+      <div className="empty-state">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.3, margin: '0 auto' }}>
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 8v4M12 16h.01" />
+        </svg>
+        <p>
+          {error.status === 401
+            ? 'Your session has expired or you are not signed in. Sign in again to see fleet data.'
+            : `Cannot reach the control plane (${error.status ? `HTTP ${error.status}` : error.message}). The numbers below would be meaningless, so nothing is shown.`}
+        </p>
+      </div>
+    );
+  }
 
   // Simplified quality trend data from buckets
   const allBuckets = useMemo(() => {
@@ -297,7 +342,8 @@ export function SystemHealthPage() {
                 <tr>
                   <th>Machine</th>
                   <th>User</th>
-                  <th>Device Status</th>
+                  <th>Status</th>
+                  <th>Link</th>
                   <th>Last Seen</th>
                   <th>Agent</th>
                   <th>Activity</th>
@@ -320,22 +366,44 @@ export function SystemHealthPage() {
                         signals_not_delivering: 'Signals not reaching API',
                         self_test_failed: 'Capture self-test failed',
                         no_interactive_session: 'No desktop session found',
+                        capture_loop_stalled: 'Capture loop stalled',
+                        capture_loop_erroring: 'Capture loop erroring',
                       } as Record<string, string>)[captureIssueCode]
                       ?? (captureIssueCode.startsWith('token_query_failed:') ? 'Session token error'
                         : captureIssueCode.startsWith('process_create_failed:') ? 'Process launch failed'
                         : captureIssueCode)
-                    : null;
+                    : (r.selfTestEffective === 'stale_pending' ? 'Self-test stuck (no input)' : null);
+                  const presence = presenceOf(r);
+                  const presenceStyle = PRESENCE_STYLE[presence];
+                  const notSignedIn = !r.accountId;
+                  const isExpanded = expandedMachineId === r.machineId;
                   return (
-                    <tr key={r.machineId}>
-                      <td><div className="td-main">{r.machineName}</div></td>
+                    <Fragment key={r.machineId}>
+                    <tr
+                      onClick={() => setExpandedMachineId(isExpanded ? null : r.machineId)}
+                      style={{ cursor: 'pointer' }}
+                      title="Click to view diagnostics and agent log"
+                    >
+                      <td><div className="td-main">{r.machineName} <span style={{ color: 'var(--muted)', fontSize: '9px' }}>{isExpanded ? '▾' : '▸'}</span></div></td>
                       <td>
                         <div style={{ fontSize: '12px', color: 'var(--text)' }}>{r.userName}</div>
                         {r.primaryEmail && <div className="td-email">{r.primaryEmail}</div>}
                       </td>
                       <td>
-                        <span className="state-badge state-focused" style={{ fontSize: '9px' }}>
-                          {(r as { deviceStatus?: string }).deviceStatus || 'Active'}
+                        <span
+                          title={presence === 'offline' && r.offlineSinceUtc ? `Offline since ${relativeTime(r.offlineSinceUtc)}` : undefined}
+                          style={{ color: presenceStyle.color, fontFamily: 'var(--font-m)', fontSize: '10px', fontWeight: 700, cursor: presence === 'offline' ? 'help' : undefined }}
+                        >
+                          {presenceStyle.label}
                         </span>
+                        {presence === 'offline' && r.offlineSinceUtc && (
+                          <div style={{ fontSize: '9px', color: 'var(--muted)' }}>since {relativeTime(r.offlineSinceUtc)}</div>
+                        )}
+                      </td>
+                      <td>
+                        {notSignedIn
+                          ? <span style={{ color: 'var(--amber)', fontFamily: 'var(--font-m)', fontSize: '9px', fontWeight: 700, border: '1px solid var(--amber)', borderRadius: '4px', padding: '1px 5px' }}>NOT SIGNED IN</span>
+                          : <span className="state-badge state-focused" style={{ fontSize: '9px' }}>{(r as { deviceStatus?: string }).deviceStatus || 'linked'}</span>}
                       </td>
                       <td style={{ fontFamily: 'var(--font-m)', fontSize: '11px' }}>
                         {relativeTime(r.reportedAtUtc)}
@@ -344,15 +412,23 @@ export function SystemHealthPage() {
                         {r.agentRunning
                           ? <span style={{ color: 'var(--green)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>Yes</span>
                           : <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>No</span>}
+                        <div
+                          title={r.agentOutdated && r.latestKnownAgentVersion ? `Latest is ${r.latestKnownAgentVersion}` : undefined}
+                          style={{ fontSize: '9px', fontFamily: 'var(--font-m)', color: r.agentOutdated ? 'var(--red)' : 'var(--muted)', cursor: r.agentOutdated ? 'help' : undefined }}
+                        >
+                          {r.agentVersion}{r.agentOutdated ? ' ⚠ outdated' : ''}
+                        </div>
                       </td>
                       <td>
-                        {r.activityDetected
-                          ? <span style={{ color: 'var(--green)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>Yes</span>
-                          : <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>No</span>}
+                        {r.hasInputData === false
+                          ? <span title="No input has ever been captured from this machine" style={{ color: 'var(--amber)', fontFamily: 'var(--font-m)', fontSize: '11px', cursor: 'help' }}>no data</span>
+                          : r.activityDetected
+                            ? <span style={{ color: 'var(--green)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>Yes</span>
+                            : <span style={{ color: 'var(--muted)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>No</span>}
                       </td>
                       <td>
                         {captureIssueLabel
-                          ? <span title={captureIssueCode ?? undefined} style={{ color: 'var(--red)', fontFamily: 'var(--font-m)', fontSize: '11px', cursor: 'help' }}>{captureIssueLabel}</span>
+                          ? <span title={captureIssueCode ?? r.selfTestEffective ?? undefined} style={{ color: 'var(--red)', fontFamily: 'var(--font-m)', fontSize: '11px', cursor: 'help' }}>{captureIssueLabel}</span>
                           : <span style={{ color: 'var(--green)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>—</span>}
                       </td>
                       <td>
@@ -362,6 +438,23 @@ export function SystemHealthPage() {
                         {errorMsg || '—'}
                       </td>
                     </tr>
+                    {isExpanded && (
+                      <tr>
+                        <td colSpan={10} style={{ background: 'var(--bg2, rgba(255,255,255,0.02))', padding: '12px 16px' }}>
+                          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap', marginBottom: '10px', fontSize: '11px', fontFamily: 'var(--font-m)' }}>
+                            <span style={{ color: 'var(--muted2)' }}>Self-test: <span style={{ color: 'var(--text)' }}>{r.selfTestEffective ?? r.userAgentSelfTestState ?? 'n/a'}</span></span>
+                            <span style={{ color: 'var(--muted2)' }}>Capture failure: <span style={{ color: 'var(--text)' }}>{r.userAgentCaptureFailureCode ?? '—'}</span></span>
+                            <span style={{ color: 'var(--muted2)' }}>Watchdog failure: <span style={{ color: 'var(--text)' }}>{r.watchdogLaunchFailureCode ?? '—'}</span></span>
+                            <span style={{ color: 'var(--muted2)' }}>Startup: <span style={{ color: 'var(--text)' }}>{r.userAgentStartupState ?? '—'} ({r.userAgentLastLaunchReason ?? '—'})</span></span>
+                            <span style={{ color: 'var(--muted2)' }}>Last input age: <span style={{ color: 'var(--text)' }}>{r.lastAcceptedInputAgeSeconds != null ? `${Math.round(r.lastAcceptedInputAgeSeconds)}s` : 'never'}</span></span>
+                          </div>
+                          {r.userAgentLogTail
+                            ? <pre style={{ maxHeight: '260px', overflow: 'auto', fontSize: '10px', lineHeight: 1.5, fontFamily: 'var(--font-m)', color: 'var(--muted2)', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', padding: '10px', whiteSpace: 'pre-wrap', margin: 0 }}>{r.userAgentLogTail}</pre>
+                            : <div style={{ fontSize: '11px', color: 'var(--muted)' }}>No agent log received yet — machine needs agent 1.2.82 or newer.</div>}
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   );
                 })}
               </tbody>

@@ -2,6 +2,8 @@ import { apiRequestRaw } from './client';
 import type { components } from './generated/controlPlane';
 
 export type GrowthSeriesMetric = components['schemas']['GrowthSeriesMetric'];
+// installs is served by the control plane but not yet in the generated contract.
+export type ConsoleSeriesMetric = GrowthSeriesMetric | 'installs';
 export type GrowthSeriesInterval = components['schemas']['GrowthSeriesInterval'];
 export type GrowthUserJourneyEventType = components['schemas']['GrowthUserJourneyEventType'];
 
@@ -29,6 +31,12 @@ export interface GrowthSummary {
   churnRateD1Pct: number | null;
   churnRateD7Pct: number | null;
   churnRateD30Pct: number | null;
+  // Install-funnel fields (additive on the control plane; absent on older deploys).
+  totalInstalls: number | null;
+  reportingMachines48h: number | null;
+  linkedMachines: number | null;
+  unlinkedMachines: number | null;
+  installToRegistrationRatePct: number | null;
 }
 
 export interface GrowthSeriesPoint {
@@ -99,6 +107,13 @@ function buildQuery(params: Record<string, string | number | undefined>): string
 }
 
 function normalizeSummary(response: GrowthSummaryResponse): GrowthSummary {
+  const funnel = response as unknown as {
+    total_installs?: number | null;
+    reporting_machines_48h?: number | null;
+    linked_machines?: number | null;
+    unlinked_machines?: number | null;
+    install_to_registration_rate_pct?: number | null;
+  };
   return {
     timezone: response.timezone,
     generatedAtUtc: response.generated_at_utc,
@@ -113,7 +128,12 @@ function normalizeSummary(response: GrowthSummaryResponse): GrowthSummary {
     retentionRateD30Pct: response.retention_rate_d30_pct,
     churnRateD1Pct: response.churn_rate_d1_pct,
     churnRateD7Pct: response.churn_rate_d7_pct,
-    churnRateD30Pct: response.churn_rate_d30_pct
+    churnRateD30Pct: response.churn_rate_d30_pct,
+    totalInstalls: funnel.total_installs ?? null,
+    reportingMachines48h: funnel.reporting_machines_48h ?? null,
+    linkedMachines: funnel.linked_machines ?? null,
+    unlinkedMachines: funnel.unlinked_machines ?? null,
+    installToRegistrationRatePct: funnel.install_to_registration_rate_pct ?? null
   };
 }
 
@@ -195,7 +215,7 @@ export async function fetchGrowthSummary(windowDays = 30): Promise<GrowthSummary
 }
 
 export async function fetchGrowthSeries(input: {
-  metric: GrowthSeriesMetric;
+  metric: ConsoleSeriesMetric;
   interval?: GrowthSeriesInterval;
   from?: string;
   to?: string;
