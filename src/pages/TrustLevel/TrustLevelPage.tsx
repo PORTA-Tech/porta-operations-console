@@ -1,12 +1,26 @@
 import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
+import type { MachineSummaryReport } from '../../api/machines';
 import { relativeTime } from '../../utils/console';
+
+// Calibration claims are only meaningful for machines that actually deliver
+// input data. An offline machine, or one whose capture pipeline never produced
+// a single packet, is not "Learning" — it is stalled.
+function presenceOf(row: MachineSummaryReport): 'online' | 'recent' | 'offline' {
+  return row.presence ?? (row.agentRunning ? 'online' : 'offline');
+}
+
+function calibrationMeaningful(row: MachineSummaryReport): boolean {
+  return presenceOf(row) !== 'offline' && row.hasInputData !== false;
+}
 
 export function TrustLevelPage() {
   const { rows } = useMachineSummaryFeed();
 
-  const calibratedCount = rows.filter((r) => r.calibrationStage === 'calibrated').length;
-  const provisionalCount = rows.filter((r) => r.calibrationStage === 'provisional').length;
-  const coldCount = rows.filter((r) => r.calibrationStage === 'cold').length;
+  const meaningfulRows = rows.filter(calibrationMeaningful);
+  const calibratedCount = meaningfulRows.filter((r) => r.calibrationStage === 'calibrated').length;
+  const provisionalCount = meaningfulRows.filter((r) => r.calibrationStage === 'provisional').length;
+  const coldCount = meaningfulRows.filter((r) => r.calibrationStage === 'cold').length;
+  const stalledCount = rows.length - meaningfulRows.length;
 
   return (
     <>
@@ -28,9 +42,9 @@ export function TrustLevelPage() {
           <div className="fc-sub">No baseline yet</div>
         </div>
         <div className="fleet-card c-accent">
-          <div className="fc-label">Total Machines</div>
-          <div className="fc-val accent">{rows.length}</div>
-          <div className="fc-sub">In fleet</div>
+          <div className="fc-label">Stalled / Offline</div>
+          <div className="fc-val accent">{stalledCount}</div>
+          <div className="fc-sub">Not collecting data · {rows.length} in fleet</div>
         </div>
       </div>
 
@@ -49,26 +63,29 @@ export function TrustLevelPage() {
             </div>
           ) : (
             rows.map((r) => {
-              const progress =
+              const meaningful = calibrationMeaningful(r);
+              const progress = !meaningful ? 0 :
                 r.calibrationStage === 'calibrated' ? 100 :
                 r.calibrationStage === 'provisional' ? 55 :
                 5;
-              const fillClass =
+              const fillClass = !meaningful ? '' :
                 r.calibrationStage === 'calibrated' ? 'prog-fill-green' :
                 r.calibrationStage === 'provisional' ? 'prog-fill-amber' : '';
               const fillStyle =
-                r.calibrationStage === 'cold'
+                !meaningful || r.calibrationStage === 'cold'
                   ? { background: 'var(--muted)', opacity: 0.4 as const }
                   : {};
               return (
                 <div className="prog-row" key={r.machineId}>
-                  <div className="prog-label" style={{ fontFamily: 'var(--font-m)', fontSize: '11px' }}>
+                  <div className="prog-label" style={{ fontFamily: 'var(--font-m)', fontSize: '11px', opacity: meaningful ? 1 : 0.55 }}>
                     {r.machineName}
                   </div>
                   <div className="prog-track" style={{ height: '8px' }}>
-                    <div className={`prog-fill ${fillClass}`} style={{ width: `${progress}%`, ...fillStyle }} />
+                    <div className={`prog-fill ${fillClass}`} style={{ width: `${Math.max(progress, 1)}%`, ...fillStyle }} />
                   </div>
-                  <div className="prog-val">{progress}%</div>
+                  <div className="prog-val" style={{ color: meaningful ? undefined : 'var(--muted)' }}>
+                    {meaningful ? `${progress}%` : presenceOf(r) === 'offline' ? 'offline' : 'no data'}
+                  </div>
                 </div>
               );
             })
@@ -95,14 +112,16 @@ export function TrustLevelPage() {
             </thead>
             <tbody>
               {rows.map((r) => {
-                const stageColor =
+                const meaningful = calibrationMeaningful(r);
+                const stageColor = !meaningful ? 'var(--muted)' :
                   r.calibrationStage === 'calibrated' ? 'var(--green)' :
                   r.calibrationStage === 'provisional' ? 'var(--amber)' :
                   'var(--muted)';
-                const stageLabel =
-                  r.calibrationStage === 'calibrated' ? 'Calibrated' :
-                  r.calibrationStage === 'provisional' ? 'Learning' :
-                  'Warming up';
+                const stageLabel = !meaningful
+                  ? (presenceOf(r) === 'offline' ? 'Offline' : 'No data yet')
+                  : r.calibrationStage === 'calibrated' ? 'Calibrated' :
+                    r.calibrationStage === 'provisional' ? 'Learning' :
+                    'Warming up';
                 return (
                   <tr key={r.machineId}>
                     <td className="td-main">{r.machineName}</td>
