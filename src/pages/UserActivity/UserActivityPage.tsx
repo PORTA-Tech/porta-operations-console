@@ -1,29 +1,43 @@
 import { useMemo } from 'react';
 import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
+import type { MachineSummaryReport } from '../../api/machines';
 import { formatSeconds, relativeTime, pressureColor, attentionStateClass, attentionStateLabel } from '../../utils/console';
+
+// A machine's behavior state is only real when the machine is reporting right now
+// AND input capture has ever delivered data. Everything else is a frozen last
+// report — rendering it as FOCUSED was the old lie this page told.
+function presenceOf(row: MachineSummaryReport): 'online' | 'recent' | 'offline' {
+  return row.presence ?? (row.agentRunning ? 'online' : 'offline');
+}
+
+function isLiveState(row: MachineSummaryReport): boolean {
+  return presenceOf(row) === 'online' && row.hasInputData !== false;
+}
 
 export function UserActivityPage() {
   const { rows } = useMachineSummaryFeed();
 
-  const activeCount = rows.filter((r) => r.activityDetected).length;
-  const focusCount = rows.filter((r) => r.attentionSegmentKind === 'focus').length;
-  const awayCount = rows.filter((r) => r.attentionSegmentKind === 'away').length;
+  const liveRows = useMemo(() => rows.filter(isLiveState), [rows]);
+
+  const activeCount = liveRows.filter((r) => r.activityDetected).length;
+  const focusCount = liveRows.filter((r) => r.attentionSegmentKind === 'focus').length;
+  const awayCount = liveRows.filter((r) => r.attentionSegmentKind === 'away').length;
 
   const avgFocusSeconds = useMemo(() => {
-    const withData = rows.filter((r) => r.focusEpisodeSeconds && r.focusEpisodeSeconds > 0);
+    const withData = liveRows.filter((r) => r.focusEpisodeSeconds && r.focusEpisodeSeconds > 0);
     if (withData.length === 0) return null;
     const total = withData.reduce((s, r) => s + (r.focusEpisodeSeconds ?? 0), 0);
     return Math.round(total / withData.length);
-  }, [rows]);
+  }, [liveRows]);
 
-  // Distraction patterns
-  const total = rows.length || 1;
+  // Distraction patterns — only across machines with live, real data.
+  const total = liveRows.length || 1;
   const patterns = useMemo(() => {
-    const appSwitch = rows.filter((r) => r.attentionSegmentReasonCode === 'fragmentation_distraction').length;
-    const junkBrowse = rows.filter((r) => r.attentionSegmentReasonCode === 'outside_focus_context').length;
-    const socialInt = rows.filter((r) => r.attentionSegmentReasonCode === 'context_excursion').length;
-    const idleDrift = rows.filter((r) => r.attentionSegmentKind === 'away').length;
-    const overload = rows.filter((r) => r.overloadActive).length;
+    const appSwitch = liveRows.filter((r) => r.attentionSegmentReasonCode === 'fragmentation_distraction').length;
+    const junkBrowse = liveRows.filter((r) => r.attentionSegmentReasonCode === 'outside_focus_context').length;
+    const socialInt = liveRows.filter((r) => r.attentionSegmentReasonCode === 'context_excursion').length;
+    const idleDrift = liveRows.filter((r) => r.attentionSegmentKind === 'away').length;
+    const overload = liveRows.filter((r) => r.overloadActive).length;
     return [
       { label: 'App-switch spiral', count: appSwitch },
       { label: 'Junk browsing', count: junkBrowse },
@@ -31,15 +45,15 @@ export function UserActivityPage() {
       { label: 'Idle drift', count: idleDrift },
       { label: 'Overload pressure', count: overload },
     ];
-  }, [rows]);
+  }, [liveRows]);
 
   const avgPressure = useMemo(() => {
-    const withData = rows.filter((r) => r.pressureLevel != null);
+    const withData = liveRows.filter((r) => r.pressureLevel != null);
     if (withData.length === 0) return 0;
     return Math.round(
       (withData.reduce((s, r) => s + (r.pressureLevel ?? 0), 0) / withData.length) * 100
     );
-  }, [rows]);
+  }, [liveRows]);
 
   return (
     <>
@@ -88,23 +102,34 @@ export function UserActivityPage() {
             ) : (
               <div className="machine-grid">
                 {rows.map((r) => {
-                  const stateClass = attentionStateClass(r.attentionSegmentKind, r.agentRunning);
-                  const stateLabel = attentionStateLabel(r.attentionSegmentKind, r.agentRunning);
-                  const pColor = pressureColor(r.pressureLevel);
-                  const pressurePct = r.pressureLevel != null ? `${Math.round(r.pressureLevel * 100)}%` : '—';
+                  const live = isLiveState(r);
+                  const presence = presenceOf(r);
+                  const noData = presence !== 'offline' && r.hasInputData === false;
+                  const stateClass = live ? attentionStateClass(r.attentionSegmentKind, r.agentRunning) : 'state-offline';
+                  const stateLabel = live
+                    ? attentionStateLabel(r.attentionSegmentKind, r.agentRunning)
+                    : noData ? 'NO DATA' : presence === 'recent' ? 'IDLE' : 'OFFLINE';
+                  const pColor = live ? pressureColor(r.pressureLevel) : 'var(--muted)';
+                  const pressurePct = live && r.pressureLevel != null ? `${Math.round(r.pressureLevel * 100)}%` : '—';
 
                   return (
-                    <div className="machine-card" key={r.machineId}>
+                    <div className="machine-card" key={r.machineId} style={live ? undefined : { opacity: 0.6 }}>
                       <div className="mc-top">
                         <div>
                           <div className="mc-name">{r.machineName}</div>
                           <div className="mc-user">{r.userName}</div>
                         </div>
-                        <span className={`state-badge ${stateClass}`}>{stateLabel}</span>
+                        <span
+                          className={`state-badge ${stateClass}`}
+                          title={noData ? 'No input has ever been captured from this machine' : undefined}
+                          style={noData ? { color: 'var(--amber)', borderColor: 'var(--amber)', cursor: 'help' } : undefined}
+                        >
+                          {stateLabel}
+                        </span>
                       </div>
                       <div className="mc-metrics">
                         <div>
-                          <div className="mc-metric-val">{formatSeconds(r.focusEpisodeSeconds)}</div>
+                          <div className="mc-metric-val">{live ? formatSeconds(r.focusEpisodeSeconds) : '—'}</div>
                           <div className="mc-metric-lbl">Focus today</div>
                         </div>
                         <div>
@@ -113,7 +138,7 @@ export function UserActivityPage() {
                         </div>
                       </div>
                       <div className="mc-last">
-                        In state {formatSeconds(r.attentionSegmentSeconds)} · Updated {relativeTime(r.reportedAtUtc)}
+                        {live ? `In state ${formatSeconds(r.attentionSegmentSeconds)} · ` : ''}Updated {relativeTime(r.reportedAtUtc)}
                       </div>
                     </div>
                   );
