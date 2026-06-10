@@ -447,6 +447,21 @@ export function SystemHealthPage() {
                             <span style={{ color: 'var(--muted2)' }}>Watchdog failure: <span style={{ color: 'var(--text)' }}>{r.watchdogLaunchFailureCode ?? '—'}</span></span>
                             <span style={{ color: 'var(--muted2)' }}>Startup: <span style={{ color: 'var(--text)' }}>{r.userAgentStartupState ?? '—'} ({r.userAgentLastLaunchReason ?? '—'})</span></span>
                             <span style={{ color: 'var(--muted2)' }}>Last input age: <span style={{ color: 'var(--text)' }}>{r.lastAcceptedInputAgeSeconds != null ? `${Math.round(r.lastAcceptedInputAgeSeconds)}s` : 'never'}</span></span>
+                            {r.windowsUpdateStatus && (() => {
+                              try {
+                                const status = JSON.parse(r.windowsUpdateStatus) as { succeeded?: boolean; version?: string; message?: string };
+                                return (
+                                  <span style={{ color: 'var(--muted2)' }}>
+                                    Last update: <span style={{ color: status.succeeded ? 'var(--green)' : 'var(--red)' }}>
+                                      {status.succeeded ? `${status.version} installed` : `${status.version} failed`}
+                                    </span>
+                                    {!status.succeeded && status.message ? <span style={{ color: 'var(--muted)' }}> — {status.message.slice(0, 120)}</span> : null}
+                                  </span>
+                                );
+                              } catch {
+                                return null;
+                              }
+                            })()}
                           </div>
                           {r.userAgentLogTail
                             ? <pre style={{ maxHeight: '260px', overflow: 'auto', fontSize: '10px', lineHeight: 1.5, fontFamily: 'var(--font-m)', color: 'var(--muted2)', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', padding: '10px', whiteSpace: 'pre-wrap', margin: 0 }}>{r.userAgentLogTail}</pre>
