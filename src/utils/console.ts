@@ -49,19 +49,27 @@ export function attentionStateLabel(kind?: string | null, agentRunning?: boolean
   }
 }
 
-export function getDayLabels(): string[] {
-  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return i === 6 ? 'Today' : (days[d.getDay()] as string);
-  });
+// Day bucketing is UTC end-to-end: uptime samples carry UTC timestamps
+// (sampledAtUtc), so the keys AND the labels must come from the same UTC
+// calendar. The old helpers mixed local setDate() with toISOString() (UTC),
+// which shifted buckets against labels depending on the viewer's timezone.
+export interface UtcDayBucket {
+  /** YYYY-MM-DD in UTC — compare against sampledAtUtc.slice(0, 10). */
+  key: string;
+  /** Weekday label derived from the SAME UTC date; last entry is 'Today'. */
+  label: string;
 }
 
-export function getLastSevenDayStrings(): string[] {
+const DAY_MS = 86_400_000;
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+export function getLastSevenUtcDays(now: number = Date.now()): UtcDayBucket[] {
+  const todayStartUtc = Math.floor(now / DAY_MS) * DAY_MS;
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(d.getDate() - (6 - i));
-    return d.toISOString().slice(0, 10);
+    const d = new Date(todayStartUtc - (6 - i) * DAY_MS);
+    return {
+      key: d.toISOString().slice(0, 10),
+      label: i === 6 ? 'Today' : (WEEKDAYS[d.getUTCDay()] as string)
+    };
   });
 }

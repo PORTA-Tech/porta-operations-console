@@ -1,16 +1,15 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
-import { fetchMachineUptime, type MachineSummaryReport, type UptimeSample } from '../../api/machines';
-import { relativeTime, getDayLabels, getLastSevenDayStrings } from '../../utils/console';
+import { fetchMachineUptime, type UptimeSample } from '../../api/machines';
+import { relativeTime, getLastSevenUtcDays } from '../../utils/console';
+import {
+  classifyMachine,
+  hasNoLiveActivity,
+  machinePresence,
+  type MachinePresence
+} from '../../utils/fleetTruth';
 
-// Liveness comes from the server-derived presence field; deviceStatus only means
-// the device credential is not revoked. Older control planes lack presence, so we
-// fall back to agentRunning from the last report.
-function presenceOf(row: MachineSummaryReport): 'online' | 'recent' | 'offline' {
-  return row.presence ?? (row.agentRunning ? 'online' : 'offline');
-}
-
-const PRESENCE_STYLE: Record<'online' | 'recent' | 'offline', { color: string; label: string }> = {
+const PRESENCE_STYLE: Record<MachinePresence, { color: string; label: string }> = {
   online: { color: 'var(--green)', label: 'ONLINE' },
   recent: { color: 'var(--amber)', label: 'RECENT' },
   offline: { color: 'var(--red)', label: 'OFFLINE' }
@@ -18,59 +17,101 @@ const PRESENCE_STYLE: Record<'online' | 'recent' | 'offline', { color: string; l
 
 // ─── UPTIME HELPERS ───────────────────────────────────────────────────────────
 
-function computeDayBuckets(
-  samples: UptimeSample[],
-  dayStrings: string[]
-): ('online' | 'offline')[] {
-  return dayStrings.map((day) => {
+// Per-machine, per-day capture status derived from uptime samples.
+// 'nodata' (no samples recorded that day) is rendered as a gap — it must
+// never masquerade as "offline", which is a positive observation.
+type DayStatus = 'active' | 'degraded' | 'offline' | 'nodata';
+
+const DAY_STATUS_LABEL: Record<DayStatus, string> = {
+  active: 'Online with activity',
+  degraded: 'Agent running, no activity captured',
+  offline: 'Agent offline',
+  nodata: 'No samples recorded'
+};
+
+const DAY_STATUS_COLOR: Record<DayStatus, string> = {
+  active: 'var(--green)',
+  degraded: 'var(--amber)',
+  offline: 'var(--red)',
+  nodata: 'transparent'
+};
+
+const DAY_STATUS_BAR_CLASS: Record<DayStatus, string> = {
+  active: 'online',
+  degraded: 'partial',
+  offline: 'offline',
+  nodata: 'nodata'
+};
+
+function computeDayStatuses(samples: UptimeSample[], dayKeys: string[]): DayStatus[] {
+  return dayKeys.map((day) => {
     const daySamples = samples.filter((s) => s.sampledAtUtc.slice(0, 10) === day);
-    return daySamples.some((s) => s.agentRunning) ? 'online' : 'offline';
+    if (daySamples.length === 0) return 'nodata';
+    const running = daySamples.filter((s) => s.agentRunning);
+    if (running.length === 0) return 'offline';
+    return running.some((s) => s.activityDetected) ? 'active' : 'degraded';
   });
 }
 
-function uptimePct(buckets: ('online' | 'offline')[]): number {
-  return Math.round((buckets.filter((b) => b === 'online').length / buckets.length) * 100);
+// Percentage over days we actually have samples for; null when there is no
+// data at all (shown as '—', because 0% would be a lie).
+function uptimePct(statuses: DayStatus[]): number | null {
+  const known = statuses.filter((s) => s !== 'nodata');
+  if (known.length === 0) return null;
+  const up = known.filter((s) => s === 'active' || s === 'degraded').length;
+  return Math.round((up / known.length) * 100);
 }
 
 // ─── QUALITY TREND SVG ───────────────────────────────────────────────────────
 
 interface QualityTrendProps {
-  allUptime: Record<string, ('online' | 'offline')[]>;
+  machineDayStatuses: Record<string, DayStatus[]>;
   machineCount: number;
 }
 
-function QualityTrendChart({ allUptime, machineCount }: QualityTrendProps) {
+interface TrendDay {
+  healthy: number;
+  degraded: number;
+  disconnected: number;
+}
+
+// Per-day fleet counts. A day where NO machine has samples is a data gap and
+// returns null: we render nothing for it rather than pretending the whole
+// fleet was offline (the old chart's "stops on Thursday" effect).
+function computeTrendDays(
+  machineDayStatuses: Record<string, DayStatus[]>,
+  machineCount: number
+): (TrendDay | null)[] {
+  return Array.from({ length: 7 }, (_, d) => {
+    const statuses = Object.values(machineDayStatuses).map((s) => s[d] ?? 'nodata');
+    if (!statuses.some((s) => s !== 'nodata')) return null;
+    return {
+      healthy: statuses.filter((s) => s === 'active').length,
+      degraded: statuses.filter((s) => s === 'degraded').length,
+      // On a day where other machines reported, a machine with no samples
+      // was itself not reporting → disconnected.
+      disconnected: statuses.filter((s) => s === 'offline' || s === 'nodata').length
+        + Math.max(0, machineCount - statuses.length)
+    };
+  });
+}
+
+function QualityTrendChart({ machineDayStatuses, machineCount }: QualityTrendProps) {
   const W = 400, H = 140;
   const pad = { t: 10, b: 10, l: 10, r: 10 };
 
-  const healthy: number[] = [];
-  const degraded: number[] = [];
-  const disconnected: number[] = [];
-
-  for (let d = 0; d < 7; d++) {
-    let h = 0, deg = 0, disc = 0;
-    Object.values(allUptime).forEach((buckets) => {
-      const status = buckets[d] ?? 'offline';
-      if (status === 'online') h++;
-      else disc++;
-    });
-    // Any machines with no uptime data at all are disconnected
-    const tracked = Object.keys(allUptime).length;
-    disc += Math.max(0, machineCount - tracked);
-    healthy.push(h);
-    degraded.push(deg);
-    disconnected.push(disc);
-  }
+  const days = computeTrendDays(machineDayStatuses, machineCount);
 
   const maxVal = Math.max(1, machineCount);
   const dw = (W - pad.l - pad.r) / 7;
+  const xOf = (i: number) => pad.l + i * dw + dw / 2;
   const scaleY = (v: number) =>
     H - pad.b - (v / maxVal) * (H - pad.t - pad.b);
 
-  const datasets = [
-    { data: healthy, color: 'rgba(74,222,128,0.7)' },
-    { data: degraded, color: 'rgba(251,191,36,0.6)' },
-    { data: disconnected, color: 'rgba(248,113,113,0.6)' },
+  const series = [
+    { key: 'healthy' as const, color: 'rgba(74,222,128,0.7)' },
+    { key: 'degraded' as const, color: 'rgba(251,191,36,0.6)' },
+    { key: 'disconnected' as const, color: 'rgba(248,113,113,0.6)' },
   ];
 
   const gridLines = [2, 4, 6, 8].filter((v) => v <= maxVal);
@@ -86,24 +127,33 @@ function QualityTrendChart({ allUptime, machineCount }: QualityTrendProps) {
           </g>
         );
       })}
-      {datasets.map(({ data, color }) => {
-        const pts = data.map((v, i) => {
-          const x = pad.l + i * dw + dw / 2;
-          const y = scaleY(v);
-          return `${x},${y}`;
+      {series.map(({ key, color }) => {
+        let path = '';
+        let started = false;
+        days.forEach((day, i) => {
+          if (!day) {
+            started = false;
+            return;
+          }
+          path += `${started ? 'L' : 'M'}${xOf(i)},${scaleY(day[key])} `;
+          started = true;
         });
-        const d = pts.map((p, i) => (i === 0 ? `M${p}` : `L${p}`)).join(' ');
         return (
-          <g key={color}>
-            <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            {data.map((v, i) => {
-              const x = pad.l + i * dw + dw / 2;
-              const y = scaleY(v);
-              return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
-            })}
+          <g key={key}>
+            <path d={path.trim()} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            {days.map((day, i) => (
+              day ? <circle key={i} cx={xOf(i)} cy={scaleY(day[key])} r="3" fill={color} /> : null
+            ))}
           </g>
         );
       })}
+      {days.map((day, i) => (
+        day ? null : (
+          <text key={i} x={xOf(i)} y={H / 2} fill="rgba(255,255,255,0.18)" fontSize="8" textAnchor="middle" fontFamily="JetBrains Mono">
+            no data
+          </text>
+        )
+      ))}
     </svg>
   );
 }
@@ -111,66 +161,62 @@ function QualityTrendChart({ allUptime, machineCount }: QualityTrendProps) {
 // ─── PAGE ────────────────────────────────────────────────────────────────────
 
 export function SystemHealthPage() {
-  const { rows, error, loading, lastRefreshUtc } = useMachineSummaryFeed();
+  const { rows, error, loading } = useMachineSummaryFeed();
   const [allUptimeData, setAllUptimeData] = useState<Record<string, UptimeSample[]>>({});
   const [expandedMachineId, setExpandedMachineId] = useState<string | null>(null);
-  const dayStrings = useMemo(() => getLastSevenDayStrings(), []);
-  const dayLabels = useMemo(() => getDayLabels(), []);
+  const [trendExpanded, setTrendExpanded] = useState(false);
+  const utcDays = useMemo(() => getLastSevenUtcDays(), []);
+  const dayKeys = useMemo(() => utcDays.map((d) => d.key), [utcDays]);
+  const dayLabels = useMemo(() => utcDays.map((d) => d.label), [utcDays]);
 
-  // Fetch uptime for all machines once rows are available
+  // Fetch uptime when the machine LIST changes, plus a slow refresh timer.
+  // Daily buckets cannot change faster than that — the old code refetched
+  // uptime for every machine on every 5-second summary poll.
+  const machineIdsKey = useMemo(() => rows.map((r) => r.machineId).sort().join('|'), [rows]);
   useEffect(() => {
-    if (rows.length === 0) return;
+    if (!machineIdsKey) return;
     let cancelled = false;
+    const ids = machineIdsKey.split('|');
 
-    Promise.all(
-      rows.map((r) =>
-        fetchMachineUptime(r.machineId, 7)
-          .then((data) => ({ id: r.machineId, data }))
-          .catch(() => ({ id: r.machineId, data: [] as UptimeSample[] }))
-      )
-    ).then((results) => {
-      if (cancelled) return;
-      const map: Record<string, UptimeSample[]> = {};
-      results.forEach(({ id, data }) => { map[id] = data; });
-      setAllUptimeData(map);
-    });
+    const load = () => {
+      Promise.all(
+        ids.map((id) =>
+          fetchMachineUptime(id, 7)
+            .then((data) => ({ id, data }))
+            .catch(() => ({ id, data: [] as UptimeSample[] }))
+        )
+      ).then((results) => {
+        if (cancelled) return;
+        const map: Record<string, UptimeSample[]> = {};
+        results.forEach(({ id, data }) => { map[id] = data; });
+        setAllUptimeData(map);
+      });
+    };
 
-    return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastRefreshUtc]);
+    load();
+    const timer = window.setInterval(load, 5 * 60_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [machineIdsKey]);
 
-  // Per-machine day buckets
-  const machineBuckets = useMemo(() => {
-    const result: Record<string, ('online' | 'offline')[]> = {};
+  // Per-machine day statuses
+  const machineDayStatuses = useMemo(() => {
+    const result: Record<string, DayStatus[]> = {};
     rows.forEach((r) => {
-      const samples = allUptimeData[r.machineId] ?? [];
-      result[r.machineId] = computeDayBuckets(samples, dayStrings);
+      result[r.machineId] = computeDayStatuses(allUptimeData[r.machineId] ?? [], dayKeys);
     });
     return result;
-  }, [allUptimeData, rows, dayStrings]);
+  }, [allUptimeData, rows, dayKeys]);
 
-  // Fleet strip counts — presence-aware: a machine silent for weeks is
-  // disconnected even though its last report said agentRunning=true.
-  const disconnectedCount = rows.filter((r) => presenceOf(r) === 'offline').length;
-  const degradedCount = rows.filter(
-    (r) => presenceOf(r) !== 'offline'
-      && (r.partialData === true
-        || (r.missingMajorChannels?.length ?? 0) > 0
-        || r.selfTestEffective === 'stale_pending'
-        || r.hasInputData === false)
-  ).length;
-  const healthyCount = rows.filter(
-    (r) => presenceOf(r) === 'online'
-      && r.userSessionConnected
-      && r.hasInputData !== false
-      && r.selfTestEffective !== 'stale_pending'
-      && !r.partialData
-      && !r.lastError
-  ).length;
-  const noActivityRows = rows.filter(
-    (r) => presenceOf(r) !== 'offline'
-      && (r.hasInputData === false || (r.hasInputData === undefined && !r.activityDetected))
-  );
+  // Fleet strip counts come from ONE exclusive classifier (fleetTruth), so
+  // healthy + degraded + disconnected always equals the machine count.
+  const fleetBuckets = useMemo(() => rows.map(classifyMachine), [rows]);
+  const healthyCount = fleetBuckets.filter((b) => b === 'healthy').length;
+  const degradedCount = fleetBuckets.filter((b) => b === 'degraded').length;
+  const disconnectedCount = fleetBuckets.filter((b) => b === 'disconnected').length;
+  const connectedCount = rows.length - disconnectedCount;
+
+  // Overlay metric, not a bucket: connected machines producing no input.
+  const noActivityRows = rows.filter(hasNoLiveActivity);
   const noActivityCount = noActivityRows.length;
   const noActivityLastUtc = noActivityRows
     .map((r) => r.lastActivityUtc)
@@ -180,7 +226,7 @@ export function SystemHealthPage() {
 
   const noActivitySub = noActivityLastUtc
     ? `Last activity ${relativeTime(noActivityLastUtc)}`
-    : 'No recent activity';
+    : `Of ${connectedCount} connected`;
 
   // C7: never render zero-filled dashboards when the API is failing — zeros that
   // mean "logged out" are indistinguishable from a real outage.
@@ -200,15 +246,6 @@ export function SystemHealthPage() {
     );
   }
 
-  // Simplified quality trend data from buckets
-  const allBuckets = useMemo(() => {
-    const result: Record<string, ('online' | 'offline')[]> = {};
-    Object.entries(machineBuckets).forEach(([id, buckets]) => {
-      result[id] = buckets;
-    });
-    return result;
-  }, [machineBuckets]);
-
   return (
     <>
       {/* Fleet strip */}
@@ -216,7 +253,7 @@ export function SystemHealthPage() {
         <div className="fleet-card c-green">
           <div className="fc-label">Healthy</div>
           <div className="fc-val green">{healthyCount}</div>
-          <div className="fc-sub">All systems operational</div>
+          <div className="fc-sub">{healthyCount === rows.length && rows.length > 0 ? 'All systems operational' : `Of ${rows.length} machines`}</div>
         </div>
         <div className="fleet-card c-amber">
           <div className="fc-label">Degraded Capture</div>
@@ -252,23 +289,31 @@ export function SystemHealthPage() {
                 Online
               </div>
               <div className="legend-item">
+                <div className="legend-dot" style={{ background: 'var(--amber)', opacity: 0.6 }} />
+                No activity
+              </div>
+              <div className="legend-item">
                 <div className="legend-dot" style={{ background: 'var(--bg3)' }} />
                 Offline
               </div>
+              <div className="legend-item">
+                <div className="legend-dot" style={{ background: 'transparent', border: '1px dashed var(--bg3)' }} />
+                No data
+              </div>
             </div>
             {rows.map((r) => {
-              const buckets = machineBuckets[r.machineId] ?? Array(7).fill('offline');
-              const pct = uptimePct(buckets);
-              const pctColor = pct > 70 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
+              const statuses = machineDayStatuses[r.machineId] ?? Array<DayStatus>(7).fill('nodata');
+              const pct = uptimePct(statuses);
+              const pctColor = pct === null ? 'var(--muted)' : pct > 70 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
               return (
                 <div className="uptime-row" key={r.machineId}>
                   <div className="uptime-name">{r.machineName}</div>
                   <div className="uptime-bars">
-                    {buckets.map((b, i) => (
-                      <div key={i} className={`uptime-bar ${b}`} />
+                    {statuses.map((s, i) => (
+                      <div key={i} className={`uptime-bar ${DAY_STATUS_BAR_CLASS[s]}`} title={`${dayLabels[i]}: ${DAY_STATUS_LABEL[s]}`} />
                     ))}
                   </div>
-                  <div className="uptime-pct" style={{ color: pctColor }}>{pct}%</div>
+                  <div className="uptime-pct" style={{ color: pctColor }}>{pct === null ? '—' : `${pct}%`}</div>
                 </div>
               );
             })}
@@ -287,11 +332,17 @@ export function SystemHealthPage() {
 
         {/* Quality trend */}
         <div className="card">
-          <div className="card-header">
+          <div
+            className="card-header"
+            onClick={() => setTrendExpanded((v) => !v)}
+            style={{ cursor: 'pointer' }}
+            title="Click for the day-by-day machine breakdown"
+          >
             <div>
               <div className="card-title">Capture Quality Trend</div>
               <div className="card-sub">Healthy / Degraded / Disconnected count per day</div>
             </div>
+            <span className="card-tag tag-accent">{trendExpanded ? 'Hide details ▾' : 'Details ▸'}</span>
           </div>
           <div className="card-body">
             <div className="chart-legend">
@@ -308,12 +359,52 @@ export function SystemHealthPage() {
                 Disconnected
               </div>
             </div>
-            <QualityTrendChart allUptime={allBuckets} machineCount={rows.length} />
+            <QualityTrendChart machineDayStatuses={machineDayStatuses} machineCount={rows.length} />
             <div className="chart-label-row">
               {dayLabels.map((l) => (
                 <span key={l} className="chart-label">{l}</span>
               ))}
             </div>
+            {trendExpanded && (
+              <div style={{ marginTop: '12px', overflowX: 'auto' }}>
+                <table className="data-table" style={{ fontSize: '11px' }}>
+                  <thead>
+                    <tr>
+                      <th>Machine</th>
+                      {dayLabels.map((l) => (
+                        <th key={l} style={{ textAlign: 'center' }}>{l}</th>
+                      ))}
+                      <th style={{ textAlign: 'right' }}>7d</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => {
+                      const statuses = machineDayStatuses[r.machineId] ?? Array<DayStatus>(7).fill('nodata');
+                      const pct = uptimePct(statuses);
+                      return (
+                        <tr key={r.machineId}>
+                          <td><div className="td-main">{r.machineName}</div></td>
+                          {statuses.map((s, i) => (
+                            <td key={i} style={{ textAlign: 'center' }} title={`${dayLabels[i]}: ${DAY_STATUS_LABEL[s]}`}>
+                              <span style={{
+                                display: 'inline-block',
+                                width: '10px',
+                                height: '10px',
+                                borderRadius: '2px',
+                                background: DAY_STATUS_COLOR[s],
+                                border: s === 'nodata' ? '1px dashed var(--bg3)' : 'none',
+                                cursor: 'help'
+                              }} />
+                            </td>
+                          ))}
+                          <td style={{ textAlign: 'right', fontFamily: 'var(--font-m)' }}>{pct === null ? '—' : `${pct}%`}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -354,9 +445,9 @@ export function SystemHealthPage() {
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const buckets = machineBuckets[r.machineId] ?? Array(7).fill('offline');
-                  const pct = uptimePct(buckets);
-                  const upColor = pct > 70 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
+                  const statuses = machineDayStatuses[r.machineId] ?? Array<DayStatus>(7).fill('nodata');
+                  const pct = uptimePct(statuses);
+                  const upColor = pct === null ? 'var(--muted)' : pct > 70 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
                   const errorMsg = r.lastError || r.captureFailureReason || r.ownershipWarning || '';
                   const captureIssueCode = r.watchdogLaunchFailureCode || r.userAgentCaptureFailureCode || null;
                   const captureIssueLabel = captureIssueCode
@@ -373,7 +464,7 @@ export function SystemHealthPage() {
                         : captureIssueCode.startsWith('process_create_failed:') ? 'Process launch failed'
                         : captureIssueCode)
                     : (r.selfTestEffective === 'stale_pending' ? 'Self-test stuck (no input)' : null);
-                  const presence = presenceOf(r);
+                  const presence = machinePresence(r);
                   const presenceStyle = PRESENCE_STYLE[presence];
                   const notSignedIn = !r.accountId;
                   const isExpanded = expandedMachineId === r.machineId;
@@ -432,7 +523,7 @@ export function SystemHealthPage() {
                           : <span style={{ color: 'var(--green)', fontFamily: 'var(--font-m)', fontSize: '11px' }}>—</span>}
                       </td>
                       <td>
-                        <span style={{ fontFamily: 'var(--font-m)', fontSize: '11px', color: upColor }}>{pct}%</span>
+                        <span style={{ fontFamily: 'var(--font-m)', fontSize: '11px', color: upColor }}>{pct === null ? '—' : `${pct}%`}</span>
                       </td>
                       <td title={r.userAgentSelfTestState ?? undefined} style={{ fontSize: '11px', color: 'var(--muted)', maxWidth: '180px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: r.userAgentSelfTestState ? 'help' : undefined }}>
                         {errorMsg || '—'}

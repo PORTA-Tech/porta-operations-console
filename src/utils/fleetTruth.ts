@@ -137,3 +137,66 @@ export function deriveSystemError(summary: MachineSummaryReport, lastSeenStale: 
   if (normalizedError) return normalizedError;
   return null;
 }
+
+// ─── Fleet classification ─────────────────────────────────────────────────────
+// Single source of truth for the System Health tiles and the sidebar counters.
+// Every machine lands in EXACTLY ONE bucket, so tile counts always sum to the
+// machine count. Priority: disconnected → degraded → healthy.
+
+export type MachinePresence = 'online' | 'recent' | 'offline';
+export type FleetBucket = 'healthy' | 'degraded' | 'disconnected';
+
+/**
+ * Liveness comes from the server-derived presence field; deviceStatus only
+ * means the device credential is not revoked. Older control planes lack
+ * presence, so we fall back to agentRunning from the last report.
+ */
+export function machinePresence(row: MachineSummaryReport): MachinePresence {
+  return row.presence ?? (row.agentRunning ? 'online' : 'offline');
+}
+
+/**
+ * Why a connected machine is not capturing cleanly. Empty array = clean.
+ * This is the ONLY place degradation rules live; the tiles must not add
+ * their own conditions on top.
+ */
+export function captureDegradationReasons(row: MachineSummaryReport): string[] {
+  const reasons: string[] = [];
+  if (row.partialData === true) reasons.push('Partial data');
+  if ((row.missingMajorChannels?.length ?? 0) > 0) {
+    reasons.push(`Missing channels: ${formatMissingChannels(row.missingMajorChannels)}`);
+  }
+  if (row.selfTestEffective === 'stale_pending') reasons.push('Self-test stuck (no input)');
+  if (row.hasInputData === false) reasons.push('No input ever captured');
+  if (!row.userSessionConnected) reasons.push('No user session attached');
+  if (row.lastError) reasons.push('Agent reported an error');
+  return reasons;
+}
+
+/**
+ * Exclusive, exhaustive bucket per machine.
+ * A RECENT machine (seen within the recent window) with no degradation flags
+ * counts as healthy — being between heartbeats is not a problem.
+ */
+export function classifyMachine(row: MachineSummaryReport): FleetBucket {
+  if (machinePresence(row) === 'offline') return 'disconnected';
+  return captureDegradationReasons(row).length > 0 ? 'degraded' : 'healthy';
+}
+
+/**
+ * "Active now" must never count a machine that is offline: activityDetected
+ * is a flag from the machine's LAST report and goes stale the moment the
+ * agent stops reporting.
+ */
+export function isActiveNow(row: MachineSummaryReport): boolean {
+  return machinePresence(row) !== 'offline' && row.activityDetected;
+}
+
+/**
+ * Overlay metric (not a bucket): connected machines producing no input.
+ * Overlaps with degraded by design — it answers a different question.
+ */
+export function hasNoLiveActivity(row: MachineSummaryReport): boolean {
+  return machinePresence(row) !== 'offline'
+    && (row.hasInputData === false || (row.hasInputData === undefined && !row.activityDetected));
+}

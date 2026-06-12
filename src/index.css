@@ -300,6 +300,7 @@ html, body { height: 100%; background: var(--bg); color: var(--text); font-famil
 .uptime-bar.online { background: var(--green); opacity: 0.7; }
 .uptime-bar.offline { background: var(--bg3); }
 .uptime-bar.partial { background: var(--amber); opacity: 0.6; }
+.uptime-bar.nodata { background: transparent; border: 1px dashed var(--bg3); box-sizing: border-box; }
 .uptime-pct { font-family: var(--font-m); font-size: 11px; color: var(--muted); width: 36px; text-align: right; flex-shrink: 0; }
 
 /* ACTION ROW */

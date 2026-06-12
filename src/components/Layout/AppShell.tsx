@@ -4,6 +4,7 @@ import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
 import { useMachineActionFeed } from '../../hooks/useMachineActionFeed';
 import { useFleetSlice } from '../../store/fleetSlice';
 import { relativeTime } from '../../utils/console';
+import { isActiveNow } from '../../utils/fleetTruth';
 
 interface AppShellProps {
   children: ReactNode;
@@ -35,7 +36,9 @@ export function AppShell({ children }: AppShellProps) {
   }, []);
 
   const machineCount = summaryFeed.rows.length;
-  const activeCount = summaryFeed.rows.filter((r) => r.activityDetected).length;
+  // isActiveNow excludes offline machines: activityDetected alone is a stale
+  // flag from the machine's last report and stays true after it goes silent.
+  const activeCount = summaryFeed.rows.filter(isActiveNow).length;
   const actionCount = actionsFeed.rows.length;
   const actionBadge = actionCount >= 200 ? '200+' : String(actionCount) || '0';
 

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { MachineSummaryReport } from '../api/machines';
-import { deriveSystemError } from './fleetTruth';
+import {
+  captureDegradationReasons,
+  classifyMachine,
+  deriveSystemError,
+  hasNoLiveActivity,
+  isActiveNow,
+  machinePresence
+} from './fleetTruth';
 
 function buildSummary(overrides: Partial<MachineSummaryReport> = {}): MachineSummaryReport {
   return {
@@ -75,5 +82,85 @@ describe('deriveSystemError', () => {
     });
 
     expect(deriveSystemError(summary, false)).toBe('Last input owner has no fresh user-agent heartbeat');
+  });
+});
+
+// Fixtures modeled on the real fleet observed on 2026-06-12. Names map to the
+// actual machines so regressions are easy to recognize.
+function buildFleet(): MachineSummaryReport[] {
+  return [
+    // ONLINE, signed in, activity, but realtime channel missing — the machine
+    // that used to be double-counted as Healthy AND Degraded.
+    buildSummary({ machineId: 'desktop-0mmjh0i', presence: 'online', activityDetected: true, hasInputData: true, missingMajorChannels: ['realtime'] }),
+    // RECENT, clean, activity on last report.
+    buildSummary({ machineId: 'desktop-g014lvj', presence: 'recent', activityDetected: true, hasInputData: true }),
+    // RECENT, not signed in, no activity, never captured input.
+    buildSummary({ machineId: 'desktop-842sqfp', presence: 'recent', activityDetected: false, hasInputData: false, accountId: null }),
+    // OFFLINE 1h — last report still says activityDetected: true (stale flag).
+    buildSummary({ machineId: 'aymene', presence: 'offline', activityDetected: true }),
+    // OFFLINE 19h with stale heartbeat error — also a stale activity flag.
+    buildSummary({ machineId: 'ebby', presence: 'offline', activityDetected: true, captureFailureReason: 'USER_AGENT_HEARTBEAT_STALE' }),
+    buildSummary({ machineId: 'joycerusse', presence: 'offline', activityDetected: false, hasInputData: false }),
+    buildSummary({ machineId: 'zachhug', presence: 'offline', activityDetected: false, hasInputData: false }),
+    buildSummary({ machineId: 'naji-laptop', presence: 'offline', activityDetected: false, hasInputData: false }),
+    buildSummary({ machineId: 'dorreyes', presence: 'offline', activityDetected: false, hasInputData: false }),
+    buildSummary({ machineId: 'danish', presence: 'offline', activityDetected: false, hasInputData: false })
+  ];
+}
+
+describe('classifyMachine', () => {
+  it('puts every machine in exactly one bucket — counts always sum to the fleet size', () => {
+    const fleet = buildFleet();
+    const buckets = fleet.map(classifyMachine);
+    const healthy = buckets.filter((b) => b === 'healthy').length;
+    const degraded = buckets.filter((b) => b === 'degraded').length;
+    const disconnected = buckets.filter((b) => b === 'disconnected').length;
+
+    expect(healthy + degraded + disconnected).toBe(fleet.length);
+  });
+
+  it('classifies the observed fleet correctly', () => {
+    const fleet = buildFleet();
+    const byId = Object.fromEntries(fleet.map((row) => [row.machineId, classifyMachine(row)]));
+
+    expect(byId['desktop-0mmjh0i']).toBe('degraded'); // missing channel — no longer also healthy
+    expect(byId['desktop-g014lvj']).toBe('healthy'); // recent + clean = healthy
+    expect(byId['desktop-842sqfp']).toBe('degraded'); // never captured input
+    expect(byId['aymene']).toBe('disconnected');
+    expect(byId['danish']).toBe('disconnected');
+  });
+
+  it('treats a missing channel as degraded, never healthy', () => {
+    const row = buildSummary({ presence: 'online', missingMajorChannels: ['keyboard'] });
+    expect(classifyMachine(row)).toBe('degraded');
+    expect(captureDegradationReasons(row)).toHaveLength(1);
+  });
+
+  it('treats lastError as degraded (rule lived only in the healthy filter before)', () => {
+    const row = buildSummary({ presence: 'online', lastError: 'boom' });
+    expect(classifyMachine(row)).toBe('degraded');
+  });
+
+  it('falls back to agentRunning when presence is missing (old control planes)', () => {
+    expect(machinePresence(buildSummary({ agentRunning: false }))).toBe('offline');
+    expect(machinePresence(buildSummary({ agentRunning: true }))).toBe('online');
+  });
+});
+
+describe('isActiveNow', () => {
+  it('never counts an offline machine, even when its last report said activityDetected', () => {
+    const fleet = buildFleet();
+    expect(fleet.filter(isActiveNow)).toHaveLength(2); // 0MMJH0I + G014LVJ, not AYMENE/EBBY
+
+    const offlineButFlagged = buildSummary({ presence: 'offline', activityDetected: true });
+    expect(isActiveNow(offlineButFlagged)).toBe(false);
+  });
+});
+
+describe('hasNoLiveActivity', () => {
+  it('only looks at connected machines', () => {
+    expect(hasNoLiveActivity(buildSummary({ presence: 'offline', hasInputData: false }))).toBe(false);
+    expect(hasNoLiveActivity(buildSummary({ presence: 'recent', hasInputData: false }))).toBe(true);
+    expect(hasNoLiveActivity(buildSummary({ presence: 'online', hasInputData: true, activityDetected: false }))).toBe(false);
   });
 });
