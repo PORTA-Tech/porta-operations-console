@@ -3,9 +3,12 @@ import type { MachineSummaryReport } from '../api/machines';
 import {
   captureDegradationReasons,
   classifyMachine,
+  countDistractionPatterns,
   deriveSystemError,
   hasNoLiveActivity,
   isActiveNow,
+  isLiveState,
+  isSegmentStale,
   machinePresence
 } from './fleetTruth';
 
@@ -162,5 +165,50 @@ describe('hasNoLiveActivity', () => {
     expect(hasNoLiveActivity(buildSummary({ presence: 'offline', hasInputData: false }))).toBe(false);
     expect(hasNoLiveActivity(buildSummary({ presence: 'recent', hasInputData: false }))).toBe(true);
     expect(hasNoLiveActivity(buildSummary({ presence: 'online', hasInputData: true, activityDetected: false }))).toBe(false);
+  });
+});
+
+describe('isLiveState', () => {
+  it('requires online presence AND real input history', () => {
+    expect(isLiveState(buildSummary({ presence: 'online', hasInputData: true }))).toBe(true);
+    expect(isLiveState(buildSummary({ presence: 'online', hasInputData: false }))).toBe(false);
+    expect(isLiveState(buildSummary({ presence: 'recent', hasInputData: true }))).toBe(false);
+    expect(isLiveState(buildSummary({ presence: 'offline', hasInputData: true }))).toBe(false);
+  });
+});
+
+describe('isSegmentStale', () => {
+  it('flags absurd segment durations (the 44h "in state" case)', () => {
+    expect(isSegmentStale(44 * 3600)).toBe(true);
+    expect(isSegmentStale(3 * 60)).toBe(false);
+    expect(isSegmentStale(null)).toBe(false);
+    expect(isSegmentStale(undefined)).toBe(false);
+  });
+});
+
+describe('countDistractionPatterns', () => {
+  it('matches on attentionSegmentKind, where the values actually live', () => {
+    const rows = [
+      buildSummary({ attentionSegmentKind: 'fragmentation_distraction' }),
+      buildSummary({ attentionSegmentKind: 'off_task_distraction' }),
+      buildSummary({ attentionSegmentKind: 'context_excursion' }),
+      buildSummary({ attentionSegmentKind: 'away' }),
+      buildSummary({ attentionSegmentKind: 'focus', overloadActive: true })
+    ];
+    const counts = countDistractionPatterns(rows);
+
+    expect(counts.appSwitch).toBe(1);
+    expect(counts.junkBrowsing).toBe(1);
+    expect(counts.socialInterrupt).toBe(1);
+    expect(counts.idleDrift).toBe(1);
+    expect(counts.overload).toBe(1);
+  });
+
+  it('reasonCode never affects pattern counts (the old dead-code path)', () => {
+    const rows = [
+      buildSummary({ attentionSegmentKind: 'focus', attentionSegmentReasonCode: 'fragmentation_distraction' })
+    ];
+    const counts = countDistractionPatterns(rows);
+    expect(counts.appSwitch).toBe(0);
   });
 });

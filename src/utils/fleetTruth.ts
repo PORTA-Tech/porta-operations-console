@@ -200,3 +200,47 @@ export function hasNoLiveActivity(row: MachineSummaryReport): boolean {
   return machinePresence(row) !== 'offline'
     && (row.hasInputData === false || (row.hasInputData === undefined && !row.activityDetected));
 }
+
+/**
+ * A machine's behavior state (focus, pressure, attention) is only real when
+ * the machine is reporting right now AND input capture has ever delivered
+ * data. Everything else is a frozen last report.
+ */
+export function isLiveState(row: MachineSummaryReport): boolean {
+  return machinePresence(row) === 'online' && row.hasInputData !== false;
+}
+
+/**
+ * Episode/segment counters arriving from agents can be absurdly stale (a
+ * machine once reported being "in state" for 44h). Anything above this
+ * threshold is rendered as stale, never as a fact.
+ */
+export const STALE_SEGMENT_SECONDS = 12 * 3600;
+
+export function isSegmentStale(seconds: number | null | undefined): boolean {
+  return seconds != null && seconds > STALE_SEGMENT_SECONDS;
+}
+
+export interface DistractionPatternCounts {
+  appSwitch: number;
+  junkBrowsing: number;
+  socialInterrupt: number;
+  idleDrift: number;
+  overload: number;
+}
+
+/**
+ * Distraction patterns match on attentionSegmentKind — the enum that actually
+ * carries these values. (The old page compared them against
+ * attentionSegmentReasonCode, where they can never appear, so three patterns
+ * were hardwired to zero.)
+ */
+export function countDistractionPatterns(rows: MachineSummaryReport[]): DistractionPatternCounts {
+  return {
+    appSwitch: rows.filter((r) => r.attentionSegmentKind === 'fragmentation_distraction').length,
+    junkBrowsing: rows.filter((r) => r.attentionSegmentKind === 'off_task_distraction').length,
+    socialInterrupt: rows.filter((r) => r.attentionSegmentKind === 'context_excursion').length,
+    idleDrift: rows.filter((r) => r.attentionSegmentKind === 'away').length,
+    overload: rows.filter((r) => r.overloadActive).length
+  };
+}
