@@ -3,8 +3,10 @@ import type { MachineSummaryReport } from '../api/machines';
 import {
   captureDegradationReasons,
   classifyMachine,
+  countActiveDays,
   countDistractionPatterns,
   deriveSystemError,
+  hasMeaningfulCalibration,
   hasNoLiveActivity,
   isActiveNow,
   isLiveState,
@@ -210,5 +212,38 @@ describe('countDistractionPatterns', () => {
     ];
     const counts = countDistractionPatterns(rows);
     expect(counts.appSwitch).toBe(0);
+  });
+});
+
+describe('hasMeaningfulCalibration', () => {
+  it('includes RECENT machines but never offline or never-captured ones', () => {
+    expect(hasMeaningfulCalibration(buildSummary({ presence: 'online', hasInputData: true }))).toBe(true);
+    expect(hasMeaningfulCalibration(buildSummary({ presence: 'recent', hasInputData: true }))).toBe(true);
+    expect(hasMeaningfulCalibration(buildSummary({ presence: 'recent', hasInputData: false }))).toBe(false);
+    expect(hasMeaningfulCalibration(buildSummary({ presence: 'offline', hasInputData: true }))).toBe(false);
+  });
+});
+
+describe('countActiveDays', () => {
+  const dayKeys = ['2026-06-10', '2026-06-11', '2026-06-12'];
+  const sample = (date: string, active: boolean) => ({
+    machineId: 'm1',
+    sampledAtUtc: `${date}T10:00:00.000Z`,
+    agentRunning: true,
+    userSessionConnected: true,
+    activityDetected: active
+  });
+
+  it('counts only days with captured activity', () => {
+    const samples = [
+      sample('2026-06-10', true),
+      sample('2026-06-11', false), // running but no activity — not a day of data
+      sample('2026-06-12', true)
+    ];
+    expect(countActiveDays(samples, dayKeys)).toBe(2);
+  });
+
+  it('returns null (not 0) when there are no samples at all', () => {
+    expect(countActiveDays([], dayKeys)).toBeNull();
   });
 });

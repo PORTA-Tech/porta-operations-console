@@ -1,4 +1,4 @@
-import type { MachineSummaryReport } from '../api/machines';
+import type { MachineSummaryReport, UptimeSample } from '../api/machines';
 
 export function parseTimestamp(value: string | null | undefined): number | null {
   if (!value) return null;
@@ -243,4 +243,25 @@ export function countDistractionPatterns(rows: MachineSummaryReport[]): Distract
     idleDrift: rows.filter((r) => r.attentionSegmentKind === 'away').length,
     overload: rows.filter((r) => r.overloadActive).length
   };
+}
+
+/**
+ * Calibration claims are only meaningful for machines that are connected and
+ * have ever delivered input data. An offline machine, or one whose capture
+ * pipeline never produced a packet, is not "Learning" — it is stalled.
+ * (Looser than isLiveState: RECENT machines still have meaningful calibration.)
+ */
+export function hasMeaningfulCalibration(row: MachineSummaryReport): boolean {
+  return machinePresence(row) !== 'offline' && row.hasInputData !== false;
+}
+
+/**
+ * How many of the given UTC days actually saw captured activity.
+ * null = no samples at all (render as '—', not 0 — absence of evidence).
+ */
+export function countActiveDays(samples: UptimeSample[], dayKeys: string[]): number | null {
+  if (samples.length === 0) return null;
+  return dayKeys.filter((day) =>
+    samples.some((s) => s.sampledAtUtc.slice(0, 10) === day && s.activityDetected)
+  ).length;
 }

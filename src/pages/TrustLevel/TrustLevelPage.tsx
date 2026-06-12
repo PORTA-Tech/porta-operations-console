@@ -1,22 +1,52 @@
+import { useEffect, useMemo, useState } from 'react';
 import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
-import type { MachineSummaryReport } from '../../api/machines';
-import { relativeTime } from '../../utils/console';
+import { fetchMachineUptime, type UptimeSample } from '../../api/machines';
+import { relativeTime, getLastSevenUtcDays } from '../../utils/console';
+import {
+  countActiveDays,
+  hasMeaningfulCalibration,
+  machinePresence
+} from '../../utils/fleetTruth';
 
-// Calibration claims are only meaningful for machines that actually deliver
-// input data. An offline machine, or one whose capture pipeline never produced
-// a single packet, is not "Learning" — it is stalled.
-function presenceOf(row: MachineSummaryReport): 'online' | 'recent' | 'offline' {
-  return row.presence ?? (row.agentRunning ? 'online' : 'offline');
-}
-
-function calibrationMeaningful(row: MachineSummaryReport): boolean {
-  return presenceOf(row) !== 'offline' && row.hasInputData !== false;
-}
+// Bar fill is a coarse stage indicator, NOT a measured percentage — the value
+// column shows the stage name. The old page printed invented numbers (55%)
+// that implied measured calibration progress where none exists.
+const STAGE_FILL: Record<string, number> = { calibrated: 100, provisional: 55, cold: 8 };
 
 export function TrustLevelPage() {
   const { rows } = useMachineSummaryFeed();
+  const [allUptimeData, setAllUptimeData] = useState<Record<string, UptimeSample[]>>({});
+  const dayKeys = useMemo(() => getLastSevenUtcDays().map((d) => d.key), []);
 
-  const meaningfulRows = rows.filter(calibrationMeaningful);
+  // Same throttled pattern as System Health: fetch when the machine list
+  // changes + slow timer, never on every 5s summary poll.
+  const machineIdsKey = useMemo(() => rows.map((r) => r.machineId).sort().join('|'), [rows]);
+  useEffect(() => {
+    if (!machineIdsKey) return;
+    let cancelled = false;
+    const ids = machineIdsKey.split('|');
+
+    const load = () => {
+      Promise.all(
+        ids.map((id) =>
+          fetchMachineUptime(id, 7)
+            .then((data) => ({ id, data }))
+            .catch(() => ({ id, data: [] as UptimeSample[] }))
+        )
+      ).then((results) => {
+        if (cancelled) return;
+        const map: Record<string, UptimeSample[]> = {};
+        results.forEach(({ id, data }) => { map[id] = data; });
+        setAllUptimeData(map);
+      });
+    };
+
+    load();
+    const timer = window.setInterval(load, 5 * 60_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [machineIdsKey]);
+
+  const meaningfulRows = rows.filter(hasMeaningfulCalibration);
   const calibratedCount = meaningfulRows.filter((r) => r.calibrationStage === 'calibrated').length;
   const provisionalCount = meaningfulRows.filter((r) => r.calibrationStage === 'provisional').length;
   const coldCount = meaningfulRows.filter((r) => r.calibrationStage === 'cold').length;
@@ -53,7 +83,7 @@ export function TrustLevelPage() {
         <div className="card-header">
           <div>
             <div className="card-title">Calibration Progress</div>
-            <div className="card-sub">Per-machine progress toward baseline readiness</div>
+            <div className="card-sub">Per-machine stage toward baseline readiness</div>
           </div>
         </div>
         <div className="card-body">
@@ -63,11 +93,8 @@ export function TrustLevelPage() {
             </div>
           ) : (
             rows.map((r) => {
-              const meaningful = calibrationMeaningful(r);
-              const progress = !meaningful ? 0 :
-                r.calibrationStage === 'calibrated' ? 100 :
-                r.calibrationStage === 'provisional' ? 55 :
-                5;
+              const meaningful = hasMeaningfulCalibration(r);
+              const fill = !meaningful ? 0 : (STAGE_FILL[r.calibrationStage] ?? 0);
               const fillClass = !meaningful ? '' :
                 r.calibrationStage === 'calibrated' ? 'prog-fill-green' :
                 r.calibrationStage === 'provisional' ? 'prog-fill-amber' : '';
@@ -75,16 +102,21 @@ export function TrustLevelPage() {
                 !meaningful || r.calibrationStage === 'cold'
                   ? { background: 'var(--muted)', opacity: 0.4 as const }
                   : {};
+              const valueLabel = !meaningful
+                ? (machinePresence(r) === 'offline' ? 'offline' : 'no data')
+                : r.calibrationStage === 'calibrated' ? 'Calibrated' :
+                  r.calibrationStage === 'provisional' ? 'Learning' :
+                  'Warming up';
               return (
                 <div className="prog-row" key={r.machineId}>
                   <div className="prog-label" style={{ fontFamily: 'var(--font-m)', fontSize: '11px', opacity: meaningful ? 1 : 0.55 }}>
                     {r.machineName}
                   </div>
                   <div className="prog-track" style={{ height: '8px' }}>
-                    <div className={`prog-fill ${fillClass}`} style={{ width: `${Math.max(progress, 1)}%`, ...fillStyle }} />
+                    <div className={`prog-fill ${fillClass}`} style={{ width: `${Math.max(fill, 1)}%`, ...fillStyle }} />
                   </div>
-                  <div className="prog-val" style={{ color: meaningful ? undefined : 'var(--muted)' }}>
-                    {meaningful ? `${progress}%` : presenceOf(r) === 'offline' ? 'offline' : 'no data'}
+                  <div className="prog-val" style={{ color: meaningful ? undefined : 'var(--muted)', minWidth: '74px' }}>
+                    {valueLabel}
                   </div>
                 </div>
               );
@@ -106,22 +138,23 @@ export function TrustLevelPage() {
                 <th>User</th>
                 <th>Calibration Stage</th>
                 <th>Trust Tier</th>
-                <th>Days of Data</th>
+                <th>Active Days (7d)</th>
                 <th>Last Reported</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => {
-                const meaningful = calibrationMeaningful(r);
+                const meaningful = hasMeaningfulCalibration(r);
                 const stageColor = !meaningful ? 'var(--muted)' :
                   r.calibrationStage === 'calibrated' ? 'var(--green)' :
                   r.calibrationStage === 'provisional' ? 'var(--amber)' :
                   'var(--muted)';
                 const stageLabel = !meaningful
-                  ? (presenceOf(r) === 'offline' ? 'Offline' : 'No data yet')
+                  ? (machinePresence(r) === 'offline' ? 'Offline' : 'No data yet')
                   : r.calibrationStage === 'calibrated' ? 'Calibrated' :
                     r.calibrationStage === 'provisional' ? 'Learning' :
                     'Warming up';
+                const activeDays = countActiveDays(allUptimeData[r.machineId] ?? [], dayKeys);
                 return (
                   <tr key={r.machineId}>
                     <td className="td-main">{r.machineName}</td>
@@ -134,14 +167,23 @@ export function TrustLevelPage() {
                         {stageLabel}
                       </span>
                     </td>
-                    <td style={{
-                      fontFamily: 'var(--font-m)',
-                      fontSize: '11px',
-                      color: r.trustTier === 'high' ? 'var(--green)' : 'var(--muted)',
-                    }}>
-                      {r.trustTier}
+                    <td
+                      title={meaningful ? undefined : 'Trust tier from the last report is stale while the machine is not collecting data'}
+                      style={{
+                        fontFamily: 'var(--font-m)',
+                        fontSize: '11px',
+                        color: meaningful && r.trustTier === 'high' ? 'var(--green)' : 'var(--muted)',
+                        cursor: meaningful ? undefined : 'help'
+                      }}
+                    >
+                      {meaningful ? r.trustTier : '—'}
                     </td>
-                    <td style={{ fontFamily: 'var(--font-m)', fontSize: '11px' }}>—</td>
+                    <td
+                      title={activeDays === null ? 'No uptime samples recorded for this machine' : 'Days with captured activity in the last 7 (UTC)'}
+                      style={{ fontFamily: 'var(--font-m)', fontSize: '11px', cursor: 'help' }}
+                    >
+                      {activeDays === null ? '—' : `${activeDays}/7`}
+                    </td>
                     <td style={{ fontFamily: 'var(--font-m)', fontSize: '11px', color: 'var(--muted)' }}>
                       {relativeTime(r.reportedAtUtc)}
                     </td>
