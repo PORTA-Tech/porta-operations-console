@@ -1,14 +1,21 @@
+import { useMemo, useState } from 'react';
 import { useGrowthDashboard } from '../../hooks/useGrowthDashboard';
-import type { GrowthSeries } from '../../api/growth';
+import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
+import { fetchGrowthUserJourney, type GrowthSeries, type GrowthUserJourney } from '../../api/growth';
+import { accountsActiveOnDay, aggregateRetention, cohortCellState } from '../../utils/growthTruth';
+
+function shortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+}
 
 // ─── REGISTRATION BAR CHART ──────────────────────────────────────────────────
 
 function RegistrationChart({ series }: { series: GrowthSeries | undefined }) {
-  const W = 500, H = 160;
+  const W = 500, H = 170, padB = 24, padT = 18;
   if (!series || series.points.length === 0) {
     return (
-      <svg width="100%" height="160" viewBox="0 0 500 160">
-        <text x="250" y="80" textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="12" fontFamily="JetBrains Mono">No data</text>
+      <svg width="100%" height="170" viewBox="0 0 500 170">
+        <text x="250" y="85" textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="12" fontFamily="JetBrains Mono">No data</text>
       </svg>
     );
   }
@@ -16,21 +23,27 @@ function RegistrationChart({ series }: { series: GrowthSeries | undefined }) {
   const points = series.points.slice(-30);
   const n = points.length;
   const dw = W / n;
-  const maxH = H - 30;
+  // Bars are scaled by value — the old chart drew +4 and +1 at identical
+  // heights (any non-zero value rendered at a fixed 70%).
+  const maxV = Math.max(1, ...points.map((p) => p.value));
+  const maxH = H - padB - padT;
 
   return (
-    <svg width="100%" height="160" viewBox={`0 0 ${W} ${H}`}>
+    <svg width="100%" height="170" viewBox={`0 0 ${W} ${H}`}>
       {points.map((p, i) => {
         const x = i * dw + dw * 0.15;
         const bw = dw * 0.7;
-        const bh = p.value === 0 ? 3 : maxH * 0.7;
-        const y = H - 20 - bh;
+        const bh = p.value === 0 ? 3 : (p.value / maxV) * maxH;
+        const y = H - padB - bh;
         const col = p.value > 0 ? 'rgba(200,255,71,0.85)' : 'rgba(255,255,255,0.04)';
         return (
           <g key={p.bucketStartUtc}>
             <rect x={x} y={y} width={bw} height={bh} rx="3" fill={col} />
             {p.value > 0 && (
-              <text x={x + bw / 2} y={y - 6} textAnchor="middle" fill="rgba(200,255,71,0.9)" fontSize="10" fontFamily="JetBrains Mono">+{p.value}</text>
+              <>
+                <text x={x + bw / 2} y={y - 6} textAnchor="middle" fill="rgba(200,255,71,0.9)" fontSize="10" fontFamily="JetBrains Mono">+{p.value}</text>
+                <text x={x + bw / 2} y={H - 8} textAnchor="middle" fill="rgba(255,255,255,0.35)" fontSize="8" fontFamily="JetBrains Mono">{shortDate(p.bucketStartUtc)}</text>
+              </>
             )}
           </g>
         );
@@ -39,22 +52,20 @@ function RegistrationChart({ series }: { series: GrowthSeries | undefined }) {
   );
 }
 
-function regDateLabels(series: GrowthSeries | undefined): string[] {
-  if (!series) return [];
-  return series.points
-    .filter((p) => p.value > 0)
-    .map((p) => new Date(p.bucketStartUtc).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }))
-    .slice(-6);
-}
-
 // ─── DAU LINE/AREA CHART ─────────────────────────────────────────────────────
 
-function DauChart({ series }: { series: GrowthSeries | undefined }) {
-  const W = 500, H = 160;
+interface DauChartProps {
+  series: GrowthSeries | undefined;
+  selectedDay: string | null;
+  onSelectDay: (dayKey: string) => void;
+}
+
+function DauChart({ series, selectedDay, onSelectDay }: DauChartProps) {
+  const W = 500, H = 170, padL = 18, padR = 18, padB = 26, padT = 20;
   if (!series || series.points.length === 0) {
     return (
-      <svg width="100%" height="160" viewBox="0 0 500 160">
-        <text x="250" y="80" textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="12" fontFamily="JetBrains Mono">No data</text>
+      <svg width="100%" height="170" viewBox="0 0 500 170">
+        <text x="250" y="85" textAnchor="middle" fill="rgba(255,255,255,0.2)" fontSize="12" fontFamily="JetBrains Mono">No data</text>
       </svg>
     );
   }
@@ -62,48 +73,111 @@ function DauChart({ series }: { series: GrowthSeries | undefined }) {
   const pts = series.points.slice(-10);
   const n = pts.length;
   const maxY = Math.max(1, ...pts.map((p) => p.value));
-  const dw = n > 1 ? W / (n - 1) : W;
-  const scaleY = (v: number) => H - 30 - (v / maxY) * (H - 50);
+  const dw = n > 1 ? (W - padL - padR) / (n - 1) : 0;
+  const scaleY = (v: number) => H - padB - (v / maxY) * (H - padB - padT);
 
-  const coords = pts.map((p, i) => ({ x: i * dw, y: scaleY(p.value), v: p.value }));
+  const coords = pts.map((p, i) => ({
+    x: padL + i * dw,
+    y: scaleY(p.value),
+    v: p.value,
+    key: p.bucketStartUtc.slice(0, 10),
+    label: shortDate(p.bucketStartUtc)
+  }));
 
-  let linePath = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
-  let areaPath = linePath + ` L${coords[coords.length - 1]!.x},${H - 20} L0,${H - 20} Z`;
+  const linePath = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x},${c.y}`).join(' ');
+  const areaPath = `${linePath} L${coords[coords.length - 1]!.x},${H - padB} L${padL},${H - padB} Z`;
+  // Date labels sit under their own points — the old chart spread the last 5
+  // dates evenly under 10 points, so labels did not match the data above them.
+  const labelStep = n > 7 ? 2 : 1;
 
   return (
-    <svg width="100%" height="160" viewBox={`0 0 ${W} ${H}`}>
+    <svg width="100%" height="170" viewBox={`0 0 ${W} ${H}`}>
       {[1, 2, 3].filter((v) => v <= maxY + 1).map((v) => {
         const y = scaleY(v);
         return (
           <g key={v}>
-            <line x1="0" y1={y} x2={W} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-            <text x="4" y={y - 3} fill="rgba(255,255,255,0.2)" fontSize="9" fontFamily="JetBrains Mono">{v}</text>
+            <line x1={padL} y1={y} x2={W - padR} y2={y} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
+            <text x={padL + 4} y={y - 3} fill="rgba(255,255,255,0.2)" fontSize="9" fontFamily="JetBrains Mono">{v}</text>
           </g>
         );
       })}
       <path d={areaPath} fill="rgba(200,255,71,0.06)" />
       <path d={linePath} fill="none" stroke="rgba(200,255,71,0.8)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      {coords.map((c, i) => (
-        <g key={i}>
-          <circle cx={c.x} cy={c.y} r="5" fill="var(--bg1)" stroke="rgba(200,255,71,0.9)" strokeWidth="2" />
-          <text x={c.x} y={c.y - 10} textAnchor="middle" fill="rgba(200,255,71,0.7)" fontSize="10" fontFamily="JetBrains Mono">{c.v}</text>
-        </g>
-      ))}
+      {coords.map((c, i) => {
+        const selected = c.key === selectedDay;
+        return (
+          <g key={c.key} onClick={() => onSelectDay(c.key)} style={{ cursor: 'pointer' }}>
+            {/* generous invisible hit target */}
+            <rect x={c.x - dw / 2} y={padT - 10} width={Math.max(dw, 24)} height={H - padT} fill="transparent" />
+            <circle cx={c.x} cy={c.y} r={selected ? 7 : 5} fill={selected ? 'rgba(200,255,71,0.9)' : 'var(--bg1)'} stroke="rgba(200,255,71,0.9)" strokeWidth="2" />
+            <text x={c.x} y={c.y - 10} textAnchor="middle" fill="rgba(200,255,71,0.7)" fontSize="10" fontFamily="JetBrains Mono">{c.v}</text>
+            {(i % labelStep === 0 || i === n - 1) && (
+              <text x={c.x} y={H - 8} textAnchor="middle" fill={selected ? 'rgba(200,255,71,0.8)' : 'rgba(255,255,255,0.35)'} fontSize="8" fontFamily="JetBrains Mono">{c.label}</text>
+            )}
+          </g>
+        );
+      })}
     </svg>
   );
-}
-
-function dauDateLabels(series: GrowthSeries | undefined): string[] {
-  if (!series) return [];
-  return series.points
-    .slice(-5)
-    .map((p) => new Date(p.bucketStartUtc).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }));
 }
 
 // ─── PAGE ────────────────────────────────────────────────────────────────────
 
 export function GrowthPage() {
   const { loading, error, summary, seriesByMetric, cohorts } = useGrowthDashboard();
+  const machineFeed = useMachineSummaryFeed();
+
+  // ── DAU day drill-down ──
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [journeys, setJourneys] = useState<Record<string, GrowthUserJourney>>({});
+  const [journeysLoaded, setJourneysLoaded] = useState(false);
+  const [journeysLoading, setJourneysLoading] = useState(false);
+
+  const accountIds = useMemo(
+    () => Array.from(new Set(machineFeed.rows.map((r) => r.accountId).filter((id): id is string => Boolean(id)))),
+    [machineFeed.rows]
+  );
+
+  // Resolve account → user labels and machines from the fleet feed.
+  const accountInfo = useMemo(() => {
+    const map = new Map<string, { label: string; machines: string[] }>();
+    machineFeed.rows.forEach((r) => {
+      if (!r.accountId) return;
+      const existing = map.get(r.accountId);
+      const label = r.primaryEmail ?? r.displayName ?? r.userName;
+      if (existing) {
+        existing.machines.push(r.machineName);
+      } else {
+        map.set(r.accountId, { label, machines: [r.machineName] });
+      }
+    });
+    return map;
+  }, [machineFeed.rows]);
+
+  // Journeys are fetched once, on the first day click — not in an effect and
+  // never on the polling cycle.
+  const handleSelectDay = (day: string) => {
+    setSelectedDay((prev) => (prev === day ? null : day));
+    if (journeysLoaded || journeysLoading || accountIds.length === 0) return;
+    setJourneysLoading(true);
+    Promise.all(
+      accountIds.map((id) =>
+        fetchGrowthUserJourney(id).then((j) => ({ id, j })).catch(() => null)
+      )
+    ).then((results) => {
+      const map: Record<string, GrowthUserJourney> = {};
+      results.forEach((r) => { if (r) map[r.id] = r.j; });
+      setJourneys(map);
+      setJourneysLoaded(true);
+      setJourneysLoading(false);
+    });
+  };
+
+  // ── Retention derived from cohort windows (real denominators) ──
+  const retention = useMemo(() => {
+    const rows = cohorts?.rows ?? [];
+    return { d1: aggregateRetention(rows, 1), d7: aggregateRetention(rows, 7), d30: aggregateRetention(rows, 30) };
+  }, [cohorts]);
 
   if (loading) {
     return (
@@ -139,6 +213,14 @@ export function GrowthPage() {
     ? (summary.retentionRateD7Pct >= 80 ? 'var(--green)' : summary.retentionRateD7Pct >= 50 ? 'var(--amber)' : 'var(--red)')
     : 'var(--muted)';
 
+  const retentionSub = (agg: typeof retention.d1): string => {
+    if (agg.pct == null) return agg.pendingUsers > 0 ? 'Maturing' : 'No data';
+    const base = `${agg.retained}/${agg.eligible} eligible returned`;
+    return agg.missingUsers > 0 ? `${base} · ${agg.missingUsers} no data` : base;
+  };
+
+  const activeAccounts = selectedDay ? accountsActiveOnDay(Object.values(journeys), selectedDay) : [];
+
   return (
     <>
       {/* Hero metrics */}
@@ -163,17 +245,15 @@ export function GrowthPage() {
         <div className="g-metric">
           <div className="g-metric-val" style={{ color: 'var(--green)' }}>{d1Pct}</div>
           <div className="g-metric-lbl">D1 Retention</div>
-          <div className="g-metric-delta delta-up">
-            {summary.retentionRateD1Pct === 100 ? 'All users returned' : `${d1Pct} returned`}
+          <div className="g-metric-delta delta-neutral" title="Computed over users whose D1 window matured AND has data — see retention funnel">
+            {retentionSub(retention.d1)}
           </div>
         </div>
         <div className="g-metric">
           <div className="g-metric-val" style={{ color: d7Color }}>{d7Pct}</div>
           <div className="g-metric-lbl">D7 Retention</div>
-          <div className="g-metric-delta delta-neutral">
-            {summary.retentionRateD7Pct != null
-              ? `${summary.retentionRateD7Pct.toFixed(1)}% retained`
-              : 'Maturing'}
+          <div className="g-metric-delta delta-neutral" title="Computed over users whose D7 window matured AND has data — see retention funnel">
+            {retentionSub(retention.d7)}
           </div>
         </div>
         <div className="g-metric">
@@ -243,11 +323,6 @@ export function GrowthPage() {
           </div>
           <div className="card-body">
             <RegistrationChart series={regSeries} />
-            <div className="chart-label-row">
-              {regDateLabels(regSeries).map((l) => (
-                <span key={l} className="chart-label">{l}</span>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -255,17 +330,58 @@ export function GrowthPage() {
           <div className="card-header">
             <div>
               <div className="card-title">Daily Active Users</div>
-              <div className="card-sub">Account-active-day facts</div>
+              <div className="card-sub">Account-active-day facts · click a day for detail</div>
             </div>
             <span className="card-tag tag-green">{todayDau} today</span>
           </div>
           <div className="card-body">
-            <DauChart series={dauSeries} />
-            <div className="chart-label-row">
-              {dauDateLabels(dauSeries).map((l) => (
-                <span key={l} className="chart-label">{l}</span>
-              ))}
-            </div>
+            <DauChart
+              series={dauSeries}
+              selectedDay={selectedDay}
+              onSelectDay={handleSelectDay}
+            />
+            {selectedDay && (
+              <div style={{ marginTop: '10px', borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '8px' }}>
+                  <span style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 600 }}>
+                    Active on {shortDate(selectedDay)}
+                  </span>
+                  <span style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'var(--font-m)' }}>
+                    {journeysLoaded ? `${activeAccounts.length} of ${Object.keys(journeys).length} known accounts` : ''}
+                  </span>
+                </div>
+                {journeysLoading && (
+                  <div style={{ fontSize: '11px', color: 'var(--muted)' }}>Loading account journeys…</div>
+                )}
+                {journeysLoaded && activeAccounts.length === 0 && (
+                  <div style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                    No known account shows activity on this day. The series may include accounts not linked to any machine in the current fleet.
+                  </div>
+                )}
+                {journeysLoaded && activeAccounts.map((j) => {
+                  const info = accountInfo.get(j.accountId);
+                  return (
+                    <div key={j.accountId} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                      <div>
+                        <div style={{ fontSize: '12px', color: 'var(--text)' }}>{info?.label ?? j.accountId}</div>
+                        <div style={{ fontSize: '10px', color: 'var(--muted)', fontFamily: 'var(--font-m)' }}>
+                          {info ? info.machines.join(', ') : 'no machine in current fleet'}
+                        </div>
+                      </div>
+                      <div style={{ textAlign: 'right', fontFamily: 'var(--font-m)', fontSize: '10px', color: 'var(--muted)' }}>
+                        <div>{j.activeDays.length} active day{j.activeDays.length === 1 ? '' : 's'} total</div>
+                        {j.registrationAtUtc && <div>registered {shortDate(j.registrationAtUtc)}</div>}
+                      </div>
+                    </div>
+                  );
+                })}
+                {journeysLoaded && (
+                  <div style={{ fontSize: '9px', color: 'var(--muted)', marginTop: '6px', fontFamily: 'var(--font-m)' }}>
+                    Resolved via the journeys of accounts linked to machines in the current fleet.
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -277,20 +393,41 @@ export function GrowthPage() {
           <div className="card-header">
             <div>
               <div className="card-title">Retention Funnel</div>
-              <div className="card-sub">D1 → D7 → D30</div>
+              <div className="card-sub">From cohort windows · retained/eligible shown</div>
             </div>
           </div>
           <div className="card-body">
             <div style={{ padding: '8px 0' }}>
               {[
-                { label: 'Registered', pct: 100, color: 'var(--accent)', fillClass: 'prog-fill-accent', display: String(summary.totalRegisteredUsers) },
-                { label: 'D1 Retained', pct: summary.retentionRateD1Pct ?? 0, color: 'var(--green)', fillClass: 'prog-fill-green', display: d1Pct },
-                { label: 'D7 Retained', pct: summary.retentionRateD7Pct ?? 0, color: d7Color, fillClass: 'prog-fill-amber', display: d7Pct },
-                { label: 'D30 Retained', pct: summary.retentionRateD30Pct ?? 0, color: 'var(--muted)', fillClass: '', display: summary.retentionRateD30Pct != null ? `${summary.retentionRateD30Pct.toFixed(1)}%` : 'Maturing' },
-              ].map(({ label, pct, color, fillClass, display }) => (
+                {
+                  label: 'Registered',
+                  pct: 100,
+                  color: 'var(--accent)',
+                  fillClass: 'prog-fill-accent',
+                  display: String(summary.totalRegisteredUsers),
+                  warn: null as string | null
+                },
+                ...([
+                  { label: 'D1 Retained', agg: retention.d1, color: 'var(--green)', fillClass: 'prog-fill-green' },
+                  { label: 'D7 Retained', agg: retention.d7, color: d7Color, fillClass: 'prog-fill-amber' },
+                  { label: 'D30 Retained', agg: retention.d30, color: 'var(--muted)', fillClass: '' }
+                ].map(({ label, agg, color, fillClass }) => ({
+                  label,
+                  pct: agg.pct ?? 0,
+                  color,
+                  fillClass,
+                  display: agg.pct != null ? `${agg.pct.toFixed(1)}% · ${agg.retained}/${agg.eligible}` : (agg.pendingUsers > 0 ? 'Maturing' : 'No data'),
+                  warn: agg.missingUsers > 0 ? `${agg.missingUsers} user${agg.missingUsers === 1 ? '' : 's'} excluded — no server data for this window` : null
+                })))
+              ].map(({ label, pct, color, fillClass, display, warn }) => (
                 <div key={label} style={{ marginBottom: '20px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                    <span style={{ fontSize: '12px', color: 'var(--muted2)' }}>{label}</span>
+                    <span style={{ fontSize: '12px', color: 'var(--muted2)' }}>
+                      {label}
+                      {warn && (
+                        <span title={warn} style={{ color: 'var(--amber)', marginLeft: '6px', cursor: 'help' }}>⚠</span>
+                      )}
+                    </span>
                     <span style={{ fontFamily: 'var(--font-m)', fontSize: '12px', color }}>{display}</span>
                   </div>
                   <div className="prog-track" style={{ height: '10px' }}>
@@ -310,7 +447,7 @@ export function GrowthPage() {
           <div className="card-header">
             <div>
               <div className="card-title">Cohort Retention Table</div>
-              <div className="card-sub">By registration week · cells unlock as window matures</div>
+              <div className="card-sub">By registration date · pending cells unlock as windows mature</div>
             </div>
           </div>
           <div className="card-body" style={{ padding: 0 }}>
@@ -332,9 +469,8 @@ export function GrowthPage() {
                 </thead>
                 <tbody>
                   {cohorts.rows.map((row) => {
-                    const getWindow = (day: number) => row.windows.find((w) => w.day === day);
-                    const retColor = (pct: number | null) =>
-                      pct == null ? 'var(--muted)' : pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
+                    const retColor = (pct: number) =>
+                      pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
 
                     return (
                       <tr key={row.cohortDate}>
@@ -342,16 +478,33 @@ export function GrowthPage() {
                         <td>{row.registeredUsers}</td>
                         <td style={{ color: 'var(--green)' }}>{row.activatedUsers}</td>
                         {[1, 7, 30].map((day) => {
-                          const w = getWindow(day);
-                          if (!w || w.retentionRatePct == null) {
-                            return <td key={day} className="ret-cell"><div className="ret-na">n/a</div></td>;
+                          const cell = cohortCellState(row, day);
+                          if (cell.kind === 'pending') {
+                            return (
+                              <td key={day} className="ret-cell">
+                                <div className="ret-na" title="This retention window has not matured yet">pending</div>
+                              </td>
+                            );
+                          }
+                          if (cell.kind === 'nodata') {
+                            return (
+                              <td key={day} className="ret-cell">
+                                <div
+                                  className="ret-na"
+                                  title="Window matured but the control plane returned no data for this cohort"
+                                  style={{ color: 'var(--amber)', cursor: 'help' }}
+                                >
+                                  no data
+                                </div>
+                              </td>
+                            );
                           }
                           return (
                             <td key={day} className="ret-cell">
-                              <div className="ret-val" style={{ color: retColor(w.retentionRatePct) }}>
-                                {w.retentionRatePct.toFixed(1)}%
+                              <div className="ret-val" style={{ color: retColor(cell.pct) }}>
+                                {cell.pct.toFixed(1)}%
                               </div>
-                              <div className="ret-sub">{w.retainedUsers}/{w.eligibleUsers}</div>
+                              <div className="ret-sub">{cell.retained}/{cell.eligible}</div>
                             </td>
                           );
                         })}
