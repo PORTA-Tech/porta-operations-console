@@ -42,6 +42,8 @@ export type ApiRequestInput<P extends PathKey, M extends ExistingMethod<P>> = {
 
 const DEV_API_BASE_URL = 'http://localhost:8787';
 
+const OPERATOR_KEY = import.meta.env.VITE_OPERATOR_KEY?.trim() ?? '';
+
 function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_BASE_URL;
   if (configured && configured.trim().length > 0) {
@@ -141,6 +143,7 @@ export async function apiRequestRaw<T>(input: RawApiRequest): Promise<T> {
   headers.set('Content-Type', 'application/json');
   headers.set('x-operator-id', auth.operatorId);
   headers.set('x-operator-role', auth.operatorRole);
+  headers.set('x-operator-key', OPERATOR_KEY);
 
   const response = await fetch(`${resolveApiBaseUrl()}${input.path}`, {
     method: input.method.toUpperCase(),
@@ -171,6 +174,7 @@ export async function apiRequest<P extends PathKey, M extends ExistingMethod<P>>
   headers.set('Content-Type', 'application/json');
   headers.set('x-operator-id', auth.operatorId);
   headers.set('x-operator-role', auth.operatorRole);
+  headers.set('x-operator-key', OPERATOR_KEY);
 
   const response = await fetch(`${resolveApiBaseUrl()}${String(input.path)}`, {
     method: input.method.toUpperCase(),
