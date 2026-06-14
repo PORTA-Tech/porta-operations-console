@@ -13,10 +13,10 @@ The agent connects to `porta-control-plane` for policy sync and fleet telemetry.
 
 ## What This Console Shows
 
-- **System Health** — service status, capture quality, API health per machine
-- **User Activity** — work-today timeline, focus sessions, pressure history
-- **Trust Level** — baseline calibration stage (Cold / Provisional / Ready / Calibrated)
-- **Actions** — break suggestions, interventions, pause/resume history
+- **Monitor** — machine health, active-now status, realtime fleet state per machine
+- **Growth** — registrations, activation rate, D1/D7/D30 retention, cohort table, DAU series, user journey
+- **Events** — lifecycle events, interventions, audit trail
+- **Analytics** — user activity patterns, focus sessions, calibration stage, pressure history
 
 ## Key Domain Terms
 
@@ -31,45 +31,25 @@ The agent connects to `porta-control-plane` for policy sync and fleet telemetry.
 | provisional | Baseline calibration phase — not enough data yet for full confidence |
 | capture context | `UserSession` = full input capture; other values = degraded/reconnecting |
 
----
-
-Admin console for the current PORTA V1 operations surface.
-
-## Current Scope
-
-- `System Health`
-- `User Activity`
-- `Trust Level`
-- `Actions`
-
 ## Behavior Glossary
 
-The console should use the canonical product meanings below even while control-plane and Windows transport still expose some legacy compatibility fields:
-
-- `focus episode`
-  - Durable user-facing focus time.
-- `pressure`
-  - Expressive user-facing overload score.
-- `overload active`
-  - Conservative stabilized overload state for intervention logic.
-- `short break`
-  - Product-facing name for the lighter break intervention.
-- `long break`
-  - Product-facing name for the stronger break intervention.
-- `limited`
-  - Truth is usable but certainty is reduced.
-- `updating`
-  - Last known usable value is shown while fresh analyzed state catches up.
+- `focus episode` — Durable user-facing focus time.
+- `pressure` — Expressive user-facing overload score.
+- `overload active` — Conservative stabilized overload state for intervention logic.
+- `short break` — Product-facing name for the lighter break intervention.
+- `long break` — Product-facing name for the stronger break intervention.
+- `limited` — Truth is usable but certainty is reduced.
+- `updating` — Last known usable value is shown while fresh analyzed state catches up.
 
 ## Legacy Migration Map
 
-- `taskContinuitySeconds` -> focus-episode duration compatibility field
-- `taskContinuityScore` -> focus-episode quality compatibility field
-- `overloadLikelihood` -> pressure compatibility field
-- `stretch_break_suggestion` -> short break
-- `break_suggestion` -> long break
-- `breakPendingAction` -> break readiness compatibility field
-- `breakPendingKind` -> canonical short-break / long-break readiness field
+- `taskContinuitySeconds` → focus-episode duration compatibility field
+- `taskContinuityScore` → focus-episode quality compatibility field
+- `overloadLikelihood` → pressure compatibility field
+- `stretch_break_suggestion` → short break
+- `break_suggestion` → long break
+- `breakPendingAction` → break readiness compatibility field
+- `breakPendingKind` → canonical short-break / long-break readiness field
 
 The console may still consume those transport fields, but it should not present them to operators as the final product terminology.
 
@@ -80,6 +60,8 @@ npm install
 npm run dev
 ```
 
+Then open `http://localhost:5173`.
+
 ## Checks
 
 ```bash
@@ -89,5 +71,28 @@ npm run build
 
 ## Environment
 
-- `VITE_API_BASE_URL`
-- `VITE_WS_BASE_URL`
+### Required
+
+| Variable | Purpose |
+|---|---|
+| `VITE_OPERATOR_KEY` | Shared secret sent as `x-operator-key` on every `/v1/*` request. Must match `PORTA_OPERATOR_KEY` on the control plane. |
+
+### Optional
+
+| Variable | Purpose |
+|---|---|
+| `VITE_API_BASE_URL` | Control plane base URL. Defaults to `http://localhost:8787` in dev, required in production. |
+| `VITE_WS_BASE_URL` | WebSocket base URL for realtime (if enabled). |
+
+### Local dev setup
+
+Create `.env.local` in the repo root:
+
+```
+VITE_OPERATOR_KEY=<your key>
+VITE_API_BASE_URL=https://your-control-plane.onrender.com
+```
+
+### Production (Render)
+
+Set both `VITE_OPERATOR_KEY` and `VITE_API_BASE_URL` as environment variables in the Render dashboard, then trigger a redeploy. `VITE_*` variables are baked in at build time — a full rebuild is required after any change.
