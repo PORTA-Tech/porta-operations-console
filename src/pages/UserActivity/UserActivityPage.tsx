@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
+import { fetchMachineDailyStats, type MachineDailyStats } from '../../api/machines';
 import { formatSeconds, relativeTime, pressureColor, attentionStateClass, attentionStateLabel } from '../../utils/console';
 import {
   countDistractionPatterns,
@@ -10,6 +11,7 @@ import {
 
 export function UserActivityPage() {
   const { rows } = useMachineSummaryFeed();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Behavior metrics only make sense for machines reporting right now with
   // real input history (fleetTruth.isLiveState). Everything else is a frozen
@@ -113,9 +115,16 @@ export function UserActivityPage() {
                   const pressurePct = live && r.pressureLevel != null ? `${Math.round(r.pressureLevel * 100)}%` : '—';
                   const focusStale = isSegmentStale(r.focusEpisodeSeconds);
                   const segmentStale = isSegmentStale(r.attentionSegmentSeconds);
+                  const expanded = expandedId === r.machineId;
 
                   return (
-                    <div className="machine-card" key={r.machineId} style={live ? undefined : { opacity: 0.6 }}>
+                    <div
+                      className="machine-card"
+                      key={r.machineId}
+                      onClick={() => setExpandedId(expanded ? null : r.machineId)}
+                      title="Click for 14-day focus / distraction history"
+                      style={{ cursor: 'pointer', ...(live ? {} : { opacity: 0.6 }) }}
+                    >
                       <div className="mc-top">
                         <div>
                           <div className="mc-name">{r.machineName}</div>
@@ -153,6 +162,7 @@ export function UserActivityPage() {
                           : ''}
                         Updated {relativeTime(r.reportedAtUtc)}
                       </div>
+                      {expanded && <MachineDailyHistory machineId={r.machineId} />}
                     </div>
                   );
                 })}
@@ -207,5 +217,87 @@ export function UserActivityPage() {
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Inline 14-day focus / distraction / away history for one machine's linked user account.
+ * Fetched on demand from the control plane's /v1/machines/:id/daily-stats endpoint.
+ * Styled inline so it renders predictably regardless of the page's CSS.
+ */
+function MachineDailyHistory({ machineId }: { machineId: string }) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [days, setDays] = useState<MachineDailyStats[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetchMachineDailyStats(machineId, 14)
+      .then((data) => {
+        if (!cancelled) {
+          setDays(data);
+          setLoading(false);
+        }
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : 'Failed to load history');
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [machineId]);
+
+  const note = (text: string) => (
+    <div style={{ marginTop: 10, fontSize: 11, color: 'var(--muted)', fontFamily: 'var(--font-m)' }}>{text}</div>
+  );
+
+  if (loading) return note('Loading 14-day history…');
+  if (error) return note(`Couldn't load history: ${error}`);
+  if (days.length === 0) return note('No daily history yet for this user.');
+
+  return (
+    <div
+      onClick={(e) => e.stopPropagation()}
+      style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border, rgba(255,255,255,0.08))' }}
+    >
+      <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6, fontFamily: 'var(--font-m)' }}>
+        Last 14 days · focus / distraction / away
+      </div>
+      {days.map((d) => {
+        const tracked = Math.max(1, d.trackedSeconds);
+        const focusPct = (d.focusSeconds / tracked) * 100;
+        const distractionPct = (d.distractionSeconds / tracked) * 100;
+        const awayPct = (d.awaySeconds / tracked) * 100;
+        return (
+          <div key={d.dateLocal} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <div style={{ width: 42, fontSize: 10, color: 'var(--muted)', fontFamily: 'var(--font-m)' }}>
+              {d.dateLocal.slice(5)}
+            </div>
+            <div
+              style={{
+                flex: 1,
+                height: 10,
+                display: 'flex',
+                borderRadius: 3,
+                overflow: 'hidden',
+                background: 'var(--muted)'
+              }}
+            >
+              <div style={{ width: `${focusPct}%`, background: 'var(--green)' }} title={`Focus ${formatSeconds(d.focusSeconds)}`} />
+              <div style={{ width: `${distractionPct}%`, background: 'var(--accent)' }} title={`Distraction ${formatSeconds(d.distractionSeconds)}`} />
+              <div style={{ width: `${awayPct}%`, background: 'var(--amber)' }} title={`Away ${formatSeconds(d.awaySeconds)}`} />
+            </div>
+            <div style={{ width: 34, textAlign: 'right', fontSize: 10, color: 'var(--green)', fontFamily: 'var(--font-m)' }}>
+              {Math.round(focusPct)}%
+            </div>
+          </div>
+        );
+      })}
+    </div>
   );
 }

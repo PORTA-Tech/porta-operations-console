@@ -193,3 +193,36 @@ export async function fetchMachineUptime(machineId: string, days = 7): Promise<U
     method: 'get'
   });
 }
+
+/** Per-day focus / distraction / away / overload history for a machine's linked user account. */
+export interface MachineDailyStats {
+  accountId: string;
+  dateLocal: string;            // "YYYY-MM-DD"
+  dayOfWeek: number;            // 0=Sun … 6=Sat
+  trackedSeconds: number;
+  focusSeconds: number;
+  focusPct: number;
+  focusScore: number;
+  longestStreakSeconds: number;
+  distractionSeconds: number;
+  distractionCount: number;
+  avgDistractionDurationSeconds: number;
+  contextSwitchCount: number;
+  overloadEvents: number;
+  breaksTaken: number;
+  breaksSuggested: number;
+  socialMediaLoops: number;
+  socialMediaSeconds: number;
+  awaySeconds: number;
+  pressureAvgPct: number;
+  firstFocusUtc: string | null;
+  peakPressureUtc: string | null;
+  mostDistractedHour: number | null;
+}
+
+export async function fetchMachineDailyStats(machineId: string, days = 14): Promise<MachineDailyStats[]> {
+  return apiRequestRaw<MachineDailyStats[]>({
+    path: `/v1/machines/${encodeURIComponent(machineId)}/daily-stats?days=${days}`,
+    method: 'get'
+  });
+}
