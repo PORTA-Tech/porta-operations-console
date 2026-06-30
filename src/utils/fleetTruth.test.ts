@@ -195,7 +195,9 @@ describe('countDistractionPatterns', () => {
       buildSummary({ attentionSegmentKind: 'off_task_distraction' }),
       buildSummary({ attentionSegmentKind: 'context_excursion' }),
       buildSummary({ attentionSegmentKind: 'away' }),
-      buildSummary({ attentionSegmentKind: 'focus', overloadActive: true })
+      // "Overload pressure" now counts high expressive pressure, not the
+      // conservative overloadActive gate (which almost never fires).
+      buildSummary({ attentionSegmentKind: 'focus', pressureLevel: 0.7 })
     ];
     const counts = countDistractionPatterns(rows);
 
@@ -204,6 +206,18 @@ describe('countDistractionPatterns', () => {
     expect(counts.socialInterrupt).toBe(1);
     expect(counts.idleDrift).toBe(1);
     expect(counts.overload).toBe(1);
+  });
+
+  it('overload pressure counts high pressureLevel, not overloadActive', () => {
+    const rows = [
+      // overloadActive true but low pressure -> NOT counted (old dead behavior).
+      buildSummary({ pressureLevel: 0.2, overloadActive: true }),
+      // At the 0.6 red threshold -> NOT counted (strictly greater than).
+      buildSummary({ pressureLevel: 0.6, overloadActive: false }),
+      // Above the threshold -> counted.
+      buildSummary({ pressureLevel: 0.61, overloadActive: false })
+    ];
+    expect(countDistractionPatterns(rows).overload).toBe(1);
   });
 
   it('reasonCode never affects pattern counts (the old dead-code path)', () => {

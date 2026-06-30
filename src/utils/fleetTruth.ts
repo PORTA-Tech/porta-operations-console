@@ -234,14 +234,24 @@ export interface DistractionPatternCounts {
  * carries these values. (The old page compared them against
  * attentionSegmentReasonCode, where they can never appear, so three patterns
  * were hardwired to zero.)
+ *
+ * "Overload pressure" counts machines in the high-pressure (red) band, i.e.
+ * pressureLevel > HIGH_PRESSURE_THRESHOLD — the same threshold pressureColor()
+ * uses to paint a machine's pressure tile red. It used to count overloadActive,
+ * but that is the conservative stabilized intervention gate (it almost never
+ * fires in the field), so the row was permanently zero. Pressure is the
+ * expressive signal this card is about, and after the agent's pressure
+ * recalibration it spans a real range, so this now reflects genuine load.
  */
+export const HIGH_PRESSURE_THRESHOLD = 0.6;
+
 export function countDistractionPatterns(rows: MachineSummaryReport[]): DistractionPatternCounts {
   return {
     appSwitch: rows.filter((r) => r.attentionSegmentKind === 'fragmentation_distraction').length,
     junkBrowsing: rows.filter((r) => r.attentionSegmentKind === 'off_task_distraction').length,
     socialInterrupt: rows.filter((r) => r.attentionSegmentKind === 'context_excursion').length,
     idleDrift: rows.filter((r) => r.attentionSegmentKind === 'away').length,
-    overload: rows.filter((r) => r.overloadActive).length
+    overload: rows.filter((r) => r.pressureLevel > HIGH_PRESSURE_THRESHOLD).length
   };
 }
 
