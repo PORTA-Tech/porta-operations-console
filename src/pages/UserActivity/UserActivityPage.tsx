@@ -276,10 +276,21 @@ function MachineDailyHistory({ machineId }: { machineId: string }) {
           byTarget.length === 0
             ? 'none yet'
             : byTarget.map((t) => `${fmt(t.target)} ${t.count} (${t.net >= 0 ? '+' : ''}${t.net})`).join(', ');
+        // Prompt response rate — shown vs answered — tells the operator whether people actually engage.
+        const shownToday = latest?.promptsShownToday ?? 0;
+        const answeredToday = latest?.promptsAnsweredToday ?? 0;
+        const shownWeek = latest?.promptsShownThisWeek ?? 0;
+        const answeredWeek = latest?.promptsAnsweredThisWeek ?? 0;
+        const rate = (a: number, s: number): string => (s > 0 ? `${Math.round((a / s) * 100)}%` : '—');
         return (
-          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 8, fontFamily: 'var(--font-m)' }}>
-            Ground-truth labels · {today} today, {week} this week · {parts}
-          </div>
+          <>
+            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 4, fontFamily: 'var(--font-m)' }}>
+              Ground-truth labels · {today} today, {week} this week · {parts}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 8, fontFamily: 'var(--font-m)' }}>
+              Prompt responses · today {answeredToday}/{shownToday} ({rate(answeredToday, shownToday)}) · week {answeredWeek}/{shownWeek} ({rate(answeredWeek, shownWeek)})
+            </div>
+          </>
         );
       })()}
       <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6, fontFamily: 'var(--font-m)' }}>

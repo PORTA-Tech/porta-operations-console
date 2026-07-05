@@ -222,6 +222,11 @@ export interface MachineDailyStats {
   labelsToday?: number;
   labelsThisWeek?: number;
   labelsByTarget?: LabelTargetCount[];
+  // Prompt response rate: how many prompts were shown vs actually answered (engagement signal).
+  promptsShownToday?: number;
+  promptsAnsweredToday?: number;
+  promptsShownThisWeek?: number;
+  promptsAnsweredThisWeek?: number;
 }
 
 export interface LabelTargetCount {
