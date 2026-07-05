@@ -265,6 +265,23 @@ function MachineDailyHistory({ machineId }: { machineId: string }) {
       onClick={(e) => e.stopPropagation()}
       style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border, rgba(255,255,255,0.08))' }}
     >
+      {(() => {
+        const latest = days[0];
+        const today = latest?.labelsToday ?? 0;
+        const week = latest?.labelsThisWeek ?? 0;
+        const byTarget = latest?.labelsByTarget ?? [];
+        const fmt = (target: string): string =>
+          ({ focus_state: 'focus', distraction: 'distraction', overload: 'overload', break_need: 'break' } as Record<string, string>)[target] ?? target;
+        const parts =
+          byTarget.length === 0
+            ? 'none yet'
+            : byTarget.map((t) => `${fmt(t.target)} ${t.count} (${t.net >= 0 ? '+' : ''}${t.net})`).join(', ');
+        return (
+          <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 8, fontFamily: 'var(--font-m)' }}>
+            Ground-truth labels · {today} today, {week} this week · {parts}
+          </div>
+        );
+      })()}
       <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 6, fontFamily: 'var(--font-m)' }}>
         Last 14 days · focus / distraction / away
       </div>

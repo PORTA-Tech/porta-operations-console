@@ -218,6 +218,16 @@ export interface MachineDailyStats {
   firstFocusUtc: string | null;
   peakPressureUtc: string | null;
   mostDistractedHour: number | null;
+  // Phase 1b — Step 4c/4d: privacy-safe ground-truth label engagement (counts only, no content).
+  labelsToday?: number;
+  labelsThisWeek?: number;
+  labelsByTarget?: LabelTargetCount[];
+}
+
+export interface LabelTargetCount {
+  target: string;
+  count: number;
+  net: number;
 }
 
 export async function fetchMachineDailyStats(machineId: string, days = 14): Promise<MachineDailyStats[]> {
