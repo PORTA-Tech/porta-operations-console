@@ -17,6 +17,7 @@ const sectionMeta: Record<string, { title: string; sub: string }> = {
   '/actions':       { title: 'Actions', sub: 'What did Ari decide, suggest, or apply?' },
   '/digest':        { title: 'Nightly Digest', sub: 'Did the 23:30 digest fire for each machine last night?' },
   '/growth':        { title: 'Growth', sub: 'Registrations, activation, retention, and cohort analysis.' },
+  '/categories':    { title: 'App Categories', sub: 'How the fleet classifies apps & sites — review and correct.' },
 };
 
 export function AppShell({ children }: AppShellProps) {
@@ -102,6 +103,15 @@ export function AppShell({ children }: AppShellProps) {
             <polyline points="17 6 23 6 23 12"/>
           </svg>
           Growth
+        </NavLink>
+        <NavLink to="/categories" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+          <svg className="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+            <path d="M4 5h16M4 12h16M4 19h16"/>
+            <circle cx="8" cy="5" r="1.6" fill="currentColor" stroke="none"/>
+            <circle cx="14" cy="12" r="1.6" fill="currentColor" stroke="none"/>
+            <circle cx="10" cy="19" r="1.6" fill="currentColor" stroke="none"/>
+          </svg>
+          Categories
         </NavLink>
 
         {/* FLEET FOOTER */}
