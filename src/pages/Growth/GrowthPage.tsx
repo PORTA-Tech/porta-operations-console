@@ -207,7 +207,13 @@ export function GrowthPage() {
 
   const d1Pct = summary.retentionRateD1Pct != null ? `${summary.retentionRateD1Pct.toFixed(1)}%` : 'n/a';
   const d7Pct = summary.retentionRateD7Pct != null ? `${summary.retentionRateD7Pct.toFixed(1)}%` : 'n/a';
-  const actPct = summary.activationRatePct != null ? `${summary.activationRatePct.toFixed(1)}%` : 'n/a';
+  // Activation % is derived from the exact fraction shown beneath it
+  // (activated / registered) so the headline number can never contradict its
+  // own "1/6 activated" subtitle, which is what the backend rate did.
+  const actRate = summary.totalRegisteredUsers > 0
+    ? (summary.activatedUsers / summary.totalRegisteredUsers) * 100
+    : null;
+  const actPct = actRate != null ? `${actRate.toFixed(1)}%` : 'n/a';
 
   const d7Color = summary.retentionRateD7Pct != null
     ? (summary.retentionRateD7Pct >= 80 ? 'var(--green)' : summary.retentionRateD7Pct >= 50 ? 'var(--amber)' : 'var(--red)')
@@ -238,9 +244,9 @@ export function GrowthPage() {
           <div className="g-metric-delta delta-up">↑ {newUsers} in last 30d</div>
         </div>
         <div className="g-metric">
-          <div className="g-metric-val" style={{ color: 'var(--green)' }}>{actPct}</div>
+          <div className="g-metric-val" style={{ color: actRate == null ? 'var(--muted)' : actRate >= 60 ? 'var(--green)' : actRate >= 30 ? 'var(--amber)' : 'var(--red)' }}>{actPct}</div>
           <div className="g-metric-lbl">Activation Rate</div>
-          <div className="g-metric-delta delta-up">{summary.activatedUsers}/{summary.totalRegisteredUsers} activated</div>
+          <div className="g-metric-delta delta-neutral">{summary.activatedUsers}/{summary.totalRegisteredUsers} activated</div>
         </div>
         <div className="g-metric">
           <div className="g-metric-val" style={{ color: 'var(--green)' }}>{d1Pct}</div>

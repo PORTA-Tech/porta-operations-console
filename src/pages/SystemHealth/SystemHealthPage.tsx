@@ -3,9 +3,10 @@ import { useMachineSummaryFeed } from '../../hooks/useMachineSummaryFeed';
 import { fetchMachineUptime, type UptimeSample } from '../../api/machines';
 import { relativeTime, getLastSevenUtcDays } from '../../utils/console';
 import {
-  classifyMachine,
   hasNoLiveActivity,
+  isDormant,
   machinePresence,
+  summarizeFleetHealth,
   type MachinePresence
 } from '../../utils/fleetTruth';
 
@@ -207,13 +208,17 @@ export function SystemHealthPage() {
     return result;
   }, [allUptimeData, rows, dayKeys]);
 
-  // Fleet strip counts come from ONE exclusive classifier (fleetTruth), so
-  // healthy + degraded + disconnected always equals the machine count.
-  const fleetBuckets = useMemo(() => rows.map(classifyMachine), [rows]);
-  const healthyCount = fleetBuckets.filter((b) => b === 'healthy').length;
-  const degradedCount = fleetBuckets.filter((b) => b === 'degraded').length;
-  const disconnectedCount = fleetBuckets.filter((b) => b === 'disconnected').length;
-  const connectedCount = rows.length - disconnectedCount;
+  // Fleet strip counts come from ONE exclusive classifier (fleetTruth), computed
+  // over the ACTIVE fleet only. Dormant/churned installs (offline > 7d) are
+  // pulled into their own count so month-old installs don't inflate the red
+  // DISCONNECTED alarm or lie about the denominator.
+  const fleetHealth = useMemo(() => summarizeFleetHealth(rows), [rows]);
+  const healthyCount = fleetHealth.healthy;
+  const degradedCount = fleetHealth.degraded;
+  const disconnectedCount = fleetHealth.disconnected;
+  const dormantCount = fleetHealth.dormant;
+  const activeTotal = fleetHealth.activeTotal;
+  const connectedCount = activeTotal - disconnectedCount;
 
   // Overlay metric, not a bucket: connected machines producing no input.
   const noActivityRows = rows.filter(hasNoLiveActivity);
@@ -253,7 +258,7 @@ export function SystemHealthPage() {
         <div className="fleet-card c-green">
           <div className="fc-label">Healthy</div>
           <div className="fc-val green">{healthyCount}</div>
-          <div className="fc-sub">{healthyCount === rows.length && rows.length > 0 ? 'All systems operational' : `Of ${rows.length} machines`}</div>
+          <div className="fc-sub">{healthyCount === activeTotal && activeTotal > 0 ? 'All active machines healthy' : `Of ${activeTotal} active machine${activeTotal === 1 ? '' : 's'}`}</div>
         </div>
         <div className="fleet-card c-amber">
           <div className="fc-label">Degraded Capture</div>
@@ -263,7 +268,7 @@ export function SystemHealthPage() {
         <div className="fleet-card c-red">
           <div className="fc-label">Disconnected</div>
           <div className="fc-val red">{disconnectedCount}</div>
-          <div className="fc-sub">Agents offline</div>
+          <div className="fc-sub">{dormantCount > 0 ? `Recently offline · ${dormantCount} dormant install${dormantCount === 1 ? '' : 's'} excluded` : 'Agents offline'}</div>
         </div>
         <div className="fleet-card c-blue">
           <div className="fc-label">No Live Activity</div>
@@ -448,7 +453,10 @@ export function SystemHealthPage() {
                   const statuses = machineDayStatuses[r.machineId] ?? Array<DayStatus>(7).fill('nodata');
                   const pct = uptimePct(statuses);
                   const upColor = pct === null ? 'var(--muted)' : pct > 70 ? 'var(--green)' : pct > 30 ? 'var(--amber)' : 'var(--red)';
-                  const errorMsg = r.lastError || r.captureFailureReason || r.ownershipWarning || '';
+                  // A dormant install (offline for weeks) surfaces a frozen error
+                  // from its last live moment — showing it as a current error is a
+                  // lie. The Status column already says how long it's been gone.
+                  const errorMsg = isDormant(r) ? '' : (r.lastError || r.captureFailureReason || r.ownershipWarning || '');
                   const captureIssueCode = r.watchdogLaunchFailureCode || r.userAgentCaptureFailureCode || null;
                   const captureIssueLabel = captureIssueCode
                     ? ({

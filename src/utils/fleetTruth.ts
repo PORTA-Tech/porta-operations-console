@@ -184,6 +184,63 @@ export function classifyMachine(row: MachineSummaryReport): FleetBucket {
 }
 
 /**
+ * A machine offline for longer than this is a churned / dormant install, not a
+ * live "agent offline" incident. Counting month-old installs in the red
+ * DISCONNECTED tile made a fleet of a few real users look like it was on fire.
+ * Dormant installs are surfaced separately, not as an active-fleet alarm.
+ */
+export const DORMANT_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+export function isDormant(row: MachineSummaryReport): boolean {
+  if (machinePresence(row) !== 'offline') return false;
+  const lastSeen = parseTimestamp(row.offlineSinceUtc) ?? parseTimestamp(row.reportedAtUtc);
+  return lastSeen !== null && (Date.now() - lastSeen) > DORMANT_AFTER_MS;
+}
+
+export interface FleetHealthCounts {
+  healthy: number;
+  /** Degraded capture, among machines still in play. */
+  degraded: number;
+  /** Recently offline (may return) — dormant installs are excluded. */
+  disconnected: number;
+  /** Churned installs: offline longer than DORMANT_AFTER_MS. */
+  dormant: number;
+  /** Machines actually in play = everything except dormant installs. */
+  activeTotal: number;
+}
+
+/**
+ * Health tile counts computed over the ACTIVE fleet only. Dormant installs are
+ * pulled out so "healthy / degraded / disconnected" describe machines that are
+ * genuinely in play, and the denominator is honest.
+ * healthy + degraded + disconnected always equals activeTotal.
+ */
+export function summarizeFleetHealth(rows: MachineSummaryReport[]): FleetHealthCounts {
+  let healthy = 0;
+  let degraded = 0;
+  let disconnected = 0;
+  let dormant = 0;
+  for (const row of rows) {
+    if (isDormant(row)) {
+      dormant += 1;
+      continue;
+    }
+    switch (classifyMachine(row)) {
+      case 'healthy':
+        healthy += 1;
+        break;
+      case 'degraded':
+        degraded += 1;
+        break;
+      case 'disconnected':
+        disconnected += 1;
+        break;
+    }
+  }
+  return { healthy, degraded, disconnected, dormant, activeTotal: rows.length - dormant };
+}
+
+/**
  * "Active now" must never count a machine that is offline: activityDetected
  * is a flag from the machine's LAST report and goes stale the moment the
  * agent stops reporting.
